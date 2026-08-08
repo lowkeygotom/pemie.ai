@@ -23,10 +23,21 @@ interface CriterionRow {
   then: string;
 }
 
+// Blindado contra HUs con acceptanceCriteria guardado como string serializado
+// (bug de escritura ya corregido en el server, pero pueden quedar filas viejas
+// así): sin esto, `.map` sobre un string tira y deja el modal en blanco.
 function criteriaFromStory(story: UserStory): CriterionRow[] {
-  return story.acceptanceCriteria?.length
-    ? story.acceptanceCriteria.map((c) => ({ ...c }))
-    : [];
+  const raw = story.acceptanceCriteria as unknown;
+  const list = typeof raw === "string" ? tryParseJson(raw) : raw;
+  return Array.isArray(list) ? list.map((c) => ({ ...c })) : [];
+}
+
+function tryParseJson(raw: string): unknown {
+  try {
+    return JSON.parse(raw);
+  } catch {
+    return null;
+  }
 }
 
 export default function StoryDetailModal({

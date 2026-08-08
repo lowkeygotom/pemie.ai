@@ -303,6 +303,18 @@ const TOOLS: McpTool[] = [
         status: { type: "string" },
         priority: { type: "string" },
         storyPoints: { type: "number" },
+        narrative: {
+          type: "object",
+          properties: { role: { type: "string" }, want: { type: "string" }, benefit: { type: "string" } },
+        },
+        acceptanceCriteria: {
+          type: "array",
+          items: {
+            type: "object",
+            properties: { given: { type: "string" }, when: { type: "string" }, then: { type: "string" } },
+          },
+        },
+        epicId: { type: ["string", "null"] },
       },
       required: ["storyId"],
       additionalProperties: true,

@@ -93,7 +93,21 @@ function validateStatus(s: string | undefined): UserStoryStatus {
   return s as UserStoryStatus;
 }
 
-const asJson = (v: unknown) => (v == null ? Prisma.JsonNull : (v as Prisma.InputJsonValue));
+// MCP no valida el shape de `narrative`/`acceptanceCriteria` contra un schema
+// estricto: un agente puede mandarlos ya serializados como string. Sin este
+// parseo, ese string se guardaba tal cual en la columna Json en vez de como
+// array/objeto real.
+function asJson(v: unknown) {
+  if (v == null) return Prisma.JsonNull;
+  if (typeof v === "string") {
+    try {
+      return JSON.parse(v) as Prisma.InputJsonValue;
+    } catch {
+      throw badRequest("El valor debe ser JSON válido, no un string plano", "invalid_json_field");
+    }
+  }
+  return v as Prisma.InputJsonValue;
+}
 
 /** Verifica que el contributor exista y pertenezca al proyecto de la HU. */
 async function validateAssignee(projectId: string, assigneeId: string) {

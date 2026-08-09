@@ -961,7 +961,9 @@ function TeamSection({
                   Si no le llega (puede caer en spam), comparte este enlace:
                 </p>
               ) : null}
-              <div className="mt-2 flex items-center gap-2">
+              {/* Cuando la etiqueta de respaldo está presente, el enlace se le
+                  pega (mt-1): la etiqueta pertenece al bloque que introduce. */}
+              <div className={`${lastInvite.emailDelivered ? "mt-1" : "mt-2"} flex items-center gap-2`}>
                 <code className="min-w-0 flex-1 truncate rounded bg-white px-2 py-1.5 font-mono text-caption text-ink-700">
                   {inviteLink(lastInvite.token)}
                 </code>

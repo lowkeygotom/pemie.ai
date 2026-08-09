@@ -103,8 +103,10 @@ export default function StoriesTab({ ws, proj }: { ws: string; proj: string }) {
     setEditingStory(null);
     const next = new URLSearchParams(searchParams);
     next.delete("story");
-    // Si el deep link venía sin `?tab=`, al cerrar no debe saltarse a `commits`.
-    if (!next.get("tab")) next.set("tab", "stories");
+    // Cerrar el detalle de una HU siempre deja al usuario en el tab de historias:
+    // fijarlo sin condición evita depender de que el `?tab=` entrante sea válido
+    // (un enlace truncado con ?tab=bogus no debe rebotar a `commits` al cerrar).
+    next.set("tab", "stories");
     setSearchParams(next, { replace: true });
   }
 

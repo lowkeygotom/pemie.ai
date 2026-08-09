@@ -72,7 +72,7 @@ export default function Project() {
         description={project.description ?? undefined}
         actions={
           <>
-            <ProjectSearch ws={slug} proj={projectSlug} onNavigateToTab={setTab} />
+            <ProjectSearch ws={slug} proj={projectSlug} onNavigateToTab={selectTab} />
             <Badge tone="neutral" mono>{project.key}</Badge>
           </>
         }

@@ -8,6 +8,7 @@ import StoriesTab from "./project/StoriesTab.js";
 import BoardTab from "./project/BoardTab.js";
 import AgentTab from "./project/AgentTab.js";
 import LeaderboardTab from "./project/LeaderboardTab.js";
+import ProjectSearch from "./project/ProjectSearch.js";
 const TABS = [
   { id: "commits", label: "Ingesta de commits" },
   { id: "reports", label: "Objetivo e informes" },
@@ -69,7 +70,12 @@ export default function Project() {
       <PageHeader
         title={project.name}
         description={project.description ?? undefined}
-        actions={<Badge tone="neutral" mono>{project.key}</Badge>}
+        actions={
+          <>
+            <ProjectSearch ws={slug} proj={projectSlug} onNavigateToTab={setTab} />
+            <Badge tone="neutral" mono>{project.key}</Badge>
+          </>
+        }
       />
 
       <Tabs

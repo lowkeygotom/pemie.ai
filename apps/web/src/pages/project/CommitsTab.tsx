@@ -491,61 +491,70 @@ export default function CommitsTab({ ws, proj, project }: { ws: string; proj: st
       <Card>
         <div className="flex flex-wrap items-center justify-between gap-3">
           <h3 className="text-h4 text-ink-900">Commits recientes</h3>
-          <div className="flex flex-wrap items-center gap-2">
-            <Select
-              value={domainFilter ?? ""}
-              onChange={(e) => {
-                const value = e.target.value || null;
-                setDomainFilter(value);
-                if (value) track("commits_filter_applied", { filter_type: "domain" });
-              }}
-              aria-label="Filtrar por tipo"
-            >
-              <option value="">Todos los tipos</option>
-              {(stats?.byDomain ?? []).map((d) => (
-                <option key={d.key} value={d.key}>
-                  {d.emoji ? `${d.emoji} ` : ""}
-                  {d.label}
-                </option>
-              ))}
-            </Select>
-            <Select
-              value={contributorFilter ?? ""}
-              onChange={(e) => {
-                const value = e.target.value || null;
-                setContributorFilter(value);
-                // Nunca el nombre del autor en texto libre — solo el hecho de filtrar.
-                if (value) track("commits_filter_applied", { filter_type: "author" });
-              }}
-              aria-label="Filtrar por autor"
-            >
-              <option value="">Todos los autores</option>
-              {(stats?.byContributor ?? [])
-                .filter((c) => c.contributor)
-                .map((c) => (
-                  <option key={c.contributor!.id} value={c.contributor!.id}>
-                    {c.contributor!.name || c.contributor!.githubLogin}
+          <div className="flex flex-wrap items-center gap-1.5">
+            <div className="w-36 shrink-0">
+              <Select
+                value={domainFilter ?? ""}
+                onChange={(e) => {
+                  const value = e.target.value || null;
+                  setDomainFilter(value);
+                  if (value) track("commits_filter_applied", { filter_type: "domain" });
+                }}
+                aria-label="Filtrar por tipo"
+                className="!py-2 !text-body-sm"
+              >
+                <option value="">Todos los tipos</option>
+                {(stats?.byDomain ?? []).map((d) => (
+                  <option key={d.key} value={d.key}>
+                    {d.emoji ? `${d.emoji} ` : ""}
+                    {d.label}
                   </option>
                 ))}
-            </Select>
-            <Select
-              value={datePreset}
-              onChange={(e) => {
-                setDatePreset(e.target.value);
-                if (e.target.value) track("commits_filter_applied", { filter_type: "date_preset" });
-              }}
-              aria-label="Filtrar por fecha"
-            >
-              {DATE_PRESETS.map((p) => (
-                <option key={p.value} value={p.value}>
-                  {p.label}
-                </option>
-              ))}
-            </Select>
+              </Select>
+            </div>
+            <div className="w-36 shrink-0">
+              <Select
+                value={contributorFilter ?? ""}
+                onChange={(e) => {
+                  const value = e.target.value || null;
+                  setContributorFilter(value);
+                  // Nunca el nombre del autor en texto libre — solo el hecho de filtrar.
+                  if (value) track("commits_filter_applied", { filter_type: "author" });
+                }}
+                aria-label="Filtrar por autor"
+                className="!py-2 !text-body-sm"
+              >
+                <option value="">Todos los autores</option>
+                {(stats?.byContributor ?? [])
+                  .filter((c) => c.contributor)
+                  .map((c) => (
+                    <option key={c.contributor!.id} value={c.contributor!.id}>
+                      {c.contributor!.name || c.contributor!.githubLogin}
+                    </option>
+                  ))}
+              </Select>
+            </div>
+            <div className="w-32 shrink-0">
+              <Select
+                value={datePreset}
+                onChange={(e) => {
+                  setDatePreset(e.target.value);
+                  if (e.target.value) track("commits_filter_applied", { filter_type: "date_preset" });
+                }}
+                aria-label="Filtrar por fecha"
+                className="!py-2 !text-body-sm"
+              >
+                {DATE_PRESETS.map((p) => (
+                  <option key={p.value} value={p.value}>
+                    {p.label}
+                  </option>
+                ))}
+              </Select>
+            </div>
             {(domainFilter || contributorFilter || datePreset) && (
               <button
                 type="button"
-                className="text-caption text-ink-500 underline hover:text-ink-800"
+                className="shrink-0 whitespace-nowrap text-caption text-ink-500 underline hover:text-ink-800"
                 onClick={() => {
                   setDomainFilter(null);
                   setContributorFilter(null);

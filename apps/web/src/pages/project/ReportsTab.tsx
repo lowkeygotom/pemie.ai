@@ -10,6 +10,7 @@ import {
   EmptyState,
   ErrorText,
   Input,
+  MarkdownBody,
   SkeletonCard,
   SkeletonList,
   Stat,
@@ -125,6 +126,7 @@ export default function ReportsTab({ ws, proj }: { ws: string; proj: string }) {
         <Textarea
           className="mt-3"
           rows={2}
+          autoResize
           value={objText}
           onChange={(e) => setObjText(e.target.value)}
           placeholder="¿Qué persigue este proyecto?"
@@ -186,9 +188,7 @@ export default function ReportsTab({ ws, proj }: { ws: string; proj: string }) {
                   </div>
                   {r.comment ? (
                     <div className="rounded-md border border-line-100 bg-surface-0 p-4">
-                      <p className="whitespace-pre-wrap text-body-sm leading-relaxed text-ink-800">
-                        {r.comment}
-                      </p>
+                      <MarkdownBody>{r.comment}</MarkdownBody>
                     </div>
                   ) : (
                     <p className="text-body-sm text-ink-400">Sin comentario.</p>
@@ -220,7 +220,9 @@ export default function ReportsTab({ ws, proj }: { ws: string; proj: string }) {
               {notes.map((n) => (
                 <div key={n.id} className="rounded-lg border border-line-200 bg-surface-50 p-4">
                   <div className="flex items-start justify-between gap-3">
-                    <p className="text-body text-ink-900">{n.message}</p>
+                    <div className="min-w-0 flex-1 text-body text-ink-900">
+                      <MarkdownBody className="text-body">{n.message}</MarkdownBody>
+                    </div>
                     <Badge
                       tone={n.status === "processed" ? "success" : "warning"}
                       dot
@@ -229,9 +231,9 @@ export default function ReportsTab({ ws, proj }: { ws: string; proj: string }) {
                     </Badge>
                   </div>
                   {n.response ? (
-                    <p className="mt-3 border-l-2 border-blue-600 pl-3 text-body-sm text-ink-600">
-                      {n.response}
-                    </p>
+                    <div className="mt-3 border-l-2 border-blue-600 pl-3 text-ink-600">
+                      <MarkdownBody className="text-ink-600">{n.response}</MarkdownBody>
+                    </div>
                   ) : (
                     <div className="mt-3 flex gap-2">
                       <Input

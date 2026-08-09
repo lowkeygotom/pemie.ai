@@ -43,6 +43,7 @@ export const queryKeys = {
   /** Prefijo de todas las variantes de commits: invalida el listado sea cual sea el filtro activo. */
   commitsAll: (ws: string, proj: string) => ["commits", ws, proj] as const,
   leaderboard: (ws: string, proj: string) => ["leaderboard", ws, proj] as const,
+  search: (ws: string, proj: string, q: string) => ["search", ws, proj, q] as const,
   objective: (ws: string, proj: string) => ["objective", ws, proj] as const,
   reports: (ws: string, proj: string) => ["reports", ws, proj] as const,
   notes: (ws: string, proj: string) => ["notes", ws, proj] as const,

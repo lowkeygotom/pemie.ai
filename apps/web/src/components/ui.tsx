@@ -2,7 +2,9 @@
 // Reglas del sistema: radios sm/md/lg, borde hairline, sombra fría, acento azul único,
 // mono (IBM Plex) para etiquetas, comandos y métricas.
 
-import { forwardRef, useEffect, useRef, useState } from "react";
+import { forwardRef, useEffect, useLayoutEffect, useRef, useState } from "react";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import type {
   ButtonHTMLAttributes,
   HTMLAttributes,
@@ -65,9 +67,35 @@ export const Input = forwardRef<HTMLInputElement, InputHTMLAttributes<HTMLInputE
   }
 );
 
-export function Textarea({ className = "", ...props }: TextareaHTMLAttributes<HTMLTextAreaElement>) {
-  return <textarea className={`${CONTROL} w-full min-w-0 leading-snug ${className}`} {...props} />;
-}
+export const Textarea = forwardRef<
+  HTMLTextAreaElement,
+  TextareaHTMLAttributes<HTMLTextAreaElement> & {
+    /** Crece con el contenido en vez de scrollear (altura mínima según `rows`). */
+    autoResize?: boolean;
+  }
+>(function Textarea({ className = "", autoResize = false, value, ...props }, ref) {
+  const innerRef = useRef<HTMLTextAreaElement | null>(null);
+
+  useLayoutEffect(() => {
+    const el = innerRef.current;
+    if (!autoResize || !el) return;
+    el.style.height = "auto";
+    el.style.height = `${el.scrollHeight}px`;
+  }, [autoResize, value]);
+
+  return (
+    <textarea
+      ref={(node) => {
+        innerRef.current = node;
+        if (typeof ref === "function") ref(node);
+        else if (ref) ref.current = node;
+      }}
+      value={value}
+      className={`${CONTROL} w-full min-w-0 leading-snug ${autoResize ? "resize-none overflow-hidden" : ""} ${className}`}
+      {...props}
+    />
+  );
+});
 
 export function Select({ className = "", ...props }: SelectHTMLAttributes<HTMLSelectElement>) {
   return <select className={`${CONTROL} w-full min-w-0 max-w-full ${className}`} {...props} />;
@@ -951,5 +979,98 @@ export function Wordmark() {
     <span className="text-[19px] font-bold tracking-[-0.02em] text-ink-900">
       pemie<span className="text-blue-600">.ai</span>
     </span>
+  );
+}
+
+/* -------------------------------- MarkdownBody ------------------------------- */
+
+function textOf(node: ReactNode): string {
+  if (node == null || typeof node === "boolean") return "";
+  if (typeof node === "string" || typeof node === "number") return String(node);
+  if (Array.isArray(node)) return node.map(textOf).join("");
+  const el = node as { props?: { children?: ReactNode } };
+  return el.props ? textOf(el.props.children) : "";
+}
+
+/**
+ * Renderiza markdown de contenido que no escribimos nosotros: informes y notas los
+ * publica un agente por MCP. Sin `rehype-raw` a propósito — el default de
+ * react-markdown no interpreta HTML crudo, así que un `<script>` en un informe sale
+ * como texto. Las imágenes también quedan fuera (origen no confiable y saltos de
+ * layout).
+ *
+ * La escala vive entre el cuerpo de la tarjeta (`text-body-sm`) y su título
+ * (`text-h4`): un `##` del informe nunca compite con el encabezado de la sección.
+ * El peso y el tamaño se declaran explícitos porque el base global pone `font-bold`
+ * a todo `h1`–`h4` (index.css).
+ */
+export function MarkdownBody({ children, className = "" }: { children: string; className?: string }) {
+  return (
+    <div
+      className={`text-body-sm leading-relaxed text-ink-800 [&>*+*]:mt-3 [&>h1+*]:mt-2 [&>h2+*]:mt-2 [&>h3+*]:mt-2 [&>*:first-child]:mt-0 ${className}`}
+    >
+      <ReactMarkdown
+        remarkPlugins={[remarkGfm]}
+        components={{
+          h1: ({ children }) => <h4 className="mt-4 text-body font-semibold text-ink-900">{children}</h4>,
+          h2: ({ children }) => <h5 className="mt-4 text-body font-semibold text-ink-900">{children}</h5>,
+          h3: ({ children }) => <h6 className="mt-4 text-body-sm font-semibold text-ink-900">{children}</h6>,
+          h4: ({ children }) => <h6 className="mt-4 text-body-sm font-semibold text-ink-900">{children}</h6>,
+          h5: ({ children }) => <h6 className="mt-4 text-body-sm font-semibold text-ink-900">{children}</h6>,
+          h6: ({ children }) => <h6 className="mt-4 text-body-sm font-semibold text-ink-900">{children}</h6>,
+          p: ({ children }) => <p className="text-body-sm leading-relaxed text-ink-800">{children}</p>,
+          ul: ({ children }) => <ul className="list-disc space-y-1 pl-5">{children}</ul>,
+          ol: ({ children }) => <ol className="list-decimal space-y-1 pl-5">{children}</ol>,
+          li: ({ children }) => <li className="leading-relaxed">{children}</li>,
+          strong: ({ children }) => <strong className="font-semibold text-ink-900">{children}</strong>,
+          hr: () => <hr className="border-line-200" />,
+          blockquote: ({ children }) => (
+            <blockquote className="border-l-2 border-line-200 pl-3 text-ink-600">{children}</blockquote>
+          ),
+          a: ({ href, children }) => (
+            <a
+              href={href}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="underline underline-offset-2"
+            >
+              {children}
+            </a>
+          ),
+          // Las imágenes no se renderizan: el contenido es de origen no confiable.
+          img: () => null,
+          code: ({ children }) => (
+            <code className="rounded-sm border border-line-200 bg-surface-100 px-1 font-mono text-caption text-ink-900">
+              {children}
+            </code>
+          ),
+          pre: ({ children }) => {
+            const child = Array.isArray(children) ? children[0] : children;
+            const cls = (child as { props?: { className?: string } })?.props?.className ?? "";
+            const lang = /language-(\w+)/.exec(cls)?.[1];
+            return (
+              <CodeBlock title={lang ?? "code"}>
+                {textOf(children).replace(/\n$/, "")}
+              </CodeBlock>
+            );
+          },
+          table: ({ children }) => (
+            <div className="overflow-x-auto">
+              <table className="w-full border-collapse text-body-sm">{children}</table>
+            </div>
+          ),
+          th: ({ children }) => (
+            <th className="border-b border-line-200 px-2.5 py-1.5 text-left font-semibold text-ink-900">
+              {children}
+            </th>
+          ),
+          td: ({ children }) => (
+            <td className="border-b border-line-200 px-2.5 py-1.5 align-top">{children}</td>
+          ),
+        }}
+      >
+        {children}
+      </ReactMarkdown>
+    </div>
   );
 }

@@ -4,13 +4,21 @@
 // (usuarios) y por MCP (agentes: list_board / create_card / move_card).
 
 import { Prisma } from "@prisma/client";
-import type { ActorType, CardType } from "@pemie/shared";
+import {
+  STATUS_COLUMN_ORDER,
+  statusForColumnOrder,
+  type ActorType,
+  type CardType,
+  type UserStoryStatus,
+} from "@pemie/shared";
 import { prisma } from "../db.js";
 import { badRequest, notFound } from "./errors.js";
 import { projectWithAccess } from "./ingest.js";
 import { resolveActorNames } from "./actor.js";
 
 const CARD_TYPES: CardType[] = ["story", "task", "bug"];
+// Los `order` son el otro extremo de STATUS_COLUMN_ORDER (@pemie/shared): esta
+// tabla y la de estados de HU describen la misma escalera y se mueven juntas.
 const DEFAULT_COLUMNS = [
   { name: "Backlog", order: 0 },
   { name: "Por hacer", order: 1 },
@@ -34,6 +42,15 @@ async function ensureBoard(projectId: string) {
   return prisma.board.create({
     data: { projectId, name: "Board", columns: { create: DEFAULT_COLUMNS } },
   });
+}
+
+/** Columna del tablero que corresponde a un estado de HU, si existe. */
+function columnForStatus<T extends { order: number }>(
+  columns: T[],
+  status: UserStoryStatus | undefined
+): T | undefined {
+  if (!status) return undefined;
+  return columns.find((col) => col.order === STATUS_COLUMN_ORDER[status]);
 }
 
 function recordActivity(
@@ -95,6 +112,12 @@ export interface CreateCardInput {
   userStoryId?: string;
   assigneeId?: string;
   labels?: unknown;
+  /**
+   * Estado de la HU que origina la tarjeta: decide la columna inicial cuando no
+   * se pasa `columnId`. Quien crea la HU no necesita conocer las columnas —
+   * resolverlas sigue siendo responsabilidad de este servicio.
+   */
+  storyStatus?: UserStoryStatus;
 }
 
 /** Carga una tarjeta con el proyecto de su tablero (para validar acceso). */
@@ -123,7 +146,13 @@ export async function opCreateCard(projectId: string, input: CreateCardInput, ac
   if (!CARD_TYPES.includes(type as CardType)) throw badRequest(`Tipo inválido: ${type}`, "invalid_type");
 
   const columns = await prisma.column.findMany({ where: { boardId: board.id }, orderBy: { order: "asc" } });
-  const column = input.columnId ? columns.find((col) => col.id === input.columnId) : columns[0];
+  // Sin `columnId` explícito manda el estado de la HU (una HU creada en "review"
+  // nace en Revisión, no en Backlog). El fallback a la primera columna cubre un
+  // tablero sin la columna esperada: perder la ubicación exacta es preferible a
+  // no crear la tarjeta.
+  const column = input.columnId
+    ? columns.find((col) => col.id === input.columnId)
+    : columnForStatus(columns, input.storyStatus) ?? columns[0];
   if (!column) throw badRequest("Columna inválida para este tablero", "invalid_column");
 
   if (input.userStoryId) {
@@ -168,9 +197,13 @@ export async function moveCard(
   return opMoveCard(card, target, { actorType: "user", actorId: userId });
 }
 
-/** Operación (ya autorizada): mueve la tarjeta y registra la actividad. */
+/**
+ * Operación (ya autorizada): mueve la tarjeta, registra la actividad y espeja
+ * la columna destino en el estado de la HU vinculada — la columna es la cara
+ * visible del estado, así que arrastrar una tarjeta *es* cambiar el estado.
+ */
 export async function opMoveCard(
-  card: { id: string; boardId: string; columnId: string },
+  card: { id: string; boardId: string; columnId: string; userStoryId?: string | null },
   target: { columnId: string; order?: number },
   actor: CardActor
 ) {
@@ -195,7 +228,52 @@ export async function opMoveCard(
     data: { columnId: toColumn.id, order },
   });
   await recordActivity(card.id, actor, "moved", fromColumn?.name ?? null, toColumn.name);
+  await syncStoryStatusToColumn(card.userStoryId ?? null, toColumn.order);
   return updated;
+}
+
+/**
+ * Escribe en la HU el estado que implica la columna donde quedó su tarjeta.
+ *
+ * Va directo a Prisma en vez de pasar por `stories.opUpdateStory` por dos
+ * motivos: `stories.ts` ya importa este módulo (llamarlo cerraría el ciclo de
+ * imports) y `opUpdateStory` mueve la tarjeta al cambiar el estado — es decir,
+ * reentraría en el movimiento que se acaba de hacer.
+ */
+async function syncStoryStatusToColumn(userStoryId: string | null, columnOrder: number) {
+  if (!userStoryId) return;
+  // Una columna fuera de las cinco por defecto no dice nada del estado de la HU:
+  // mejor dejarla como está que inventarle uno.
+  const status = statusForColumnOrder(columnOrder);
+  if (!status) return;
+
+  const story = await prisma.userStory.findUnique({
+    where: { id: userStoryId },
+    select: { status: true },
+  });
+  if (!story || story.status === status) return;
+  await prisma.userStory.update({ where: { id: userStoryId }, data: { status } });
+}
+
+/**
+ * Operación (ya autorizada): lleva la tarjeta a la columna que corresponde al
+ * estado de su HU. Usada al editar el estado desde la HU (ver
+ * stories.opUpdateStory).
+ *
+ * Devuelve null cuando no hay nada que mover: sin columna equivalente, o ya
+ * estando en ella. Ese corte evita un "moved" vacío en CardActivity, que además
+ * le mentiría a `wasLastMovedByUser`.
+ */
+export async function opMoveCardToStatus(
+  card: { id: string; boardId: string; columnId: string; userStoryId?: string | null },
+  status: UserStoryStatus,
+  actor: CardActor
+) {
+  const column = await prisma.column.findFirst({
+    where: { boardId: card.boardId, order: STATUS_COLUMN_ORDER[status] },
+  });
+  if (!column || column.id === card.columnId) return null;
+  return opMoveCard(card, { columnId: column.id }, actor);
 }
 
 /**

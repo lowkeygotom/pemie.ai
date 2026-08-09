@@ -6,7 +6,13 @@
 
 import { Prisma } from "@prisma/client";
 import { z } from "zod";
-import { classifyCommit, DEFAULT_DOMAIN_CONFIG, type DomainConfig, type Role } from "@pemie/shared";
+import {
+  classifyCommit,
+  DEFAULT_DOMAIN_CONFIG,
+  STATUS_COLUMN_ORDER,
+  type DomainConfig,
+  type Role,
+} from "@pemie/shared";
 import { prisma } from "../db.js";
 import { badRequest, conflict, forbidden, notFound } from "./errors.js";
 import { requireMembership } from "./tenancy.js";
@@ -216,12 +222,16 @@ async function recordCommits(
   return count;
 }
 
-/** Regla de palabras clave -> `order` de columna destino (ver DEFAULT_COLUMNS en board.ts). */
+/**
+ * Regla de palabras clave -> `order` de columna destino. El destino se nombra
+ * por el estado de HU al que equivale (STATUS_COLUMN_ORDER, @pemie/shared): mover
+ * la tarjeta también mueve el estado, así que la regla se lee en esos términos.
+ */
 const COMMIT_KEYWORD_RULES: { regex: RegExp; columnOrder: number }[] = [
-  { regex: /\b(fix|close|fixes|resolves)\b/i, columnOrder: 3 }, // Revisión
-  { regex: /\b(wip|progress|avance)\b/i, columnOrder: 2 }, // En progreso
-  { regex: /\b(review|pr|merge)\b/i, columnOrder: 3 }, // Revisión
-  { regex: /\bfeat\b/i, columnOrder: 2 }, // En progreso
+  { regex: /\b(fix|close|fixes|resolves)\b/i, columnOrder: STATUS_COLUMN_ORDER.review },
+  { regex: /\b(wip|progress|avance)\b/i, columnOrder: STATUS_COLUMN_ORDER.in_progress },
+  { regex: /\b(review|pr|merge)\b/i, columnOrder: STATUS_COLUMN_ORDER.review },
+  { regex: /\bfeat\b/i, columnOrder: STATUS_COLUMN_ORDER.in_progress },
 ];
 
 function escapeRegExp(s: string): string {

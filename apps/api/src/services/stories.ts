@@ -93,7 +93,21 @@ function validateStatus(s: string | undefined): UserStoryStatus {
   return s as UserStoryStatus;
 }
 
-const asJson = (v: unknown) => (v == null ? Prisma.JsonNull : (v as Prisma.InputJsonValue));
+// MCP no valida el shape de `narrative`/`acceptanceCriteria` contra un schema
+// estricto: un agente puede mandarlos ya serializados como string. Sin este
+// parseo, ese string se guardaba tal cual en la columna Json en vez de como
+// array/objeto real.
+function asJson(v: unknown) {
+  if (v == null) return Prisma.JsonNull;
+  if (typeof v === "string") {
+    try {
+      return JSON.parse(v) as Prisma.InputJsonValue;
+    } catch {
+      throw badRequest("El valor debe ser JSON válido, no un string plano", "invalid_json_field");
+    }
+  }
+  return v as Prisma.InputJsonValue;
+}
 
 /** Verifica que el contributor exista y pertenezca al proyecto de la HU. */
 async function validateAssignee(projectId: string, assigneeId: string) {
@@ -185,10 +199,12 @@ export async function opCreateStory(
     ? { actorType: "user", actorId: actor.createdById }
     : { actorType: "agent", actorId: actor.createdByAgentId ?? null };
   // «PEM-13 · Título» es el formato que ya usaban las tarjetas creadas a mano:
-  // la tarjeta se lee igual en el tablero venga de donde venga.
+  // la tarjeta se lee igual en el tablero venga de donde venga. `storyStatus`
+  // decide la columna inicial: una HU que nace "in_progress" no puede aparecer
+  // en Backlog.
   await board.opCreateCard(
     projectId,
-    { title: `${story.key} · ${story.title}`, type: "story", userStoryId: story.id },
+    { title: `${story.key} · ${story.title}`, type: "story", userStoryId: story.id, storyStatus: status },
     cardActor
   );
 
@@ -240,13 +256,21 @@ export async function updateStory(userId: string, storyId: string, patch: Update
   const story = await getStoryById(storyId);
   if (!story) throw notFound("HU no encontrada");
   await projectWithAccess(userId, story.projectId, "member");
-  return opUpdateStory(story, patch);
+  return opUpdateStory(story, patch, { actorType: "user", actorId: userId });
 }
 
-/** Operación (ya autorizada): aplica el patch a una HU ya cargada. */
+/**
+ * Operación (ya autorizada): aplica el patch a una HU ya cargada y, si cambió el
+ * estado, arrastra su tarjeta a la columna correspondiente.
+ *
+ * `actor` cae en "agent" cuando el llamador no lo pasa: un movimiento sin
+ * responsable identificable no debe hacerse pasar por decisión humana ante
+ * `wasLastMovedByUser`, que congelaría la tarjeta frente al auto-move.
+ */
 export async function opUpdateStory(
-  story: { id: string; projectId: string },
-  patch: UpdateStoryInput
+  story: { id: string; projectId: string; status: string },
+  patch: UpdateStoryInput,
+  actor: CardActor = { actorType: "agent", actorId: null }
 ) {
   const data: Prisma.UserStoryUpdateInput = {};
   if (patch.title !== undefined) {
@@ -255,7 +279,8 @@ export async function opUpdateStory(
     data.title = t;
   }
   if (patch.priority !== undefined) data.priority = validatePriority(patch.priority);
-  if (patch.status !== undefined) data.status = validateStatus(patch.status);
+  const nextStatus = patch.status !== undefined ? validateStatus(patch.status) : undefined;
+  if (nextStatus !== undefined) data.status = nextStatus;
   if (patch.storyPoints !== undefined) data.storyPoints = patch.storyPoints;
   if (patch.narrative !== undefined) data.narrative = asJson(patch.narrative);
   if (patch.acceptanceCriteria !== undefined) data.acceptanceCriteria = asJson(patch.acceptanceCriteria);
@@ -277,7 +302,16 @@ export async function opUpdateStory(
       data.assignee = { disconnect: true };
     }
   }
-  return prisma.userStory.update({ where: { id: story.id }, data });
+  const updated = await prisma.userStory.update({ where: { id: story.id }, data });
+
+  // El tablero es la otra cara del estado: si cambió de verdad, la tarjeta se va
+  // a la columna que le toca (mismo patrón que opAssignStory con el assignee).
+  if (nextStatus !== undefined && nextStatus !== story.status) {
+    const card = await prisma.card.findUnique({ where: { userStoryId: story.id } });
+    if (card) await board.opMoveCardToStatus(card, nextStatus, actor);
+  }
+
+  return updated;
 }
 
 /** Elimina una HU (member+). */

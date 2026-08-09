@@ -11,9 +11,11 @@ import * as agentsSvc from "../services/agents.js";
 import * as stories from "../services/stories.js";
 import * as board from "../services/board.js";
 import * as leaderboard from "../services/leaderboard.js";
+import * as searchSvc from "../services/search.js";
 import { badRequest } from "../services/errors.js";
 import { listInstallationRepos } from "../lib/github-app.js";
 import { type AppContext, type AppEnv, requireUser } from "./http.js";
+import { SEARCHABLE_TYPES } from "@pemie/shared";
 
 const createWorkspaceSchema = z.object({ name: z.string().min(2) });
 const updateWorkspaceSchema = z.object({ name: z.string().min(2) });
@@ -314,6 +316,18 @@ export function workspaceRoutes() {
     return c.json({ leaderboard: await leaderboard.opProjectLeaderboard(project.id) });
   });
 
+  app.get("/:slug/projects/:projectSlug/search", async (c) => {
+    const project = await resolveProject(c);
+    const q = c.req.query("q") ?? "";
+    const limitParam = c.req.query("limit");
+    const result = await searchSvc.opSearch(
+      project.id,
+      { query: q, limit: limitParam ? Number(limitParam) : undefined },
+      [...SEARCHABLE_TYPES]
+    );
+    return c.json(result);
+  });
+
   app.put("/:slug/projects/:projectSlug/domain-config", async (c) => {
     const user = requireUser(c);
     const project = await resolveProject(c);
@@ -433,6 +447,22 @@ export function workspaceRoutes() {
     const user = requireUser(c);
     await tenancy.getWorkspace(user.id, c.req.param("slug"));
     return c.json(await agentsSvc.deleteAgent(user.id, c.req.param("agentId")));
+  });
+
+  // Bloquear/desbloquear una key ajena vista operando aquí. No hay DELETE: la
+  // key pertenece a otro workspace y desde este solo se le corta el paso.
+  app.post("/:slug/agents/presence/:presenceId/block", async (c) => {
+    const user = requireUser(c);
+    await tenancy.getWorkspace(user.id, c.req.param("slug"));
+    const presence = await agentsSvc.blockAgentPresence(user.id, c.req.param("presenceId"));
+    return c.json({ presence });
+  });
+
+  app.post("/:slug/agents/presence/:presenceId/unblock", async (c) => {
+    const user = requireUser(c);
+    await tenancy.getWorkspace(user.id, c.req.param("slug"));
+    const presence = await agentsSvc.unblockAgentPresence(user.id, c.req.param("presenceId"));
+    return c.json({ presence });
   });
 
   // ─── F4: API keys y AuditLog (por workspace, admin+) ───────────────

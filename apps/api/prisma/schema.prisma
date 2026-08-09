@@ -36,11 +36,13 @@ model User {
   objectives  ObjectiveHistory[]
   contributor Contributor[]
   apiKeys     ApiKey[]            @relation("ApiKeyOwner")
+  ownedAgents Agent[]             @relation("AgentOwner")
   channelLinks ChannelLink[]
   channelConfig UserChannelConfig?
   channelLinkTokens ChannelLinkToken[]
   channelMessages ChannelMessage[]
   channelLlmCredentials ChannelLlmCredential[]
+  blockedAgentPresences AgentPresence[]     @relation("AgentPresenceBlocker")
 
   @@map("users")
 }
@@ -84,6 +86,7 @@ model Workspace {
   projects    Project[]
   apiKeys     ApiKey[]
   auditLogs   AuditLog[]
+  agentPresences AgentPresence[]
 
   @@map("workspaces")
 }
@@ -145,6 +148,7 @@ model Project {
   agents              Agent[]
   apiKeys             ApiKey[]
   channelDefaultsFor  UserChannelConfig[]
+  agentPresences      AgentPresence[]
 
   @@unique([workspaceId, slug])
   @@index([workspaceId])
@@ -392,8 +396,13 @@ model Agent {
   projectId String
   name      String
   kind      String   @default("mcp")
+  /// Persona que creó el agente. Null en los agentes anteriores a PEM-35: no
+  /// hay de dónde deducirlo, createAgent no auditaba. No indica pertenencia
+  /// al equipo — el dueño puede seguir existiendo sin membresía.
+  ownerId   String?
   createdAt DateTime @default(now())
   project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  owner     User?    @relation("AgentOwner", fields: [ownerId], references: [id], onDelete: SetNull)
   apiKeys   ApiKey[]
   reports   Report[]
 
@@ -422,11 +431,38 @@ model ApiKey {
   agent        Agent?    @relation(fields: [agentId], references: [id])
   owner        User?     @relation("ApiKeyOwner", fields: [ownerUserId], references: [id], onDelete: SetNull)
   channelConfig UserChannelConfig?
+  presences    AgentPresence[]
 
   @@index([workspaceId])
   @@index([projectId])
   @@index([ownerUserId])
   @@map("api_keys")
+}
+
+/// Rastro de que una API key operó en un workspace. Existe porque las keys
+/// workspace/user no tienen fila `Agent` en ninguna parte: sin esto, un agente
+/// que trabaja en tu equipo con una key ajena es invisible en el roster.
+/// La fila la crea el propio uso (control de admisión), nunca un alta manual.
+model AgentPresence {
+  id            String    @id @default(cuid())
+  apiKeyId      String
+  workspaceId   String
+  /// Último proyecto en el que se la vio; solo informativo para el roster.
+  lastProjectId String?
+  /// Bloqueo decidido por un admin del workspace *anfitrión*, no del dueño de
+  /// la key: por eso vive aquí y no en ApiKey.
+  blockedAt     DateTime?
+  blockedById   String?
+  firstSeenAt   DateTime  @default(now())
+  lastSeenAt    DateTime  @default(now())
+  apiKey        ApiKey    @relation(fields: [apiKeyId], references: [id], onDelete: Cascade)
+  workspace     Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  lastProject   Project?  @relation(fields: [lastProjectId], references: [id], onDelete: SetNull)
+  blockedBy     User?     @relation("AgentPresenceBlocker", fields: [blockedById], references: [id], onDelete: SetNull)
+
+  @@unique([apiKeyId, workspaceId])
+  @@index([workspaceId])
+  @@map("agent_presences")
 }
 
 model AuditLog {

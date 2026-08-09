@@ -14,6 +14,7 @@ import {
   type ApiKeyScopeLevel,
   type ActorType,
   type Role,
+  type WorkspaceAgentRosterItem,
 } from "@pemie/shared";
 import { Prisma, type ApiKey, type Project } from "@prisma/client";
 import { prisma } from "../db.js";
@@ -51,10 +52,21 @@ export async function createAgent(
   name: string,
   kind = "mcp"
 ) {
-  await projectWithAccess(userId, projectId, "member");
+  const project = await projectWithAccess(userId, projectId, "member");
   const trimmed = name.trim();
   if (trimmed.length < 2) throw badRequest("El nombre del agente es muy corto", "invalid_name");
-  return prisma.agent.create({ data: { projectId, name: trimmed, kind } });
+  const agent = await prisma.agent.create({
+    data: { projectId, name: trimmed, kind, ownerId: userId },
+  });
+  await audit({
+    workspaceId: project.workspaceId,
+    actorType: "user",
+    actorId: userId,
+    action: "agent.create",
+    entity: "Agent",
+    entityId: agent.id,
+  });
+  return agent;
 }
 
 /** Lista los agentes de un proyecto (viewer+). */
@@ -72,17 +84,84 @@ export function opListAgents(projectId: string) {
   });
 }
 
-/** Lista los agentes de todos los proyectos del workspace (viewer+). */
-export async function listAgentsInWorkspace(userId: string, workspaceId: string) {
+/**
+ * Roster de agentes del workspace (viewer+): los registrados en sus proyectos
+ * más las keys amplias que se vio operar aquí.
+ *
+ * Las dos mitades responden a la misma pregunta —«¿quién está trabajando en mi
+ * equipo?»— y por eso viajan en una sola lista en vez de dos endpoints: quien
+ * mira el equipo no sabe de antemano si el agente que le interesa tiene fila
+ * `Agent` detrás o es una key de otro workspace.
+ */
+export async function listAgentsInWorkspace(
+  userId: string,
+  workspaceId: string
+): Promise<WorkspaceAgentRosterItem<Date>[]> {
   await requireMembership(userId, workspaceId);
-  return prisma.agent.findMany({
-    where: { project: { workspaceId } },
-    orderBy: [{ project: { name: "asc" } }, { createdAt: "asc" }],
-    include: {
-      _count: { select: { apiKeys: true } },
-      project: { select: { id: true, name: true, slug: true, key: true } },
-    },
-  });
+
+  const [registered, presences] = await Promise.all([
+    prisma.agent.findMany({
+      where: { project: { workspaceId } },
+      orderBy: [{ project: { name: "asc" } }, { createdAt: "asc" }],
+      include: {
+        _count: { select: { apiKeys: true } },
+        project: { select: { id: true, name: true, slug: true, key: true } },
+        owner: { select: { id: true, name: true, email: true } },
+      },
+    }),
+    prisma.agentPresence.findMany({
+      where: { workspaceId },
+      orderBy: { lastSeenAt: "desc" },
+      include: {
+        // `select` y no `include`: el roster no necesita el hash de la key y
+        // no hay razón para sacarlo de la base.
+        apiKey: {
+          select: {
+            name: true,
+            scopeLevel: true,
+            agentId: true,
+            owner: { select: { id: true, name: true, email: true } },
+          },
+        },
+        lastProject: { select: { id: true, name: true, slug: true, key: true } },
+      },
+    }),
+  ]);
+
+  const registeredIds = new Set(registered.map((agent) => agent.id));
+
+  const items: WorkspaceAgentRosterItem<Date>[] = registered.map((agent) => ({
+    source: "registered",
+    id: agent.id,
+    name: agent.name,
+    kind: agent.kind,
+    projectId: agent.projectId,
+    project: agent.project,
+    owner: agent.owner,
+    createdAt: agent.createdAt,
+    _count: agent._count,
+  }));
+
+  for (const presence of presences) {
+    // La admisión registra presencia para toda key, incluidas las de proyecto
+    // con agente. Ese caso ya tiene fila arriba: mostrarlo dos veces convertiría
+    // un agente en dos entradas del equipo.
+    if (presence.apiKey.agentId && registeredIds.has(presence.apiKey.agentId)) continue;
+    items.push({
+      source: "observed",
+      id: presence.id,
+      apiKeyId: presence.apiKeyId,
+      name: presence.apiKey.name,
+      scopeLevel: presence.apiKey.scopeLevel as ApiKeyScopeLevel,
+      owner: presence.apiKey.owner,
+      lastProject: presence.lastProject,
+      firstSeenAt: presence.firstSeenAt,
+      lastSeenAt: presence.lastSeenAt,
+      blockedAt: presence.blockedAt,
+    });
+  }
+
+  return items;
 }
 
 /**
@@ -282,6 +361,73 @@ export function requireScope(key: ApiKey, scope: ApiScope) {
     throw forbidden(`La API key no tiene el scope requerido: ${scope}`);
 }
 
+// ─── Presencia de agentes ──────────────────────────────────────────────────
+
+/**
+ * Registra que `key` está operando en `workspaceId` y decide si puede seguir.
+ *
+ * A diferencia de `audit()`, esto **no** es best-effort: es control de admisión.
+ * Si la escritura falla, la tool call falla; tragarse el error dejaría entrar a
+ * una key bloqueada, que es justo lo que esta función existe para impedir.
+ *
+ * El upsert va antes de mirar `blockedAt` a propósito: así el equipo anfitrión
+ * ve en `lastSeenAt` que un agente bloqueado sigue intentando entrar, en vez de
+ * que el bloqueo lo vuelva invisible. Por eso el `update` tampoco toca
+ * `blockedAt` ni `blockedById`: usar la key no levanta su propio bloqueo.
+ */
+export async function admitAgentToWorkspace(key: ApiKey, workspaceId: string, projectId: string) {
+  const presence = await prisma.agentPresence.upsert({
+    where: { apiKeyId_workspaceId: { apiKeyId: key.id, workspaceId } },
+    create: { apiKeyId: key.id, workspaceId, lastProjectId: projectId },
+    update: { lastSeenAt: new Date(), lastProjectId: projectId },
+  });
+
+  if (presence.blockedAt)
+    throw forbidden("Un administrador de este workspace bloqueó a este agente");
+
+  return presence;
+}
+
+/**
+ * Bloquea o desbloquea una presencia (admin+ del workspace **anfitrión**).
+ *
+ * La autorización se pide contra `presence.workspaceId`, no contra el workspace
+ * dueño de la key: ese es el punto de la feature. Si un agente ajeno actúa en tu
+ * equipo, lo cortas tú sin depender de quien emitió la key.
+ */
+async function setAgentPresenceBlock(userId: string, presenceId: string, blocked: boolean) {
+  const presence = await prisma.agentPresence.findUnique({ where: { id: presenceId } });
+  if (!presence) throw notFound("Presencia de agente no encontrada");
+  await requireMembership(userId, presence.workspaceId, "admin");
+
+  const updated = await prisma.agentPresence.update({
+    where: { id: presenceId },
+    data: blocked
+      ? { blockedAt: new Date(), blockedById: userId }
+      : { blockedAt: null, blockedById: null },
+  });
+  await audit({
+    workspaceId: presence.workspaceId,
+    actorType: "user",
+    actorId: userId,
+    action: blocked ? "agent_presence.block" : "agent_presence.unblock",
+    entity: "AgentPresence",
+    entityId: presenceId,
+    meta: { apiKeyId: presence.apiKeyId },
+  });
+  return updated;
+}
+
+/** Bloquea una presencia: sus tool calls dejan de entrar al workspace (admin+). */
+export function blockAgentPresence(userId: string, presenceId: string) {
+  return setAgentPresenceBlock(userId, presenceId, true);
+}
+
+/** Levanta el bloqueo de una presencia (admin+). */
+export function unblockAgentPresence(userId: string, presenceId: string) {
+  return setAgentPresenceBlock(userId, presenceId, false);
+}
+
 export interface ResolvedProject {
   project: Project;
   workspaceId: string;
@@ -290,6 +436,11 @@ export interface ResolvedProject {
 /**
  * Resuelve el proyecto efectivo para una key según su alcance.
  * Keys amplias (workspace/user) exigen `projectIdFromArgs`.
+ *
+ * Toda resolución pasa por `admitAgentToWorkspace`: este es el único punto por
+ * el que una key llega a un proyecto, y lo alcanzan por igual el JSON-RPC de
+ * HTTP y las invocaciones en-proceso del canal Telegram. Poner la admisión aquí
+ * —y no en la capa MCP— es lo que hace que ambos caminos queden cubiertos.
  */
 export async function resolveProjectForKey(
   key: ApiKey,
@@ -304,6 +455,7 @@ export async function resolveProjectForKey(
       throw forbidden("Esta API key solo puede operar en su proyecto fijado");
     const project = await prisma.project.findUnique({ where: { id: key.projectId } });
     if (!project) throw notFound("Proyecto no encontrado");
+    await admitAgentToWorkspace(key, project.workspaceId, project.id);
     return { project, workspaceId: project.workspaceId };
   }
 
@@ -330,6 +482,7 @@ export async function resolveProjectForKey(
   });
   if (!membership) throw forbidden("El dueño de la key no es miembro del workspace del proyecto");
 
+  await admitAgentToWorkspace(key, project.workspaceId, project.id);
   return { project, workspaceId: project.workspaceId };
 }
 

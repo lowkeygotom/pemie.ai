@@ -60,6 +60,10 @@ export const ANALYTICS_EVENTS = {
   commits_filter_applied: ["filter_type"],
   commits_filter_cleared: [],
 
+  // ─── Búsqueda ────────────────────────────────────────────────────────
+  project_search_used: ["result_type"],
+  project_search_failed: ["reason"],
+
   // ─── Informes ────────────────────────────────────────────────────────
   report_objective_set: [],
   report_objective_set_failed: ["reason"],
@@ -74,6 +78,12 @@ export const ANALYTICS_EVENTS = {
   agent_registered_failed: ["reason"],
   agent_deleted: [],
   agent_deleted_failed: ["reason"],
+  // Bloqueo de una key ajena vista operando en el workspace. `scope_level` es
+  // metadata del alcance de la key, nunca su valor ni su dueño.
+  agent_presence_blocked: ["scope_level"],
+  agent_presence_blocked_failed: ["reason"],
+  agent_presence_unblocked: ["scope_level"],
+  agent_presence_unblocked_failed: ["reason"],
   // Nunca el valor de la key, solo metadata.
   api_key_created: ["scope_level"],
   api_key_created_failed: ["reason"],

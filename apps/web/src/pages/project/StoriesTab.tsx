@@ -12,6 +12,7 @@ import {
   Card,
   Checkbox,
   EmptyState,
+  Field,
   Skeleton,
   SkeletonCard,
   SkeletonList,
@@ -200,46 +201,57 @@ export default function StoriesTab({ ws, proj }: { ws: string; proj: string }) {
       {/* Nueva HU */}
       <Card>
         <h3 className="text-h4 text-ink-900">Nueva historia de usuario</h3>
-        <form onSubmit={createStory} className="mt-4 space-y-3">
-          <div className="flex flex-wrap gap-2">
+        <form onSubmit={createStory} className="mt-4 space-y-4">
+          <Field label="Título">
             <Input
-              placeholder="Título (ej: Login con GitHub)"
+              placeholder="ej: Login con GitHub"
               value={title}
               onChange={(e) => setTitle(e.target.value)}
               aria-label="Título de historia"
             />
-            <Select
-              value={priority}
-              onChange={(e) => setPriority(e.target.value)}
-              aria-label="Prioridad"
-            >
-              {PRIORITIES.map((p) => (
-                <option key={p} value={p}>
-                  {p}
-                </option>
-              ))}
-            </Select>
-            <Button type="submit">Crear</Button>
+          </Field>
+
+          <div className="grid gap-3 sm:grid-cols-3">
+            <Field label="Como… (rol)">
+              <Input
+                value={role}
+                onChange={(e) => setRole(e.target.value)}
+                aria-label="Rol"
+              />
+            </Field>
+            <Field label="quiero…">
+              <Input
+                value={want}
+                onChange={(e) => setWant(e.target.value)}
+                aria-label="Quiero"
+              />
+            </Field>
+            <Field label="para…">
+              <Input
+                value={benefit}
+                onChange={(e) => setBenefit(e.target.value)}
+                aria-label="Beneficio"
+              />
+            </Field>
           </div>
-          <div className="grid gap-2 sm:grid-cols-3">
-            <Input
-              placeholder="Como… (rol)"
-              value={role}
-              onChange={(e) => setRole(e.target.value)}
-              aria-label="Rol"
-            />
-            <Input
-              placeholder="quiero… (want)"
-              value={want}
-              onChange={(e) => setWant(e.target.value)}
-              aria-label="Quiero"
-            />
-            <Input
-              placeholder="para… (beneficio)"
-              value={benefit}
-              onChange={(e) => setBenefit(e.target.value)}
-              aria-label="Beneficio"
-            />
+
+          <div className="flex items-end justify-between gap-3 border-t border-line-100 pt-4">
+            <div className="w-40">
+              <Field label="Prioridad">
+                <Select
+                  value={priority}
+                  onChange={(e) => setPriority(e.target.value)}
+                  aria-label="Prioridad"
+                >
+                  {PRIORITIES.map((p) => (
+                    <option key={p} value={p}>
+                      {p}
+                    </option>
+                  ))}
+                </Select>
+              </Field>
+            </div>
+            <Button type="submit">Crear</Button>
           </div>
         </form>
       </Card>

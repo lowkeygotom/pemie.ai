@@ -36,6 +36,7 @@ import {
   DragHandle,
   EmptyState,
   ErrorText,
+  Field,
   Input,
   Select,
   SkeletonBoard,
@@ -338,6 +339,9 @@ export default function BoardTab({ ws, proj }: { ws: string; proj: string }) {
       // Un movimiento puede haber entrado o salido de "Hecho": el leaderboard
       // se deriva de eso y quedaría mostrando un ranking viejo si no se avisa.
       queryClient.invalidateQueries({ queryKey: queryKeys.leaderboard(ws, proj) });
+      // La columna define el estado de la HU vinculada: el listado de Historias
+      // mostraría el estado anterior hasta que expire su staleTime.
+      queryClient.invalidateQueries({ queryKey: queryKeys.stories(ws, proj) });
     } catch (e) {
       setActionError(e instanceof ApiError ? e.message : "No se pudo mover la tarjeta");
       await resyncBoard();
@@ -355,7 +359,11 @@ export default function BoardTab({ ws, proj }: { ws: string; proj: string }) {
     if (!prev) return;
     // Si cambió de columna, recargar para respetar orden del servidor.
     const current = prev.columns.flatMap((c) => c.cards).find((c) => c.id === updated.id);
-    if (!current || current.columnId !== updated.columnId) return void resyncBoard();
+    if (!current || current.columnId !== updated.columnId) {
+      // Guardar la tarjeta en otra columna también movió el estado de su HU.
+      queryClient.invalidateQueries({ queryKey: queryKeys.stories(ws, proj) });
+      return void resyncBoard();
+    }
     commitBoard({
       ...prev,
       columns: prev.columns.map((col) => ({
@@ -456,20 +464,33 @@ export default function BoardTab({ ws, proj }: { ws: string; proj: string }) {
 
       {/* Nueva tarjeta */}
       <Card>
-        <form onSubmit={addCard} className="flex flex-wrap items-end gap-2">
-          <Input
-            placeholder="Nueva tarjeta…"
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
-            className="max-w-sm"
-            aria-label="Nueva tarjeta"
-          />
-          <Select value={type} onChange={(e) => setType(e.target.value)} aria-label="Tipo de tarjeta">
-            <option value="task">task</option>
-            <option value="story">story</option>
-            <option value="bug">bug</option>
-          </Select>
-          <Button type="submit">Añadir a {board.columns[0]?.name}</Button>
+        <h3 className="text-h4 text-ink-900">Nueva tarjeta</h3>
+        <p className="mt-1 text-body-sm text-ink-500">
+          Para tareas o bugs sueltos que no necesitan una historia de usuario completa.
+        </p>
+        <form onSubmit={addCard} className="mt-4 flex flex-wrap items-end gap-3">
+          <div className="min-w-0 flex-1 sm:max-w-sm">
+            <Field label="Título">
+              <Input
+                placeholder="ej: Corregir test flaky"
+                value={title}
+                onChange={(e) => setTitle(e.target.value)}
+                aria-label="Nueva tarjeta"
+              />
+            </Field>
+          </div>
+          <div className="w-32 shrink-0">
+            <Field label="Tipo">
+              <Select value={type} onChange={(e) => setType(e.target.value)} aria-label="Tipo de tarjeta">
+                <option value="task">task</option>
+                <option value="story">story</option>
+                <option value="bug">bug</option>
+              </Select>
+            </Field>
+          </div>
+          <Button type="submit" className="shrink-0">
+            Añadir a {board.columns[0]?.name}
+          </Button>
         </form>
       </Card>
 

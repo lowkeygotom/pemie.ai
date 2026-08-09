@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { formatNarrative } from "@pemie/shared";
 import { api, analyticsFailureReason, ApiError, type UserStory } from "../../lib/api.js";
@@ -76,6 +77,39 @@ export default function StoriesTab({ ws, proj }: { ws: string; proj: string }) {
   const [benefit, setBenefit] = useState("");
 
   const [editingStory, setEditingStory] = useState<UserStory | null>(null);
+  const [searchParams, setSearchParams] = useSearchParams();
+  const storyParam = searchParams.get("story");
+
+  // Deep link (PEM-38): `?story=<KEY>` abre el detalle de esa HU en cuanto la
+  // lista carga. Una key que no resuelve (HU eliminada, correo viejo) deja la
+  // lista visible sin error: el tab ya es el destino útil del enlace.
+  useEffect(() => {
+    if (!storyParam) return;
+    const found = stories.find((s) => s.key.toLowerCase() === storyParam.toLowerCase());
+    // No re-setear si ya se edita esa HU: un refetch en segundo plano no debe
+    // reiniciar el estado del modal abierto.
+    if (found) setEditingStory((prev) => (prev?.id === found.id ? prev : found));
+  }, [storyParam, stories]);
+
+  // Abrir/cerrar el detalle se refleja en la URL: cualquier HU queda enlazable
+  // copiando la barra de direcciones con el modal abierto.
+  function openStory(story: UserStory) {
+    setEditingStory(story);
+    const next = new URLSearchParams(searchParams);
+    next.set("story", story.key);
+    setSearchParams(next, { replace: true });
+  }
+
+  function closeStory() {
+    setEditingStory(null);
+    const next = new URLSearchParams(searchParams);
+    next.delete("story");
+    // Cerrar el detalle de una HU siempre deja al usuario en el tab de historias:
+    // fijarlo sin condición evita depender de que el `?tab=` entrante sea válido
+    // (un enlace truncado con ?tab=bogus no debe rebotar a `commits` al cerrar).
+    next.set("tab", "stories");
+    setSearchParams(next, { replace: true });
+  }
 
   const [pendingDelete, setPendingDelete] = useState<UserStory | null>(null);
   const [deleting, setDeleting] = useState(false);
@@ -272,7 +306,7 @@ export default function StoriesTab({ ws, proj }: { ws: string; proj: string }) {
                       type="button"
                       className="grid h-8 w-8 shrink-0 place-items-center rounded-md text-ink-400 transition-colors hover:bg-surface-100 hover:text-ink-900"
                       aria-label={`Editar ${s.key} — ${s.title}`}
-                      onClick={() => setEditingStory(s)}
+                      onClick={() => openStory(s)}
                     >
                       <PencilIcon />
                     </button>
@@ -311,9 +345,9 @@ export default function StoriesTab({ ws, proj }: { ws: string; proj: string }) {
           ws={ws}
           proj={proj}
           epics={epics}
-          onClose={() => setEditingStory(null)}
+          onClose={closeStory}
           onSaved={() => {
-            setEditingStory(null);
+            closeStory();
             invalidateAfterStoryChange();
           }}
         />

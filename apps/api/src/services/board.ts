@@ -305,6 +305,22 @@ export async function opAssignCard(
 }
 
 /**
+ * Escribe en la HU vinculada el assignee que acaba de fijarse en su tarjeta.
+ *
+ * Va directo a Prisma en vez de pasar por stories.opAssignStory, por el mismo
+ * motivo que syncStoryStatusToColumn: stories.ts ya importa este módulo
+ * (llamarlo cerraría el ciclo de imports) y opAssignStory reasigna la tarjeta
+ * vinculada — es decir, reentraría en la actualización que se acaba de hacer.
+ * Idempotente: si la HU ya tiene ese assignee, no escribe.
+ */
+async function syncCardAssigneeToStory(userStoryId: string | null, assigneeId: string | null) {
+  if (!userStoryId) return;
+  const story = await prisma.userStory.findUnique({ where: { id: userStoryId }, select: { assigneeId: true } });
+  if (!story || story.assigneeId === assigneeId) return;
+  await prisma.userStory.update({ where: { id: userStoryId }, data: { assigneeId } });
+}
+
+/**
  * Operación (ya autorizada): vincula una tarjeta existente a una HU sin tarjeta.
  * Falla si la HU ya tiene otra tarjeta vinculada.
  */
@@ -370,6 +386,7 @@ export async function opUpdateCard(
 
   const data: Prisma.CardUpdateInput = {};
   const activities: Array<{ action: string; from: string | null; to: string | null }> = [];
+  let assigneeChanged = false;
 
   if (patch.title !== undefined) {
     const t = patch.title.trim();
@@ -402,6 +419,7 @@ export async function opUpdateCard(
         from: card.assigneeId,
         to: patch.assigneeId,
       });
+      assigneeChanged = true;
     }
   }
   if (patch.labels !== undefined) data.labels = asJson(patch.labels);
@@ -437,6 +455,16 @@ export async function opUpdateCard(
 
   for (const a of activities) {
     await recordActivity(card.id, actor, a.action, a.from, a.to);
+  }
+
+  // El assignee (PEM-39) es la otra cara de la misma información en la HU
+  // vinculada, igual que el estado/columna: si cambió, se espeja. `nextUserStoryId`
+  // sale de patch/card locales (no de `updated`) porque `data.userStory` usa
+  // sintaxis de relación anidada (`connect`/`disconnect`), y el valor esperado ya
+  // se conoce sin necesidad de leerlo de vuelta.
+  if (assigneeChanged) {
+    const nextUserStoryId = patch.userStoryId !== undefined ? patch.userStoryId : card.userStoryId;
+    await syncCardAssigneeToStory(nextUserStoryId, patch.assigneeId ?? null);
   }
 
   return updated;

@@ -260,6 +260,83 @@ test("llevar la tarjeta al estado en el que ya está no escribe nada", async (t)
   assert.deepEqual(writes.activities, [], "un 'moved' vacío le mentiría a wasLastMovedByUser");
 });
 
+// ─── Reasignar la tarjeta -> reasigna la HU ────────────────────────────────
+
+/** Construye el card que espera opUpdateCard (más campos que el que usa opMoveCard). */
+function cardForUpdate(card: Row | null, extra: Row = {}): never {
+  if (!card) throw new Error("test setup: la HU de este caso necesita una tarjeta vinculada");
+  return {
+    id: card.id,
+    title: "Buscador global",
+    description: null,
+    type: "task",
+    assigneeId: card.assigneeId ?? null,
+    userStoryId: card.userStoryId,
+    board: { projectId: "project-1" },
+    ...extra,
+  } as never;
+}
+
+test("reasignar la tarjeta escribe la HU vinculada con el mismo assigneeId", async (t) => {
+  const { card, writes } = stubKanban(t, {
+    card: { assigneeId: "contributor-old" },
+    story: { assigneeId: "contributor-old" },
+  });
+  stubDelegate(t, "contributor", {
+    findUnique: async () => ({ id: "contributor-new", projectId: "project-1" }),
+  });
+
+  await board.opUpdateCard(cardForUpdate(card), { assigneeId: "contributor-new" }, USER);
+
+  assert.deepEqual(writes.storyUpdates.map((w) => w.assigneeId), ["contributor-new"]);
+});
+
+test("reasignar al contributor que ya tiene la HU no escribe la HU (idempotencia)", async (t) => {
+  const { card, writes } = stubKanban(t, {
+    card: { assigneeId: "contributor-old" },
+    story: { assigneeId: "contributor-new" },
+  });
+  stubDelegate(t, "contributor", {
+    findUnique: async () => ({ id: "contributor-new", projectId: "project-1" }),
+  });
+
+  await board.opUpdateCard(cardForUpdate(card), { assigneeId: "contributor-new" }, USER);
+
+  assert.equal(writes.cardUpdates.length, 1, "la tarjeta sí cambió de assignee");
+  assert.deepEqual(writes.storyUpdates, [], "la HU ya tenía ese assignee: no hay nada que sincronizar");
+});
+
+test("desasignar la tarjeta desasigna también la HU vinculada", async (t) => {
+  const { card, writes } = stubKanban(t, {
+    card: { assigneeId: "contributor-1" },
+    story: { assigneeId: "contributor-1" },
+  });
+
+  await board.opUpdateCard(cardForUpdate(card), { assigneeId: null }, USER);
+
+  assert.deepEqual(writes.storyUpdates.map((w) => w.assigneeId), [null]);
+});
+
+test("reasignar una tarjeta sin HU vinculada no escribe ninguna HU", async (t) => {
+  const { card, writes } = stubKanban(t, { card: { userStoryId: null, assigneeId: "contributor-old" } });
+  stubDelegate(t, "contributor", {
+    findUnique: async () => ({ id: "contributor-new", projectId: "project-1" }),
+  });
+
+  await board.opUpdateCard(cardForUpdate(card), { assigneeId: "contributor-new" }, USER);
+
+  assert.deepEqual(writes.storyUpdates, []);
+});
+
+test("editar la tarjeta sin tocar el assignee no escribe la HU", async (t) => {
+  const { card, writes } = stubKanban(t, { card: { assigneeId: "contributor-1" }, story: { assigneeId: "contributor-1" } });
+
+  await board.opUpdateCard(cardForUpdate(card), { title: "Buscador global v2" }, USER);
+
+  assert.equal(writes.cardUpdates.length, 1, "el título sí cambió");
+  assert.deepEqual(writes.storyUpdates, []);
+});
+
 // ─── Auto-move desde commits -> arrastra también el estado ─────────────────
 //
 // El auto-move ya movía la tarjeta; el estado de la HU lo sincroniza opMoveCard,

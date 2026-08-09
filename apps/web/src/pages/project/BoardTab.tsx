@@ -357,11 +357,12 @@ export default function BoardTab({ ws, proj }: { ws: string; proj: string }) {
     setSelectedCard(null);
     const prev = currentBoard();
     if (!prev) return;
+    // El assignee (PEM-39) y la columna de la tarjeta se espejan en la HU
+    // vinculada: cualquier edición de la tarjeta puede haber cambiado la HU.
+    queryClient.invalidateQueries({ queryKey: queryKeys.stories(ws, proj) });
     // Si cambió de columna, recargar para respetar orden del servidor.
     const current = prev.columns.flatMap((c) => c.cards).find((c) => c.id === updated.id);
     if (!current || current.columnId !== updated.columnId) {
-      // Guardar la tarjeta en otra columna también movió el estado de su HU.
-      queryClient.invalidateQueries({ queryKey: queryKeys.stories(ws, proj) });
       return void resyncBoard();
     }
     commitBoard({

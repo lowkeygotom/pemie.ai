@@ -26,7 +26,15 @@ import {
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { formatNarrative } from "@pemie/shared";
-import { api, analyticsFailureReason, ApiError, type Board, type Card as CardData, type Column } from "../../lib/api.js";
+import {
+  api,
+  analyticsFailureReason,
+  ApiError,
+  type AssignmentNotification,
+  type Board,
+  type Card as CardData,
+  type Column,
+} from "../../lib/api.js";
 import { queryKeys, STALE_TIME } from "../../lib/queryClient.js";
 import { track } from "../../lib/analytics/index.js";
 import {
@@ -38,10 +46,12 @@ import {
   ErrorText,
   Field,
   Input,
+  Notice,
   Select,
   SkeletonBoard,
 } from "../../components/ui.js";
 import CardDetailModal from "./CardDetailModal.js";
+import InvitePersonModal from "../../components/InvitePersonModal.js";
 
 /** Columna que contiene la tarjeta, o el id de la propia columna si se soltó en un hueco vacío. */
 function findContainer(board: Board, id: string): string | undefined {
@@ -236,7 +246,7 @@ function BoardColumn({
   );
 }
 
-export default function BoardTab({ ws, proj }: { ws: string; proj: string }) {
+export default function BoardTab({ ws, proj, canManage }: { ws: string; proj: string; canManage: boolean }) {
   const queryClient = useQueryClient();
   const boardQueryKey = queryKeys.board(ws, proj);
   const boardQuery = useQuery({
@@ -255,6 +265,8 @@ export default function BoardTab({ ws, proj }: { ws: string; proj: string }) {
   const [title, setTitle] = useState("");
   const [type, setType] = useState("task");
   const [selectedCard, setSelectedCard] = useState<CardData | null>(null);
+  const [assignmentNotice, setAssignmentNotice] = useState<{ card: CardData; notification: AssignmentNotification } | null>(null);
+  const [inviteEmail, setInviteEmail] = useState<string | null>(null);
 
   // Los handlers de drag necesitan leer el tablero ya actualizado dentro del mismo
   // evento: React difiere los updaters de setState hasta el render, así que calcular
@@ -353,8 +365,10 @@ export default function BoardTab({ ws, proj }: { ws: string; proj: string }) {
     void persistMove(id, columnId, undefined, fromColumn);
   }
 
-  function applyCardUpdate(updated: CardData) {
+  function applyCardUpdate(updated: CardData, notification?: AssignmentNotification) {
     setSelectedCard(null);
+    if (notification && notification.reason !== "self_assignment" && notification.reason !== "unassigned")
+      setAssignmentNotice({ card: updated, notification });
     const prev = currentBoard();
     if (!prev) return;
     // El assignee (PEM-39) y la columna de la tarjeta se espejan en la HU
@@ -465,6 +479,15 @@ export default function BoardTab({ ws, proj }: { ws: string; proj: string }) {
 
       {/* Nueva tarjeta */}
       <Card>
+        {assignmentNotice ? <Notice tone={assignmentNotice.notification.notified ? (assignmentNotice.notification.contentLite ? "warning" : "success") : assignmentNotice.notification.reason === "notification_error" ? "danger" : assignmentNotice.notification.reason === "recently_notified" ? "info" : "warning"} onDismiss={() => setAssignmentNotice(null)}>
+          {assignmentNotice.notification.notified
+            ? <>{`${assignmentNotice.card.userStory?.key ?? assignmentNotice.card.title} asignada a ${assignmentNotice.card.assignee?.name ?? "la persona seleccionada"}${assignmentNotice.notification.contentLite ? `. Se envió un aviso a ${assignmentNotice.notification.email} sin el detalle de la HU: no es miembro del workspace.` : ` — aviso enviado a ${assignmentNotice.notification.email}.`}`}{assignmentNotice.notification.contentLite && canManage && assignmentNotice.notification.email ? <Button size="sm" variant="secondary" onClick={() => setInviteEmail(assignmentNotice.notification.email!)}>Invitar al workspace</Button> : null}</>
+            : assignmentNotice.notification.reason === "recently_notified"
+              ? `${assignmentNotice.card.userStory?.key ?? assignmentNotice.card.title} asignada. No se reenvió el correo: ya se le avisó hace unos minutos.`
+              : assignmentNotice.notification.reason === "notification_error"
+                ? `${assignmentNotice.card.userStory?.key ?? assignmentNotice.card.title} asignada, pero el correo falló. La asignación quedó guardada.`
+                : `${assignmentNotice.card.userStory?.key ?? assignmentNotice.card.title} asignada, pero no se pudo avisar: no tiene correo.`}
+        </Notice> : null}
         <h3 className="text-h4 text-ink-900">Nueva tarjeta</h3>
         <p className="mt-1 text-body-sm text-ink-500">
           Para tareas o bugs sueltos que no necesitan una historia de usuario completa.
@@ -547,8 +570,10 @@ export default function BoardTab({ ws, proj }: { ws: string; proj: string }) {
           onClose={() => setSelectedCard(null)}
           onChanged={applyCardUpdate}
           onDeleted={applyCardDelete}
+          canManage={canManage}
         />
       )}
+      {inviteEmail ? <InvitePersonModal ws={ws} initialEmail={inviteEmail} onClose={() => setInviteEmail(null)} /> : null}
     </div>
   );
 }

@@ -14,7 +14,7 @@
     "db:studio": "prisma studio",
     "db:seed": "tsx prisma/seed.ts",
     "typecheck": "tsc --noEmit",
-    "test": "NODE_ENV=test DATABASE_URL=postgresql://test:test@localhost:5432/pemie?schema=public tsx --test \"src/**/*.test.ts\""
+    "test": "NODE_ENV=test DATABASE_URL=postgresql://test:test@localhost:5432/pemie?schema=public tsx --experimental-test-module-mocks --test \"src/**/*.test.ts\""
   },
   "dependencies": {
     "@hono/node-server": "^1",

@@ -26,6 +26,7 @@ test("el enlace de asignación respeta el contrato del deep link de HU", () => {
 
 test("un githubLogin de otro workspace no resuelve ni vincula al contributor", async (t) => {
   let userWhere: Record<string, unknown> | undefined;
+  let updateCalls = 0;
   stubDelegate(t, "contributor", {
     findUnique: async () => ({
       id: "contributor-1",
@@ -33,6 +34,10 @@ test("un githubLogin de otro workspace no resuelve ni vincula al contributor", a
       userId: null,
       project: { workspaceId: "workspace-1" },
     }),
+    update: async () => {
+      updateCalls++;
+      return {};
+    },
   });
   stubDelegate(t, "user", {
     findFirst: async ({ where }: { where: Record<string, unknown> }) => {
@@ -46,6 +51,26 @@ test("un githubLogin de otro workspace no resuelve ni vincula al contributor", a
     reason: "no_matching_member",
   });
   assert.deepEqual(userWhere?.memberships, { some: { workspaceId: "workspace-1" } });
+  assert.equal(updateCalls, 0, "no debe escribir en un match cross-tenant");
+});
+
+test("contributor sin email, sin userId y sin ningún match de githubLogin devuelve no_email", async (t) => {
+  stubDelegate(t, "contributor", {
+    findUnique: async () => ({
+      id: "contributor-1",
+      githubLogin: "sin-match",
+      userId: null,
+      project: { workspaceId: "workspace-1" },
+    }),
+  });
+  // Sin condicionar por `where`: a diferencia del test cross-tenant, acá
+  // tanto la búsqueda scoped al workspace como la global deben devolver null.
+  stubDelegate(t, "user", { findFirst: async () => null });
+
+  assert.deepEqual(await resolveContributorRecipient("contributor-1"), {
+    recipient: null,
+    reason: "no_email",
+  });
 });
 
 test("el correo explícito gana y marca si su cuenta es miembro", async (t) => {
@@ -102,6 +127,42 @@ test("una desasignación no consulta ni envía", async () => {
     }),
     { notified: false, reason: "unassigned" }
   );
+});
+
+test("una asignación repetida dentro de los 15 minutos no reenvía el correo", async (t) => {
+  stubDelegate(t, "contributor", {
+    findUnique: async () => ({
+      id: "contributor-1", githubLogin: "autor-inferido", userId: null, email: "persona@example.com",
+      project: { workspaceId: "workspace-1" },
+    }),
+  });
+  stubDelegate(t, "user", { findUnique: async () => ({ id: "user-1" }) });
+  stubDelegate(t, "membership", { findUnique: async () => ({ id: "membership-1" }) });
+  stubDelegate(t, "userStory", {
+    findUnique: async () => ({
+      key: "PEM-38",
+      title: "Notificar asignación",
+      project: { name: "pemie", slug: "pemie", workspace: { slug: "acme" } },
+    }),
+  });
+  let upsertCalls = 0;
+  stubDelegate(t, "assignmentNotification", {
+    findUnique: async () => ({ notifiedAt: new Date(Date.now() - 5 * 60 * 1000) }),
+    upsert: async () => {
+      upsertCalls++;
+      return {};
+    },
+  });
+
+  assert.deepEqual(
+    await notifyStoryAssigned({
+      storyId: "story-1",
+      assigneeId: "contributor-1",
+      actor: { actorType: "user", actorId: "user-2" },
+    }),
+    { notified: false, reason: "recently_notified", email: "persona@example.com" }
+  );
+  assert.equal(upsertCalls, 0, "la supresión corta el flujo antes de reintentar el envío");
 });
 
 // ─── resolveContributorRecipients (PEM-42): lectura batched, sin escrituras ──

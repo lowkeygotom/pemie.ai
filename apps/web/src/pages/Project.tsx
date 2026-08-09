@@ -90,7 +90,7 @@ export default function Project() {
       {tab === "commits" && <CommitsTab ws={slug} proj={projectSlug} project={project} />}
       {tab === "reports" && <ReportsTab ws={slug} proj={projectSlug} />}
       {tab === "stories" && <StoriesTab ws={slug} proj={projectSlug} canManage={project.role === "owner" || project.role === "admin"} />}
-      {tab === "board" && <BoardTab ws={slug} proj={projectSlug} />}
+      {tab === "board" && <BoardTab ws={slug} proj={projectSlug} canManage={project.role === "owner" || project.role === "admin"} />}
       {tab === "leaderboard" && <LeaderboardTab ws={slug} proj={projectSlug} />}
       {tab === "activity" && <AgentTab ws={slug} proj={projectSlug} />}
       {tab === "team" && <ContributorsTab ws={slug} proj={projectSlug} canManage={project.role === "owner" || project.role === "admin"} />}

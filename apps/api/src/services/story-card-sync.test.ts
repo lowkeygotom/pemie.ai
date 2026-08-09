@@ -283,8 +283,19 @@ test("reasignar la tarjeta escribe la HU vinculada con el mismo assigneeId", asy
     story: { assigneeId: "contributor-old" },
   });
   stubDelegate(t, "contributor", {
-    findUnique: async () => ({ id: "contributor-new", projectId: "project-1" }),
+    // Sirve a validateCardAssignee (projectId) y a resolveContributorRecipient,
+    // que dispara notifyStoryAssigned al reasignar (necesita project.workspaceId).
+    findUnique: async () => ({
+      id: "contributor-new",
+      projectId: "project-1",
+      email: null,
+      userId: null,
+      githubLogin: "contributor-new",
+      project: { workspaceId: "workspace-1" },
+    }),
   });
+  // Sin destinatario resoluble: notifyStoryAssigned no debe pegarle a la DB real.
+  stubDelegate(t, "user", { findFirst: async () => null });
 
   await board.opUpdateCard(cardForUpdate(card), { assigneeId: "contributor-new" }, USER);
 
@@ -297,8 +308,18 @@ test("reasignar al contributor que ya tiene la HU no escribe la HU (idempotencia
     story: { assigneeId: "contributor-new" },
   });
   stubDelegate(t, "contributor", {
-    findUnique: async () => ({ id: "contributor-new", projectId: "project-1" }),
+    findUnique: async () => ({
+      id: "contributor-new",
+      projectId: "project-1",
+      email: null,
+      userId: null,
+      githubLogin: "contributor-new",
+      project: { workspaceId: "workspace-1" },
+    }),
   });
+  // La tarjeta igual cambia de assignee (assigneeChanged): notifyStoryAssigned
+  // se dispara aunque la HU no tenga nada que sincronizar.
+  stubDelegate(t, "user", { findFirst: async () => null });
 
   await board.opUpdateCard(cardForUpdate(card), { assigneeId: "contributor-new" }, USER);
 
@@ -326,6 +347,38 @@ test("reasignar una tarjeta sin HU vinculada no escribe ninguna HU", async (t) =
   await board.opUpdateCard(cardForUpdate(card), { assigneeId: "contributor-new" }, USER);
 
   assert.deepEqual(writes.storyUpdates, []);
+});
+
+test("reasignar una tarjeta con HU vinculada devuelve assignmentNotification en el resultado de opUpdateCard", async (t) => {
+  const { card } = stubKanban(t, {
+    card: { assigneeId: "contributor-old" },
+    story: { assigneeId: "contributor-old" },
+  });
+  stubDelegate(t, "contributor", {
+    // Un solo objeto sirve para las dos llamadas que hace opUpdateCard:
+    // validateCardAssignee (solo lee projectId) y resolveContributorRecipient
+    // (real, no mockeado — lee email/userId/githubLogin/project.workspaceId).
+    // Sin email y sin userId, cae a buscar por githubLogin y no encuentra
+    // match — reason "no_email". Ejercita el flujo completo (board.ts ->
+    // notifications.ts) sin llegar al mailer real.
+    findUnique: async () => ({
+      id: "contributor-new",
+      projectId: "project-1",
+      githubLogin: "sin-match",
+      userId: null,
+      email: null,
+      project: { workspaceId: "workspace-1" },
+    }),
+  });
+  stubDelegate(t, "user", { findFirst: async () => null });
+
+  const result = await board.opUpdateCard(cardForUpdate(card), { assigneeId: "contributor-new" }, USER);
+
+  // `opUpdateCard` solo agrega `assignmentNotification` al objeto cuando hubo
+  // intento de notificar (ver board.ts): el tipo de retorno es una unión entre
+  // "con" y "sin" esa propiedad, así que se angosta con `in` antes de leerla.
+  assert.ok("assignmentNotification" in result, "debe incluir assignmentNotification en el resultado");
+  assert.deepEqual(result.assignmentNotification, { notified: false, reason: "no_email" });
 });
 
 test("editar la tarjeta sin tocar el assignee no escribe la HU", async (t) => {

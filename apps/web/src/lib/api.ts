@@ -389,6 +389,7 @@ export interface Card {
   labels?: unknown;
   createdAt?: string;
   updatedAt?: string;
+  assignmentNotification?: AssignmentNotification;
 }
 export interface CardActivity {
   id: string;

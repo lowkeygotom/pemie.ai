@@ -5,6 +5,7 @@ import {
   api,
   analyticsFailureReason,
   ApiError,
+  type AssignmentNotification,
   type Card as CardData,
   type CardActivity,
   type Column,
@@ -79,14 +80,16 @@ export default function CardDetailModal({
   onClose,
   onChanged,
   onDeleted,
+  canManage,
 }: {
   card: CardData;
   columns: Column[];
   ws: string;
   proj: string;
   onClose: () => void;
-  onChanged: (card: CardData) => void;
+  onChanged: (card: CardData, notification?: AssignmentNotification) => void;
   onDeleted: (cardId: string) => void;
+  canManage: boolean;
 }) {
   const queryClient = useQueryClient();
   const [title, setTitle] = useState(card.title);
@@ -163,7 +166,7 @@ export default function CardDetailModal({
         finalCard = { ...finalCard, columnId };
       }
       queryClient.invalidateQueries({ queryKey: activitiesQueryKey });
-      onChanged(finalCard);
+      onChanged(finalCard, updated.assignmentNotification);
     } catch (e) {
       setActionError(e instanceof ApiError ? e.message : "No se pudo guardar la tarjeta");
     } finally {
@@ -262,6 +265,18 @@ export default function CardDetailModal({
                 </Select>
               </Field>
             </div>
+
+            {assigneeId && contributorsQuery.data ? (() => {
+              const assignee = contributors.find((c) => c.id === assigneeId);
+              if (!assignee || assignee.notify === "member") return null;
+              return (
+                <div className={assignee.notify === "none" ? "rounded-md border border-amber-600 bg-amber-100 p-3 text-body-sm text-amber-700" : "rounded-md border border-blue-600 bg-blue-100 p-3 text-body-sm text-blue-700"}>
+                  {assignee.notify === "none"
+                    ? <>Sin correo: se asignará, pero no recibirá aviso. {canManage ? "Agrégalo desde Colaboradores antes de guardar." : "Un owner o admin puede agregarlo desde Colaboradores."}</>
+                    : "Recibirá un aviso sin el detalle de la HU: no tiene cuenta en el workspace."}
+                </div>
+              );
+            })() : null}
 
             <div className="min-w-0 border-t border-line-100 pt-4">
               <h4 className="mb-2 text-body-sm font-semibold text-ink-800">Actividad</h4>

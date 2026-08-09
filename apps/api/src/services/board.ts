@@ -15,6 +15,7 @@ import { prisma } from "../db.js";
 import { badRequest, notFound } from "./errors.js";
 import { projectWithAccess } from "./ingest.js";
 import { resolveActorNames } from "./actor.js";
+import { notifyStoryAssigned, type AssignmentNotificationResult } from "./notifications.js";
 
 const CARD_TYPES: CardType[] = ["story", "task", "bug"];
 // Los `order` son el otro extremo de STATUS_COLUMN_ORDER (@pemie/shared): esta
@@ -462,12 +463,20 @@ export async function opUpdateCard(
   // sale de patch/card locales (no de `updated`) porque `data.userStory` usa
   // sintaxis de relación anidada (`connect`/`disconnect`), y el valor esperado ya
   // se conoce sin necesidad de leerlo de vuelta.
+  let assignmentNotification: AssignmentNotificationResult | undefined;
   if (assigneeChanged) {
     const nextUserStoryId = patch.userStoryId !== undefined ? patch.userStoryId : card.userStoryId;
     await syncCardAssigneeToStory(nextUserStoryId, patch.assigneeId ?? null);
+    if (nextUserStoryId) {
+      assignmentNotification = await notifyStoryAssigned({
+        storyId: nextUserStoryId,
+        assigneeId: patch.assigneeId ?? null,
+        actor,
+      });
+    }
   }
 
-  return updated;
+  return assignmentNotification ? { ...updated, assignmentNotification } : updated;
 }
 
 /** Elimina una tarjeta del tablero (member+). */

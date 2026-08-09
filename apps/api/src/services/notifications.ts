@@ -66,6 +66,85 @@ export async function resolveContributorRecipient(contributorId: string): Promis
   return { recipient: { ...user, isMember: true } };
 }
 
+export type RecipientResolutionLite = {
+  recipient: { id: string | null; email: string; isMember: boolean } | null;
+};
+
+/**
+ * Versión batched de `resolveContributorRecipient`, sin efectos secundarios:
+ * usada por lecturas (opListContributors) que no pueden degradar a un
+ * `UPDATE` o a N+1 queries por fila. 3 queries fijas sin importar cuántos
+ * contributors haya — el mismo patrón que `resolveActorNames` (actor.ts).
+ *
+ * No hace `prisma.contributor.update` (el backfill de userId por githubLogin
+ * queda solo en la versión singular) ni reproduce el detalle de `reason`:
+ * ningún llamador batched lo lee hoy — si hiciera falta, debe usar la
+ * función singular.
+ */
+export async function resolveContributorRecipients(
+  workspaceId: string,
+  contributors: Array<{ id: string; email: string | null; userId: string | null; githubLogin: string }>
+): Promise<Map<string, RecipientResolutionLite>> {
+  const withEmail = contributors.filter(
+    (c): c is typeof c & { email: string } => c.email !== null && !isPlaceholderEmail(c.email)
+  );
+  const placeholderIds = contributors
+    .filter((c) => c.email !== null && isPlaceholderEmail(c.email))
+    .map((c) => c.id);
+  const withoutEmail = contributors.filter((c) => c.email === null);
+
+  const emails = [...new Set(withEmail.map((c) => c.email))];
+  const directUserIds = [...new Set(withoutEmail.filter((c) => c.userId).map((c) => c.userId as string))];
+  const logins = [...new Set(withoutEmail.map((c) => c.githubLogin))];
+
+  const [usersByEmail, usersByIdOrLogin] = await Promise.all([
+    emails.length
+      ? prisma.user.findMany({ where: { email: { in: emails } }, select: { id: true, email: true } })
+      : Promise.resolve([] as Array<{ id: string; email: string }>),
+    directUserIds.length || logins.length
+      ? prisma.user.findMany({
+          where: { OR: [{ id: { in: directUserIds } }, { githubLogin: { in: logins, mode: "insensitive" } }] },
+          select: { id: true, email: true, githubLogin: true },
+        })
+      : Promise.resolve([] as Array<{ id: string; email: string; githubLogin: string | null }>),
+  ]);
+
+  const candidateUserIds = [...new Set([...usersByEmail.map((u) => u.id), ...usersByIdOrLogin.map((u) => u.id)])];
+  const memberships = candidateUserIds.length
+    ? await prisma.membership.findMany({
+        where: { workspaceId, userId: { in: candidateUserIds } },
+        select: { userId: true },
+      })
+    : [];
+  const memberIds = new Set(memberships.map((m) => m.userId));
+
+  const userByEmail = new Map(usersByEmail.map((u) => [u.email, u]));
+  const userById = new Map(usersByIdOrLogin.map((u) => [u.id, u]));
+  const userByLoginLower = new Map<string, (typeof usersByIdOrLogin)[number]>();
+  for (const u of usersByIdOrLogin) {
+    const key = u.githubLogin?.toLowerCase();
+    if (key && !userByLoginLower.has(key)) userByLoginLower.set(key, u);
+  }
+
+  const result = new Map<string, RecipientResolutionLite>();
+  for (const c of withEmail) {
+    const user = userByEmail.get(c.email);
+    result.set(c.id, {
+      recipient: { id: user?.id ?? null, email: c.email, isMember: user ? memberIds.has(user.id) : false },
+    });
+  }
+  for (const id of placeholderIds) result.set(id, { recipient: null });
+  for (const c of withoutEmail) {
+    const direct = c.userId ? userById.get(c.userId) : undefined;
+    const matched = direct && memberIds.has(direct.id) ? direct : userByLoginLower.get(c.githubLogin.toLowerCase());
+    const user = matched && memberIds.has(matched.id) ? matched : undefined;
+    result.set(c.id, {
+      recipient: user && !isPlaceholderEmail(user.email) ? { id: user.id, email: user.email, isMember: true } : null,
+    });
+  }
+  return result;
+}
+
 export function storyAssignmentUrl(workspaceSlug: string, projectSlug: string, storyKey: string) {
   return `${env.WEB_ORIGIN}/w/${encodeURIComponent(workspaceSlug)}/p/${encodeURIComponent(
     projectSlug

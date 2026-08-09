@@ -15,7 +15,7 @@ import { projectWithAccess } from "./ingest.js";
 import { normalizeEmail, requireMembership } from "./tenancy.js";
 import * as board from "./board.js";
 import type { CardActor } from "./board.js";
-import { notifyStoryAssigned, resolveContributorRecipient } from "./notifications.js";
+import { notifyStoryAssigned, resolveContributorRecipients } from "./notifications.js";
 
 const PRIORITIES = ["low", "medium", "high", "critical"] as const;
 const STATUSES: UserStoryStatus[] = ["backlog", "ready", "in_progress", "review", "done"];
@@ -402,6 +402,32 @@ export async function listContributors(userId: string, projectId: string) {
   return opListContributors(projectId, membership.role === "owner" || membership.role === "admin");
 }
 
+/**
+ * Batchea el correo sugerido (`suggestedEmail`) para contributors sin email:
+ * el email que ya cargó otro proyecto del mismo workspace para el mismo
+ * githubLogin. Antes era un `findFirst` por fila (N+1); acá es una sola
+ * query para todos los logins sin email de la lista.
+ */
+async function loadSuggestedEmails(
+  workspaceId: string,
+  projectId: string,
+  contributors: Array<{ email: string | null; githubLogin: string }>
+): Promise<Map<string, string>> {
+  const logins = [...new Set(contributors.filter((c) => !c.email).map((c) => c.githubLogin))];
+  if (logins.length === 0) return new Map();
+  const matches = await prisma.contributor.findMany({
+    where: { githubLogin: { in: logins, mode: "insensitive" }, email: { not: null }, project: { workspaceId }, NOT: { projectId } },
+    select: { githubLogin: true, email: true },
+    orderBy: { createdAt: "asc" },
+  });
+  const byLogin = new Map<string, string>();
+  for (const m of matches) {
+    const key = m.githubLogin.toLowerCase();
+    if (!byLogin.has(key)) byLogin.set(key, m.email!);
+  }
+  return byLogin;
+}
+
 /** Operación (ya autorizada): lista los contribuidores del proyecto. */
 export async function opListContributors(projectId: string, includeSuggestion = false) {
   const project = await prisma.project.findUnique({ where: { id: projectId }, select: { workspaceId: true } });
@@ -409,19 +435,24 @@ export async function opListContributors(projectId: string, includeSuggestion = 
   const contributors = await prisma.contributor.findMany({
     where: { projectId },
     orderBy: { githubLogin: "asc" },
-    select: { id: true, githubLogin: true, name: true, avatarUrl: true, email: true },
+    select: { id: true, githubLogin: true, name: true, avatarUrl: true, email: true, userId: true },
   });
-  return Promise.all(contributors.map(async (contributor) => {
-    const resolution = await resolveContributorRecipient(contributor.id);
-    const suggestion = includeSuggestion && !contributor.email
-      ? await prisma.contributor.findFirst({ where: { githubLogin: { equals: contributor.githubLogin, mode: "insensitive" }, email: { not: null }, project: { workspaceId: project.workspaceId }, NOT: { projectId } }, select: { email: true } })
-      : null;
+  const [recipients, suggestions] = await Promise.all([
+    resolveContributorRecipients(project.workspaceId, contributors),
+    includeSuggestion ? loadSuggestedEmails(project.workspaceId, projectId, contributors) : Promise.resolve(new Map<string, string>()),
+  ]);
+  return contributors.map((contributor) => {
+    const resolution = recipients.get(contributor.id)?.recipient ?? null;
     return {
-      ...contributor,
-      notify: resolution.recipient ? (resolution.recipient.isMember ? "member" : "external") : "none",
-      suggestedEmail: includeSuggestion ? suggestion?.email ?? null : null,
+      id: contributor.id,
+      githubLogin: contributor.githubLogin,
+      name: contributor.name,
+      avatarUrl: contributor.avatarUrl,
+      email: contributor.email,
+      notify: resolution ? (resolution.isMember ? "member" : "external") : "none",
+      suggestedEmail: includeSuggestion ? suggestions.get(contributor.githubLogin.toLowerCase()) ?? null : null,
     };
-  }));
+  });
 }
 
 /** Guarda el correo explícito de un contributor (owner/admin). */

@@ -185,6 +185,39 @@ test("guardar la HU con el estado que ya tenía no mueve la tarjeta", async (t) 
   assert.deepEqual(writes.activities, []);
 });
 
+test("un asignado de otro proyecto rechaza todo el patch antes de escribir", async (t) => {
+  const { story, writes } = stubKanban(t);
+  stubDelegate(t, "contributor", {
+    findUnique: async () => ({ id: "contributor-foreign", projectId: "other-project" }),
+  });
+
+  await assert.rejects(
+    () =>
+      stories.opUpdateStory(
+        { id: "story-1", projectId: "project-1", status: "backlog" },
+        { title: "Título que no debe guardarse", assigneeId: "contributor-foreign" },
+        USER
+      ),
+    /asignado no pertenece al proyecto/
+  );
+
+  assert.equal(story.title, "Buscador global");
+  assert.deepEqual(writes.storyUpdates, []);
+  assert.deepEqual(writes.cardUpdates, []);
+});
+
+test("reasignar al mismo contributor es idempotente y no escribe la tarjeta", async (t) => {
+  const { story, writes } = stubKanban(t, { story: { assigneeId: "contributor-1" } });
+  stubDelegate(t, "contributor", {
+    findUnique: async () => ({ id: "contributor-1", projectId: "project-1" }),
+  });
+
+  await stories.opAssignStory(story.id as string, "contributor-1", USER);
+
+  assert.deepEqual(writes.storyUpdates, []);
+  assert.deepEqual(writes.cardUpdates, []);
+});
+
 // ─── Mover la tarjeta -> cambia el estado de la HU ─────────────────────────
 
 test("mover la tarjeta a En progreso deja la HU en in_progress", async (t) => {

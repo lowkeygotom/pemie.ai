@@ -323,15 +323,19 @@ const TOOLS: McpTool[] = [
       const projectId = await requireProject(ctx, args, "stories:write");
       const story = await stories.getStoryById(String(args.storyId));
       if (!story || story.projectId !== projectId) throw forbidden("La HU no pertenece a este proyecto");
-      return stories.opUpdateStory(story, {
-        title: args.title as string | undefined,
-        status: args.status as string | undefined,
-        priority: args.priority as string | undefined,
-        storyPoints: typeof args.storyPoints === "number" ? args.storyPoints : undefined,
-        narrative: args.narrative as never,
-        acceptanceCriteria: args.acceptanceCriteria as never,
-        epicId: args.epicId as string | null | undefined,
-      }, { actorType: "agent", actorId: ctx.key.agentId ?? ctx.key.id });
+      return stories.opUpdateStory(
+        story,
+        {
+          title: args.title as string | undefined,
+          status: args.status as string | undefined,
+          priority: args.priority as string | undefined,
+          storyPoints: typeof args.storyPoints === "number" ? args.storyPoints : undefined,
+          narrative: args.narrative as never,
+          acceptanceCriteria: args.acceptanceCriteria as never,
+          epicId: args.epicId as string | null | undefined,
+        },
+        { actorType: "agent", actorId: ctx.key.agentId ?? ctx.key.id }
+      );
     },
   },
   {

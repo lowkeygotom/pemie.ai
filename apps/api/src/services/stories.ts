@@ -297,6 +297,10 @@ export async function opUpdateStory(
       data.epic = { disconnect: true };
     }
   }
+  // Se valida antes de cualquier escritura: opAssignStory vuelve a validarlo
+  // porque también es una operación pública de MCP, pero acá un patch inválido
+  // tiene que rechazarse entero, no después de guardar título o estado.
+  if (patch.assigneeId) await validateAssignee(story.projectId, patch.assigneeId);
   const updated = Object.keys(data).length
     ? await prisma.userStory.update({ where: { id: story.id }, data })
     : await getStoryById(story.id);

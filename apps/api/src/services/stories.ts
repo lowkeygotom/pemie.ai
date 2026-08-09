@@ -14,6 +14,7 @@ import { badRequest, notFound } from "./errors.js";
 import { projectWithAccess } from "./ingest.js";
 import * as board from "./board.js";
 import type { CardActor } from "./board.js";
+import { notifyStoryAssigned } from "./notifications.js";
 
 const PRIORITIES = ["low", "medium", "high", "critical"] as const;
 const STATUSES: UserStoryStatus[] = ["backlog", "ready", "in_progress", "review", "done"];
@@ -208,6 +209,8 @@ export async function opCreateStory(
     cardActor
   );
 
+  if (story.assigneeId) await notifyStoryAssigned({ storyId: story.id, assigneeId: story.assigneeId, actor: cardActor });
+
   return story;
 }
 
@@ -294,15 +297,10 @@ export async function opUpdateStory(
       data.epic = { disconnect: true };
     }
   }
-  if (patch.assigneeId !== undefined) {
-    if (patch.assigneeId) {
-      await validateAssignee(story.projectId, patch.assigneeId);
-      data.assignee = { connect: { id: patch.assigneeId } };
-    } else {
-      data.assignee = { disconnect: true };
-    }
-  }
-  const updated = await prisma.userStory.update({ where: { id: story.id }, data });
+  const updated = Object.keys(data).length
+    ? await prisma.userStory.update({ where: { id: story.id }, data })
+    : await getStoryById(story.id);
+  if (!updated) throw notFound("HU no encontrada");
 
   // El tablero es la otra cara del estado: si cambió de verdad, la tarjeta se va
   // a la columna que le toca (mismo patrón que opAssignStory con el assignee).
@@ -311,7 +309,9 @@ export async function opUpdateStory(
     if (card) await board.opMoveCardToStatus(card, nextStatus, actor);
   }
 
-  return updated;
+  return patch.assigneeId === undefined
+    ? updated
+    : opAssignStory(story.id, patch.assigneeId, actor);
 }
 
 /** Elimina una HU (member+). */
@@ -376,6 +376,8 @@ export async function opAssignStory(storyId: string, assigneeId: string | null, 
   if (!story) throw notFound("HU no encontrada");
   if (assigneeId) await validateAssignee(story.projectId, assigneeId);
 
+  if (story.assigneeId === assigneeId) return story;
+
   const updated = await prisma.userStory.update({
     where: { id: story.id },
     data: { assigneeId },
@@ -383,6 +385,8 @@ export async function opAssignStory(storyId: string, assigneeId: string | null, 
 
   const card = await prisma.card.findUnique({ where: { userStoryId: story.id } });
   if (card) await board.opAssignCard(card, assigneeId, actor);
+
+  await notifyStoryAssigned({ storyId: updated.id, assigneeId, actor });
 
   return updated;
 }

@@ -155,6 +155,39 @@ export async function sendInvitationEmail(opts: {
   return sendEmail({ to, subject, html, text });
 }
 
+/** Correo al contributor cuando una Historia de Usuario pasa a su cargo. */
+export async function sendStoryAssignedEmail(opts: {
+  to: string;
+  storyKey: string;
+  storyTitle: string;
+  projectName: string;
+  assignerName: string;
+  storyUrl: string;
+}): Promise<SendResult> {
+  const { to, storyKey, storyTitle, projectName, assignerName, storyUrl } = opts;
+  const subject = `Te asignaron ${storyKey} · ${storyTitle} en ${projectName}`;
+  const text =
+    `${assignerName} te asignó la HU ${storyKey} · ${storyTitle} en ${projectName}.\n\n` +
+    `Ver Historia de Usuario:\n${storyUrl}`;
+  const html = `
+    <div style="font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;max-width:480px;margin:0 auto;color:#1a1f2e">
+      <h2 style="font-size:20px;margin:0 0 12px">Te asignaron una Historia de Usuario</h2>
+      <p style="font-size:14px;line-height:1.6;color:#4b5563">
+        <strong>${escapeHtml(assignerName)}</strong> te asignó <strong>${escapeHtml(storyKey)}</strong>
+        · ${escapeHtml(storyTitle)} en <strong>${escapeHtml(projectName)}</strong>.
+      </p>
+      <p style="margin:24px 0">
+        <a href="${escapeHtml(storyUrl)}" style="display:inline-block;background:#2563eb;color:#fff;text-decoration:none;padding:10px 20px;border-radius:8px;font-size:14px;font-weight:600">
+          Ver Historia de Usuario
+        </a>
+      </p>
+      <p style="font-size:12px;color:#9ca3af;line-height:1.6">
+        O copia este enlace:<br><span style="word-break:break-all">${escapeHtml(storyUrl)}</span>
+      </p>
+    </div>`;
+  return sendEmail({ to, subject, html, text });
+}
+
 function escapeHtml(s: string): string {
   return s
     .replace(/&/g, "&amp;")

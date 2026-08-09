@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { formatNarrative } from "@pemie/shared";
-import { api, analyticsFailureReason, ApiError, type UserStory } from "../../lib/api.js";
+import { api, analyticsFailureReason, ApiError, type AssignmentNotification, type UserStory } from "../../lib/api.js";
 import { queryKeys, STALE_TIME } from "../../lib/queryClient.js";
 import { track } from "../../lib/analytics/index.js";
 import {
@@ -22,8 +22,10 @@ import {
   PencilIcon,
   Select,
   TrashIcon,
+  Notice,
 } from "../../components/ui.js";
 import StoryDetailModal from "./StoryDetailModal.js";
+import InvitePersonModal from "../../components/InvitePersonModal.js";
 
 const STATUSES = ["backlog", "ready", "in_progress", "review", "done"];
 const PRIORITIES = ["low", "medium", "high", "critical"];
@@ -43,7 +45,7 @@ const PRIORITY_TONE: Record<string, BadgeTone> = {
   critical: "danger",
 };
 
-export default function StoriesTab({ ws, proj }: { ws: string; proj: string }) {
+export default function StoriesTab({ ws, proj, canManage }: { ws: string; proj: string; canManage: boolean }) {
   const queryClient = useQueryClient();
   const storiesQuery = useQuery({
     queryKey: queryKeys.stories(ws, proj),
@@ -77,6 +79,8 @@ export default function StoriesTab({ ws, proj }: { ws: string; proj: string }) {
   const [benefit, setBenefit] = useState("");
 
   const [editingStory, setEditingStory] = useState<UserStory | null>(null);
+  const [assignmentNotice, setAssignmentNotice] = useState<{ story: UserStory; notification: AssignmentNotification } | null>(null);
+  const [inviteEmail, setInviteEmail] = useState<string | null>(null);
   const [searchParams, setSearchParams] = useSearchParams();
   const storyParam = searchParams.get("story");
 
@@ -200,6 +204,15 @@ export default function StoriesTab({ ws, proj }: { ws: string; proj: string }) {
 
       {/* Nueva HU */}
       <Card>
+        {assignmentNotice ? <Notice tone={assignmentNotice.notification.notified ? (assignmentNotice.notification.contentLite ? "warning" : "success") : assignmentNotice.notification.reason === "notification_error" ? "danger" : assignmentNotice.notification.reason === "recently_notified" ? "info" : "warning"} onDismiss={() => setAssignmentNotice(null)}>
+          {assignmentNotice.notification.notified
+            ? <>{`${assignmentNotice.story.key} asignada a ${assignmentNotice.story.assignee?.name ?? "la persona seleccionada"}${assignmentNotice.notification.contentLite ? `. Se envió un aviso a ${assignmentNotice.notification.email} sin el detalle de la HU: no es miembro del workspace.` : ` — aviso enviado a ${assignmentNotice.notification.email}.`}`}{assignmentNotice.notification.contentLite && canManage && assignmentNotice.notification.email ? <Button size="sm" variant="secondary" onClick={() => setInviteEmail(assignmentNotice.notification.email!)}>Invitar al workspace</Button> : null}</>
+            : assignmentNotice.notification.reason === "recently_notified"
+              ? `${assignmentNotice.story.key} asignada. No se reenvió el correo: ya se le avisó hace unos minutos.`
+              : assignmentNotice.notification.reason === "notification_error"
+                ? `${assignmentNotice.story.key} asignada, pero el correo falló. La asignación quedó guardada.`
+                : `${assignmentNotice.story.key} asignada, pero no se pudo avisar: no tiene correo.`}
+        </Notice> : null}
         <h3 className="text-h4 text-ink-900">Nueva historia de usuario</h3>
         <form onSubmit={createStory} className="mt-4 space-y-4">
           <Field label="Título">
@@ -346,7 +359,10 @@ export default function StoriesTab({ ws, proj }: { ws: string; proj: string }) {
           proj={proj}
           epics={epics}
           onClose={closeStory}
-          onSaved={() => {
+          canManage={canManage}
+          onSaved={(updated, notification) => {
+            if (notification && notification.reason !== "self_assignment" && notification.reason !== "unassigned")
+              setAssignmentNotice({ story: updated, notification });
             closeStory();
             invalidateAfterStoryChange();
           }}
@@ -401,6 +417,7 @@ export default function StoriesTab({ ws, proj }: { ws: string; proj: string }) {
           </div>
         </Modal>
       )}
+      {inviteEmail ? <InvitePersonModal ws={ws} initialEmail={inviteEmail} onClose={() => setInviteEmail(null)} /> : null}
     </div>
   );
 }

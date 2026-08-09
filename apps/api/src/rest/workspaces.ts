@@ -97,6 +97,7 @@ const updateStorySchema = z.object({
   epicId: z.string().nullable().optional(),
   assigneeId: z.string().nullable().optional(),
 });
+const updateContributorSchema = z.object({ email: z.string().nullable() });
 const createCardSchema = z.object({
   title: z.string().min(1),
   type: z.enum(["story", "task", "bug"]).optional(),
@@ -527,8 +528,16 @@ export function workspaceRoutes() {
   });
 
   app.get("/:slug/projects/:projectSlug/contributors", async (c) => {
+    const user = requireUser(c);
     const project = await resolveProject(c);
-    return c.json({ contributors: await stories.opListContributors(project.id) });
+    return c.json({ contributors: await stories.listContributors(user.id, project.id) });
+  });
+
+  app.patch("/:slug/projects/:projectSlug/contributors/:contributorId", async (c) => {
+    const user = requireUser(c);
+    const body = updateContributorSchema.safeParse(await c.req.json().catch(() => null));
+    if (!body.success) throw badRequest("Datos de contributor inválidos", "invalid_body");
+    return c.json({ contributor: await stories.updateContributorEmail(user.id, c.req.param("contributorId"), body.data.email) });
   });
 
   app.post("/:slug/projects/:projectSlug/user-stories", async (c) => {

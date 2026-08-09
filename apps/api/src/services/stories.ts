@@ -12,9 +12,10 @@ import type {
 import { prisma } from "../db.js";
 import { badRequest, notFound } from "./errors.js";
 import { projectWithAccess } from "./ingest.js";
+import { normalizeEmail, requireMembership } from "./tenancy.js";
 import * as board from "./board.js";
 import type { CardActor } from "./board.js";
-import { notifyStoryAssigned } from "./notifications.js";
+import { notifyStoryAssigned, resolveContributorRecipient } from "./notifications.js";
 
 const PRIORITIES = ["low", "medium", "high", "critical"] as const;
 const STATUSES: UserStoryStatus[] = ["backlog", "ready", "in_progress", "review", "done"];
@@ -390,24 +391,48 @@ export async function opAssignStory(storyId: string, assigneeId: string | null, 
   const card = await prisma.card.findUnique({ where: { userStoryId: story.id } });
   if (card) await board.opAssignCard(card, assigneeId, actor);
 
-  await notifyStoryAssigned({ storyId: updated.id, assigneeId, actor });
-
-  return updated;
+  const assignmentNotification = await notifyStoryAssigned({ storyId: updated.id, assigneeId, actor });
+  return { ...updated, assignmentNotification };
 }
 
 /** Lista los contribuidores del proyecto, candidatos a asignar HUs/tarjetas (viewer+). */
 export async function listContributors(userId: string, projectId: string) {
-  await projectWithAccess(userId, projectId);
-  return opListContributors(projectId);
+  const project = await projectWithAccess(userId, projectId);
+  const membership = await requireMembership(userId, project.workspaceId);
+  return opListContributors(projectId, membership.role === "owner" || membership.role === "admin");
 }
 
 /** Operación (ya autorizada): lista los contribuidores del proyecto. */
-export function opListContributors(projectId: string) {
-  return prisma.contributor.findMany({
+export async function opListContributors(projectId: string, includeSuggestion = false) {
+  const project = await prisma.project.findUnique({ where: { id: projectId }, select: { workspaceId: true } });
+  if (!project) return [];
+  const contributors = await prisma.contributor.findMany({
     where: { projectId },
     orderBy: { githubLogin: "asc" },
-    select: { id: true, githubLogin: true, name: true, avatarUrl: true },
+    select: { id: true, githubLogin: true, name: true, avatarUrl: true, email: true },
   });
+  return Promise.all(contributors.map(async (contributor) => {
+    const resolution = await resolveContributorRecipient(contributor.id);
+    const suggestion = includeSuggestion && !contributor.email
+      ? await prisma.contributor.findFirst({ where: { githubLogin: { equals: contributor.githubLogin, mode: "insensitive" }, email: { not: null }, project: { workspaceId: project.workspaceId }, NOT: { projectId } }, select: { email: true } })
+      : null;
+    return {
+      ...contributor,
+      notify: resolution.recipient ? (resolution.recipient.isMember ? "member" : "external") : "none",
+      suggestedEmail: includeSuggestion ? suggestion?.email ?? null : null,
+    };
+  }));
+}
+
+/** Guarda el correo explícito de un contributor (owner/admin). */
+export async function updateContributorEmail(userId: string, contributorId: string, email: string | null) {
+  const contributor = await prisma.contributor.findUnique({ where: { id: contributorId }, include: { project: { select: { workspaceId: true } } } });
+  if (!contributor) throw notFound("Contributor no encontrado");
+  await requireMembership(userId, contributor.project.workspaceId, "admin");
+  const normalized = email === null ? null : normalizeEmail(email);
+  if (normalized && !normalized.includes("@")) throw badRequest("Email inválido", "invalid_email");
+  if (normalized && normalized.endsWith("@users.noreply.github.com")) throw badRequest("Ese correo de GitHub no recibe mensajes", "placeholder_email");
+  return prisma.contributor.update({ where: { id: contributorId }, data: { email: normalized } });
 }
 
 /**

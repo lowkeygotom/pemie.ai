@@ -8,8 +8,8 @@ import { sendStoryAssignedEmail, type SendResult } from "./mailer.js";
 import type { CardActor } from "./board.js";
 
 export type RecipientResolution =
-  | { recipient: { id: string; email: string }; reason?: never }
-  | { recipient: null; reason: "contributor_not_found" | "no_matching_member" | "placeholder_email" };
+  | { recipient: { id: string | null; email: string; isMember: boolean }; reason?: never }
+  | { recipient: null; reason: "contributor_not_found" | "no_matching_member" | "no_email" | "placeholder_email" };
 
 function isPlaceholderEmail(email: string) {
   return email.toLowerCase().endsWith("@users.noreply.github.com");
@@ -26,6 +26,15 @@ export async function resolveContributorRecipient(contributorId: string): Promis
     include: { project: { select: { workspaceId: true } } },
   });
   if (!contributor) return { recipient: null, reason: "contributor_not_found" };
+
+  if (contributor.email) {
+    if (isPlaceholderEmail(contributor.email)) return { recipient: null, reason: "placeholder_email" };
+    const user = await prisma.user.findUnique({ where: { email: contributor.email }, select: { id: true } });
+    const membership = user
+      ? await prisma.membership.findUnique({ where: { userId_workspaceId: { userId: user.id, workspaceId: contributor.project.workspaceId } } })
+      : null;
+    return { recipient: { id: user?.id ?? null, email: contributor.email, isMember: Boolean(membership) } };
+  }
 
   const membership = { some: { workspaceId: contributor.project.workspaceId } };
   let user = contributor.userId
@@ -44,9 +53,17 @@ export async function resolveContributorRecipient(contributorId: string): Promis
       await prisma.contributor.update({ where: { id: contributor.id }, data: { userId: user.id } });
   }
 
-  if (!user) return { recipient: null, reason: "no_matching_member" };
+  if (!user) {
+    // Este lookup no se usa para resolver ni vincular: solo conserva el motivo
+    // preciso cuando el login inferido pertenece a otra frontera de workspace.
+    const globalMatch = await prisma.user.findFirst({
+      where: { githubLogin: { equals: contributor.githubLogin, mode: "insensitive" } },
+      select: { id: true },
+    });
+    return { recipient: null, reason: globalMatch ? "no_matching_member" : "no_email" };
+  }
   if (isPlaceholderEmail(user.email)) return { recipient: null, reason: "placeholder_email" };
-  return { recipient: user };
+  return { recipient: { ...user, isMember: true } };
 }
 
 export function storyAssignmentUrl(workspaceSlug: string, projectSlug: string, storyKey: string) {
@@ -56,8 +73,8 @@ export function storyAssignmentUrl(workspaceSlug: string, projectSlug: string, s
 }
 
 export type AssignmentNotificationResult =
-  | { notified: true; delivered: boolean; previewUrl?: string }
-  | { notified: false; reason: string };
+  | { notified: true; delivered: boolean; previewUrl?: string; email: string; contentLite: boolean }
+  | { notified: false; reason: string; email?: string };
 
 /** Intenta notificar una asignación; sus fallos nunca revocan la asignación. */
 export async function notifyStoryAssigned(opts: {
@@ -87,6 +104,12 @@ export async function notifyStoryAssigned(opts: {
     if (opts.actor.actorType === "user" && opts.actor.actorId === resolved.recipient.id)
       return { notified: false, reason: "self_assignment" };
 
+    const previous = await prisma.assignmentNotification.findUnique({
+      where: { storyId_contributorId: { storyId: opts.storyId, contributorId: opts.assigneeId } },
+    });
+    if (previous && Date.now() - previous.notifiedAt.getTime() < 15 * 60 * 1000)
+      return { notified: false, reason: "recently_notified", email: resolved.recipient.email };
+
     const [actor] = await resolveActorNames([{ ...opts.actor, actorId: opts.actor.actorId ?? null }]);
     const result: SendResult = await sendStoryAssignedEmail({
       to: resolved.recipient.email,
@@ -95,8 +118,14 @@ export async function notifyStoryAssigned(opts: {
       projectName: story.project.name,
       assignerName: actor.actorName,
       storyUrl: storyAssignmentUrl(story.project.workspace.slug, story.project.slug, story.key),
+      contentLite: !resolved.recipient.isMember,
     });
-    return { notified: true, ...result };
+    await prisma.assignmentNotification.upsert({
+      where: { storyId_contributorId: { storyId: opts.storyId, contributorId: opts.assigneeId } },
+      create: { storyId: opts.storyId, contributorId: opts.assigneeId },
+      update: { notifiedAt: new Date() },
+    });
+    return { notified: true, ...result, email: resolved.recipient.email, contentLite: !resolved.recipient.isMember };
   } catch (err) {
     console.error(`[notifications] No se pudo notificar la asignación de HU ${opts.storyId}:`, err);
     return { notified: false, reason: "notification_error" };

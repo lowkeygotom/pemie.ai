@@ -18,7 +18,7 @@ test("el enlace de asignación respeta el contrato del deep link de HU", () => {
   );
 });
 
-test("un githubLogin coincidente sin Membership no resuelve destinatario", async (t) => {
+test("un githubLogin de otro workspace no resuelve ni vincula al contributor", async (t) => {
   let userWhere: Record<string, unknown> | undefined;
   stubDelegate(t, "contributor", {
     findUnique: async () => ({
@@ -30,8 +30,8 @@ test("un githubLogin coincidente sin Membership no resuelve destinatario", async
   });
   stubDelegate(t, "user", {
     findFirst: async ({ where }: { where: Record<string, unknown> }) => {
-      userWhere = where;
-      return null;
+      if ("memberships" in where) userWhere = where;
+      return "memberships" in where ? null : { id: "user-externo" };
     },
   });
 
@@ -40,6 +40,21 @@ test("un githubLogin coincidente sin Membership no resuelve destinatario", async
     reason: "no_matching_member",
   });
   assert.deepEqual(userWhere?.memberships, { some: { workspaceId: "workspace-1" } });
+});
+
+test("el correo explícito gana y marca si su cuenta es miembro", async (t) => {
+  stubDelegate(t, "contributor", {
+    findUnique: async () => ({
+      id: "contributor-1", githubLogin: "autor-inferido", userId: null, email: "persona@example.com",
+      project: { workspaceId: "workspace-1" },
+    }),
+  });
+  stubDelegate(t, "user", { findUnique: async () => ({ id: "user-1" }) });
+  stubDelegate(t, "membership", { findUnique: async () => ({ id: "membership-1" }) });
+
+  assert.deepEqual(await resolveContributorRecipient("contributor-1"), {
+    recipient: { id: "user-1", email: "persona@example.com", isMember: true },
+  });
 });
 
 test("una autoasignación no envía correo", async (t) => {

@@ -12,6 +12,11 @@ import { sendInvitationEmail } from "./mailer.js";
 const ROLE_RANK: Record<Role, number> = { viewer: 0, member: 1, admin: 2, owner: 3 };
 const INVITE_TTL_MS = 1000 * 60 * 60 * 24 * 7; // 7 días
 
+/** Una sola llave de correo para invitaciones y contributors. */
+export function normalizeEmail(email: string): string {
+  return email.trim().toLowerCase();
+}
+
 /**
  * Verifica que `userId` es miembro de `workspaceId` con al menos `minRole`.
  * Devuelve la membresía; lanza 403/404 si no aplica.
@@ -161,7 +166,7 @@ export async function createInvitation(
   role: Role = "member"
 ) {
   await requireMembership(userId, workspaceId, "admin");
-  const normalized = email.trim().toLowerCase();
+  const normalized = normalizeEmail(email);
   if (!normalized.includes("@")) throw badRequest("Email inválido", "invalid_email");
   if (role === "owner") throw badRequest("No se puede invitar como owner", "invalid_role");
 
@@ -330,11 +335,16 @@ export async function listProjects(userId: string, workspaceId: string) {
 export async function getProject(userId: string, workspaceSlug: string, projectSlug: string) {
   const workspace = await prisma.workspace.findFirst({
     where: { slug: workspaceSlug, memberships: { some: { userId } } },
+    include: { memberships: { where: { userId }, select: { role: true } } },
   });
   if (!workspace) throw notFound("Workspace no encontrado");
   const project = await prisma.project.findUnique({
     where: { workspaceId_slug: { workspaceId: workspace.id, slug: projectSlug } },
   });
   if (!project) throw notFound("Proyecto no encontrado");
-  return { ...project, workspace: { name: workspace.name, slug: workspace.slug } };
+  return {
+    ...project,
+    workspace: { name: workspace.name, slug: workspace.slug },
+    role: workspace.memberships[0]!.role as Role,
+  };
 }

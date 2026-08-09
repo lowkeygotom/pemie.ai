@@ -953,7 +953,17 @@ function TeamSection({
                   Ver correo enviado →
                 </a>
               ) : null}
-              <div className="mt-2 flex items-center gap-2">
+              {/* Aun con entrega confirmada el enlace queda visible como acción
+                  secundaria: si el correo cae en spam, este enlace es la única
+                  vía de invitación que le queda al owner. */}
+              {lastInvite.emailDelivered ? (
+                <p className="mt-2 text-caption text-ink-600">
+                  Si no le llega (puede caer en spam), comparte este enlace:
+                </p>
+              ) : null}
+              {/* Cuando la etiqueta de respaldo está presente, el enlace se le
+                  pega (mt-1): la etiqueta pertenece al bloque que introduce. */}
+              <div className={`${lastInvite.emailDelivered ? "mt-1" : "mt-2"} flex items-center gap-2`}>
                 <code className="min-w-0 flex-1 truncate rounded bg-white px-2 py-1.5 font-mono text-caption text-ink-700">
                   {inviteLink(lastInvite.token)}
                 </code>

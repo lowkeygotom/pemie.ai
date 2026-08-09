@@ -37,10 +37,14 @@ const schema = z.object({
   // Generar: openssl rand -base64 32
   CHANNEL_SECRETS_KEY: z.string().optional(),
 
-  // Envío de correo (invitaciones). Si RESEND_API_KEY está vacío, el mailer
-  // cae a modo dev: usa un buzón de prueba (Ethereal) y loguea el preview.
+  // Envío de correo. Resend es el transporte definitivo; SMTP es un escalón
+  // temporal de prueba y solo se usa si no hay key de Resend.
   RESEND_API_KEY: z.string().optional(),
   MAIL_FROM: z.string().default("pemie.ai <onboarding@resend.dev>"),
+  SMTP_HOST: z.string().optional(),
+  SMTP_PORT: z.coerce.number().int().min(1).max(65535).default(587),
+  SMTP_USER: z.string().optional(),
+  SMTP_PASS: z.string().optional(),
 
   // Analítica de producto (PEM-8, server-side: eventos telegram_*). Credencial
   // separada de la del cliente (VITE_POSTHOG_KEY en apps/web) — sin key, el

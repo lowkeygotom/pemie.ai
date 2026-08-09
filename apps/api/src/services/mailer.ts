@@ -2,7 +2,8 @@
 //
 // Estrategia de proveedor (cero configuración por defecto):
 //   1. Si RESEND_API_KEY está seteado → Resend (entrega real a inboxes reales).
-//   2. Si no → Ethereal: cuenta de prueba que nodemailer autocrea en runtime,
+//   2. Si no y SMTP_HOST está seteado → SMTP (escalón temporal de prueba).
+//   3. Si no → Ethereal: cuenta de prueba que nodemailer autocrea en runtime,
 //      sin registro ni claves. El correo NO llega a un inbox real, pero se
 //      obtiene una URL de preview donde se ve el email renderizado. Ideal para
 //      probar el flujo en local sin que el usuario configure nada.
@@ -48,6 +49,23 @@ function getEtherealTransport(): Promise<Transporter> {
   return etherealTransport;
 }
 
+/** Transporte SMTP temporal: falla rápido antes de agotar maxDuration de Vercel. */
+function getSmtpTransport(): Transporter {
+  const hasCredentials = Boolean(env.SMTP_USER && env.SMTP_PASS);
+  if ((env.SMTP_USER || env.SMTP_PASS) && !hasCredentials)
+    console.warn("📧 [mailer:smtp] SMTP_USER y SMTP_PASS deben configurarse juntos; se intentará sin auth.");
+
+  return nodemailer.createTransport({
+    host: env.SMTP_HOST,
+    port: env.SMTP_PORT,
+    secure: env.SMTP_PORT === 465,
+    ...(hasCredentials ? { auth: { user: env.SMTP_USER!, pass: env.SMTP_PASS! } } : {}),
+    connectionTimeout: 5_000,
+    greetingTimeout: 5_000,
+    socketTimeout: 10_000,
+  });
+}
+
 /** Envía un email. Nunca lanza: en fallo devuelve delivered=false y loguea. */
 export async function sendEmail(input: SendEmailInput): Promise<SendResult> {
   // Proveedor real (opt-in).
@@ -79,9 +97,28 @@ export async function sendEmail(input: SendEmailInput): Promise<SendResult> {
     }
   }
 
+  // Transporte temporal para comprobar entrega real antes de verificar el
+  // dominio de Resend. Al configurar RESEND_API_KEY queda desactivado solo.
+  if (env.SMTP_HOST) {
+    try {
+      await getSmtpTransport().sendMail({
+        from: env.MAIL_FROM,
+        to: input.to,
+        subject: input.subject,
+        html: input.html,
+        text: input.text,
+      });
+      console.info(`📧 [mailer:smtp] Email aceptado por SMTP para: ${input.to}`);
+      return { delivered: true };
+    } catch (err) {
+      console.error("📧 [mailer:smtp] Error enviando email vía SMTP:", err);
+      return { delivered: false };
+    }
+  }
+
   // En producción no se cae a Ethereal: es un buzón de prueba y el SMTP
-  // saliente suele estar bloqueado en serverless (colgaría la petición). La
-  // invitación se crea igual y se comparte por su `acceptUrl`.
+  // saliente suele estar bloqueado en serverless. La invitación se crea igual
+  // y se comparte por su `acceptUrl`.
   if (isProd) {
     console.warn(
       "📧 [mailer] Sin RESEND_API_KEY en producción: no se envía correo. " +

@@ -50,20 +50,27 @@ function getEtherealTransport(): Promise<Transporter> {
 }
 
 /** Transporte SMTP temporal: falla rápido antes de agotar maxDuration de Vercel. */
+let smtpTransport: Transporter | null = null;
 function getSmtpTransport(): Transporter {
+  if (smtpTransport) return smtpTransport;
+
   const hasCredentials = Boolean(env.SMTP_USER && env.SMTP_PASS);
   if ((env.SMTP_USER || env.SMTP_PASS) && !hasCredentials)
     console.warn("📧 [mailer:smtp] SMTP_USER y SMTP_PASS deben configurarse juntos; se intentará sin auth.");
+  if (env.SMTP_USER && !env.MAIL_FROM.toLowerCase().includes(env.SMTP_USER.toLowerCase()))
+    console.warn("📧 [mailer:smtp] MAIL_FROM debería usar la misma cuenta autenticada por SMTP.");
 
-  return nodemailer.createTransport({
+  smtpTransport = nodemailer.createTransport({
     host: env.SMTP_HOST,
     port: env.SMTP_PORT,
     secure: env.SMTP_PORT === 465,
+    requireTLS: env.SMTP_PORT !== 465,
     ...(hasCredentials ? { auth: { user: env.SMTP_USER!, pass: env.SMTP_PASS! } } : {}),
     connectionTimeout: 5_000,
     greetingTimeout: 5_000,
     socketTimeout: 10_000,
   });
+  return smtpTransport;
 }
 
 /** Envía un email. Nunca lanza: en fallo devuelve delivered=false y loguea. */

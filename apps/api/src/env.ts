@@ -42,7 +42,10 @@ const schema = z.object({
   RESEND_API_KEY: z.string().optional(),
   MAIL_FROM: z.string().default("pemie.ai <onboarding@resend.dev>"),
   SMTP_HOST: z.string().optional(),
-  SMTP_PORT: z.coerce.number().int().min(1).max(65535).default(587),
+  SMTP_PORT: z.preprocess(
+    (value) => (value === "" ? undefined : value),
+    z.coerce.number().int().min(1).max(65535).default(587)
+  ),
   SMTP_USER: z.string().optional(),
   SMTP_PASS: z.string().optional(),
 

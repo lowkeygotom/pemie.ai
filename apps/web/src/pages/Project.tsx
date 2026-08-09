@@ -8,6 +8,7 @@ import StoriesTab from "./project/StoriesTab.js";
 import BoardTab from "./project/BoardTab.js";
 import AgentTab from "./project/AgentTab.js";
 import LeaderboardTab from "./project/LeaderboardTab.js";
+import ContributorsTab from "./project/ContributorsTab.js";
 import ProjectSearch from "./project/ProjectSearch.js";
 const TABS = [
   { id: "commits", label: "Ingesta de commits" },
@@ -16,6 +17,7 @@ const TABS = [
   { id: "board", label: "Kanban" },
   { id: "leaderboard", label: "Leaderboard" },
   { id: "activity", label: "Actividad" },
+  { id: "team", label: "Colaboradores" },
 ] as const;
 
 type TabId = (typeof TABS)[number]["id"];
@@ -87,10 +89,11 @@ export default function Project() {
 
       {tab === "commits" && <CommitsTab ws={slug} proj={projectSlug} project={project} />}
       {tab === "reports" && <ReportsTab ws={slug} proj={projectSlug} />}
-      {tab === "stories" && <StoriesTab ws={slug} proj={projectSlug} />}
+      {tab === "stories" && <StoriesTab ws={slug} proj={projectSlug} canManage={project.role === "owner" || project.role === "admin"} />}
       {tab === "board" && <BoardTab ws={slug} proj={projectSlug} />}
       {tab === "leaderboard" && <LeaderboardTab ws={slug} proj={projectSlug} />}
       {tab === "activity" && <AgentTab ws={slug} proj={projectSlug} />}
+      {tab === "team" && <ContributorsTab ws={slug} proj={projectSlug} canManage={project.role === "owner" || project.role === "admin"} />}
     </div>
   );
 }

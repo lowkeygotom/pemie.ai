@@ -207,8 +207,17 @@ export async function sendStoryAssignedEmail(opts: {
   projectName: string;
   assignerName: string;
   storyUrl: string;
+  contentLite?: boolean;
 }): Promise<SendResult> {
-  const { to, storyKey, storyTitle, projectName, assignerName, storyUrl } = opts;
+  const { to, storyKey, storyTitle, projectName, assignerName, storyUrl, contentLite = false } = opts;
+  if (contentLite) {
+    return sendEmail({
+      to,
+      subject: `Te asignaron una HU en ${projectName}`,
+      text: `${assignerName} te asignó una Historia de Usuario en ${projectName}.\n\nInicia sesión para verla:\n${storyUrl}`,
+      html: `<div style="font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;max-width:480px;margin:0 auto;color:#1a1f2e"><h2 style="font-size:20px;margin:0 0 12px">Te asignaron una Historia de Usuario</h2><p style="font-size:14px;line-height:1.6;color:#4b5563"><strong>${escapeHtml(assignerName)}</strong> te asignó una HU en <strong>${escapeHtml(projectName)}</strong>.</p><p style="margin:24px 0"><a href="${escapeHtml(storyUrl)}" style="display:inline-block;background:#2563eb;color:#fff;text-decoration:none;padding:10px 20px;border-radius:8px;font-size:14px;font-weight:600">Ver Historia de Usuario</a></p></div>`,
+    });
+  }
   const subject = `Te asignaron ${storyKey} · ${storyTitle} en ${projectName}`;
   const text =
     `${assignerName} te asignó la HU ${storyKey} · ${storyTitle} en ${projectName}.\n\n` +

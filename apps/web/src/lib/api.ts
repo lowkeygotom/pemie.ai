@@ -170,6 +170,7 @@ export interface Project {
   domainConfig: DomainConfig | null;
   createdAt: string;
   updatedAt: string;
+  role: Role;
   workspace: { name: string; slug: string };
 }
 
@@ -204,6 +205,9 @@ export interface Contributor {
   githubLogin: string;
   name: string | null;
   avatarUrl: string | null;
+  email: string | null;
+  notify: "member" | "external" | "none";
+  suggestedEmail: string | null;
 }
 export interface Commit {
   id: string;
@@ -281,6 +285,16 @@ export interface UserStory {
   assigneeId: string | null;
   assignee?: Contributor | null;
   createdAt: string;
+  assignmentNotification?: AssignmentNotification;
+}
+
+export interface AssignmentNotification {
+  notified: boolean;
+  delivered?: boolean;
+  previewUrl?: string;
+  email?: string;
+  contentLite?: boolean;
+  reason?: string;
 }
 
 // ─── F4: agentes / API keys / audit ──────────────────────────────────
@@ -544,6 +558,8 @@ export const api = {
   },
   contributors: {
     list: (w: string, p: string) => get<{ contributors: Contributor[] }>(`${pp(w, p)}/contributors`),
+    update: (w: string, p: string, id: string, email: string | null) =>
+      patch<{ contributor: Contributor }>(`${pp(w, p)}/contributors/${id}`, { email }),
   },
 
   // ─── F4: agentes / API keys / audit ────────────────────────────────

@@ -1,6 +1,5 @@
 import { Link } from "react-router-dom";
-import { LogoMark, Wordmark } from "../../../components/ui.js";
-import { GithubIcon } from "../components/GithubIcon.js";
+import { GithubIcon, LogoMark, Wordmark } from "../../../components/ui.js";
 
 const LINKS = [
   { href: "#como", label: "Cómo funciona" },

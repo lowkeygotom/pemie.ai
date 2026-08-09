@@ -4,7 +4,7 @@ import { api, analyticsFailureReason, ApiError, type InvitationDetail } from "..
 import { useAuth } from "../lib/auth.js";
 import { track } from "../lib/analytics/index.js";
 import { Button, ErrorText, Spinner } from "../components/ui.js";
-import { AuthShell } from "./Login.js";
+import { AuthShell } from "./auth/AuthShell.js";
 
 export default function AcceptInvite() {
   const { token = "" } = useParams();

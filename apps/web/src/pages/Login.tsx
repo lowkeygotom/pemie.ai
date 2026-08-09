@@ -3,7 +3,8 @@ import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { safeNextPath, useAuth } from "../lib/auth.js";
 import { api, analyticsFailureReason, ApiError } from "../lib/api.js";
 import { track } from "../lib/analytics/index.js";
-import { Button, Card, ErrorText, Eyebrow, Field, Input, LogoMark, Wordmark } from "../components/ui.js";
+import { Button, ErrorText, Field, GithubIcon, Input } from "../components/ui.js";
+import { AuthShell } from "./auth/AuthShell.js";
 
 export default function Login() {
   const { login } = useAuth();
@@ -34,7 +35,27 @@ export default function Login() {
   }
 
   return (
-    <AuthShell eyebrow="ACCESO" title="Entra a pemie.ai" subtitle="Monitorea tus proyectos y equipos.">
+    <AuthShell
+      eyebrow="ACCESO"
+      title="Entra a pemie.ai"
+      subtitle="Continúa donde lo dejaste y vuelve a tener la operación completa a la vista."
+    >
+      <Button
+        type="button"
+        variant="secondary"
+        className="w-full"
+        onClick={() => window.location.assign(api.auth.githubUrl(next))}
+      >
+        <GithubIcon />
+        Continuar con GitHub
+      </Button>
+
+      <div className="my-6 flex items-center gap-3 text-caption text-ink-400">
+        <div className="h-px flex-1 bg-line-100" />
+        <span className="font-mono">o con email</span>
+        <div className="h-px flex-1 bg-line-100" />
+      </div>
+
       <form onSubmit={onSubmit} className="space-y-4">
         <Field label="Email">
           <Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} required />
@@ -52,15 +73,6 @@ export default function Login() {
           {busy ? "Entrando…" : "Entrar"}
         </Button>
       </form>
-
-      <div className="my-4 flex items-center gap-3 text-caption text-ink-400">
-        <div className="h-px flex-1 bg-line-100" /> o <div className="h-px flex-1 bg-line-100" />
-      </div>
-      <a href={api.auth.githubUrl(next)} className="block">
-        <Button variant="secondary" className="w-full">
-          Continuar con GitHub
-        </Button>
-      </a>
 
       <p className="mt-6 text-center text-body-sm text-ink-500">
         ¿No tienes cuenta?{" "}
@@ -81,33 +93,4 @@ function oauthError(code: string | null): string | null {
   if (code === "oauth_unconfigured")
     return "El acceso con GitHub aún no está habilitado en este servidor. Entra con tu correo y contraseña.";
   return "No se pudo iniciar sesión con GitHub.";
-}
-
-export function AuthShell({
-  eyebrow,
-  title,
-  subtitle,
-  children,
-}: {
-  eyebrow?: string;
-  title: string;
-  subtitle: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <div className="flex min-h-screen flex-col items-center justify-center bg-surface-50 px-4 py-16">
-      <div className="mb-8 flex items-center gap-2.5">
-        <LogoMark size={28} />
-        <Wordmark />
-      </div>
-      <Card className="w-full max-w-[420px]">
-        <div className="mb-6">
-          {eyebrow ? <Eyebrow className="mb-2 block">{eyebrow}</Eyebrow> : null}
-          <h1 className="text-h3 text-ink-900">{title}</h1>
-          <p className="mt-1.5 text-body-sm text-ink-500">{subtitle}</p>
-        </div>
-        {children}
-      </Card>
-    </div>
-  );
 }

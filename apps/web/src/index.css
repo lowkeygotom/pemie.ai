@@ -73,4 +73,97 @@
     background: radial-gradient(ellipse at center, var(--accent-tint), transparent 65%);
     pointer-events: none;
   }
+
+  /* Superficie editorial del acceso: convierte el pulso de actividad de pemie
+     en el gesto visual del login sin depender de una ilustración externa. */
+  .auth-signal-panel {
+    isolation: isolate;
+  }
+
+  .auth-signal-grid {
+    background-image:
+      linear-gradient(var(--line-onink) 1px, transparent 1px),
+      linear-gradient(90deg, var(--line-onink) 1px, transparent 1px);
+    background-size: var(--sp-12) var(--sp-12);
+    opacity: 0.45;
+    mask-image: linear-gradient(to bottom, black, transparent 86%);
+  }
+
+  .auth-signal-glow {
+    background:
+      radial-gradient(circle at 62% 42%, color-mix(in srgb, var(--blue-600) 38%, transparent), transparent 22%),
+      radial-gradient(circle at 24% 64%, color-mix(in srgb, var(--blue-500) 20%, transparent), transparent 34%),
+      linear-gradient(145deg, transparent 36%, color-mix(in srgb, var(--blue-700) 18%, transparent));
+  }
+
+  .auth-signal-art {
+    opacity: 0.9;
+  }
+
+  .auth-signal-path {
+    fill: none;
+    stroke: var(--accent-on-ink);
+    stroke-width: 2;
+    stroke-linecap: round;
+    stroke-dasharray: 12 14;
+    animation: auth-signal-flow 16s linear infinite;
+  }
+
+  .auth-signal-path-soft {
+    opacity: 0.22;
+    stroke-width: 1;
+  }
+
+  .auth-signal-path-bright {
+    opacity: 0.55;
+    stroke-width: 1.5;
+    animation-direction: reverse;
+    animation-duration: 22s;
+  }
+
+  .auth-signal-node {
+    fill: var(--text-on-ink);
+    filter: drop-shadow(0 0 var(--sp-4) var(--accent-on-ink));
+  }
+
+  .auth-signal-node-soft {
+    fill: var(--accent-on-ink);
+  }
+
+  .auth-signal-ring {
+    fill: none;
+    stroke: var(--accent-on-ink);
+    stroke-width: 1;
+    transform-box: fill-box;
+    transform-origin: center;
+    animation: auth-signal-ping 2.8s ease-out infinite;
+  }
+
+  .auth-status-dot {
+    box-shadow: 0 0 var(--sp-3) color-mix(in srgb, var(--green-600) 70%, transparent);
+  }
+}
+
+@keyframes auth-signal-flow {
+  to {
+    stroke-dashoffset: -260;
+  }
+}
+
+@keyframes auth-signal-ping {
+  0% {
+    opacity: 0.9;
+    transform: scale(0.6);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(1.8);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .auth-signal-path,
+  .auth-signal-ring {
+    animation: none;
+  }
 }

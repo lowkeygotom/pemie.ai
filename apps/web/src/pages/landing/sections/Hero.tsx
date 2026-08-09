@@ -1,6 +1,5 @@
-import { Button } from "../../../components/ui.js";
+import { Button, GithubIcon } from "../../../components/ui.js";
 import { AnimatedWordmark } from "../components/AnimatedWordmark.js";
-import { GithubIcon } from "../components/GithubIcon.js";
 import { TerminalDemo } from "../components/TerminalDemo.js";
 
 export function Hero({ githubUrl }: { githubUrl: string }) {

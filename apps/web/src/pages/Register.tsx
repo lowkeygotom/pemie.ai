@@ -4,7 +4,7 @@ import { safeNextPath, useAuth } from "../lib/auth.js";
 import { analyticsFailureReason, ApiError } from "../lib/api.js";
 import { track } from "../lib/analytics/index.js";
 import { Button, ErrorText, Field, Input } from "../components/ui.js";
-import { AuthShell } from "./Login.js";
+import { AuthShell } from "./auth/AuthShell.js";
 
 export default function Register() {
   const { register } = useAuth();

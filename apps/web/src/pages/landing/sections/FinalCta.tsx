@@ -1,6 +1,5 @@
-import { Button } from "../../../components/ui.js";
+import { Button, GithubIcon } from "../../../components/ui.js";
 import { Section, sectionTitleId } from "../components/Section.js";
-import { GithubIcon } from "../components/GithubIcon.js";
 
 const TITLE_ID = sectionTitleId("empezar");
 

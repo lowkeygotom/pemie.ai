@@ -53,12 +53,17 @@ interface Activity {
  */
 function stubDrift(
   t: TestContext,
-  seed: { rows: JoinRow[]; columns?: typeof COLUMNS; activities?: Activity[] }
+  seed: { rows: JoinRow[]; columns?: typeof COLUMNS; activities?: Activity[]; totalCommits?: number }
 ) {
   stubClientMember(t, "$queryRaw", async () => seed.rows);
   stubClientMember(t, "board", { findFirst: async () => ({ id: "board-1" }) });
   stubClientMember(t, "column", { findMany: async () => seed.columns ?? COLUMNS });
   stubClientMember(t, "cardActivity", { findMany: async () => seed.activities ?? [] });
+  // Default: cobertura 100% (todos los commits matcheados del seed son "el total"),
+  // así los tests que no le importa la cobertura nunca cruzan el umbral default.
+  stubClientMember(t, "commit", {
+    count: async () => seed.totalCommits ?? seed.rows.filter((r) => r.committedAt != null).length,
+  });
 }
 
 // ─── Un caso por tipo de alerta ─────────────────────────────────────────
@@ -257,4 +262,128 @@ test("el orden agrupa por tipo (unreported_work primero) antes que por fecha", a
     ["unreported_work", "stalled_wip"],
     "unreported_work va primero: el tablero está objetivamente mal y se arregla con un clic"
   );
+});
+
+// ─── PEM-51: cobertura de correlación (adopción parcial) ─────────────────
+
+test("cobertura de correlación alta no suprime stalled_wip", async (t) => {
+  const enteredInFlight = daysAgo(30);
+  const lastCommit = daysAgo(20);
+  stubDrift(t, {
+    rows: [{ storyId: "s1", key: "PEM-20", title: "Reportes semanales", status: "in_progress", committedAt: lastCommit }],
+    activities: [
+      { fromValue: "Backlog", toValue: "En progreso", createdAt: enteredInFlight, card: { userStoryId: "s1" } },
+    ],
+    totalCommits: 1, // 1 matcheado de 1 total -> cobertura 100%, muy por encima del umbral default (0.5)
+  });
+
+  const report = await drift.opDetectDrift("project-1");
+
+  assert.equal(report.correlationCoverage, 1);
+  assert.equal(report.coverageBelowThreshold, false);
+  assert.equal(report.alerts.length, 1);
+  assert.equal(report.alerts[0]!.evidence.type, "stalled_wip");
+});
+
+test("cobertura de correlación baja suprime stalled_wip pero no unreported_work", async (t) => {
+  const enteredInFlight = daysAgo(30);
+  const lastCommit = daysAgo(20); // más viejo que el umbral de staleDays -> candidato a stalled_wip
+  stubDrift(t, {
+    rows: [
+      { storyId: "s1", key: "PEM-21", title: "Estancada de verdad", status: "in_progress", committedAt: lastCommit },
+      { storyId: "s2", key: "PEM-22", title: "Trabajo no declarado", status: "backlog", committedAt: daysAgo(1) },
+    ],
+    activities: [
+      { fromValue: "Backlog", toValue: "En progreso", createdAt: enteredInFlight, card: { userStoryId: "s1" } },
+    ],
+    totalCommits: 10, // 2 matcheados de 10 totales -> cobertura 0.2, por debajo del umbral default (0.5)
+  });
+
+  const report = await drift.opDetectDrift("project-1");
+
+  assert.equal(report.correlationCoverage, 0.2);
+  assert.equal(report.coverageBelowThreshold, true);
+  assert.equal(report.alerts.length, 1, "solo unreported_work: stalled_wip depende de ausencia, que no es confiable acá");
+  assert.equal(report.alerts[0]!.evidence.type, "unreported_work");
+  assert.deepEqual(report.countsByType, { unreported_work: 1, stalled_wip: 0 });
+});
+
+test("cobertura exactamente igual al umbral NO suprime (umbral es el mínimo aceptable, no el punto de corte)", async (t) => {
+  const enteredInFlight = daysAgo(30);
+  const lastCommit = daysAgo(20);
+  stubDrift(t, {
+    rows: [{ storyId: "s1", key: "PEM-23", title: "Justo en el límite", status: "in_progress", committedAt: lastCommit }],
+    activities: [
+      { fromValue: "Backlog", toValue: "En progreso", createdAt: enteredInFlight, card: { userStoryId: "s1" } },
+    ],
+    totalCommits: 2, // 1 matcheado de 2 totales -> cobertura 0.5, igual al umbral default
+  });
+
+  const report = await drift.opDetectDrift("project-1");
+
+  assert.equal(report.correlationCoverage, 0.5);
+  assert.equal(report.coverageBelowThreshold, false);
+  assert.equal(report.alerts.length, 1);
+  assert.equal(report.alerts[0]!.evidence.type, "stalled_wip");
+});
+
+test("coverageThreshold es configurable por parámetro", async (t) => {
+  const enteredInFlight = daysAgo(30);
+  const lastCommit = daysAgo(20);
+  stubDrift(t, {
+    rows: [
+      { storyId: "s1", key: "PEM-24", title: "Estancada", status: "in_progress", committedAt: lastCommit },
+      // Commits de un ciclo anterior a la entrada al grupo: no afectan el
+      // cálculo de stalled_wip (se filtran por fecha), pero sí cuentan para
+      // el total matcheado que define la cobertura.
+      { storyId: "s1", key: "PEM-24", title: "Estancada", status: "in_progress", committedAt: daysAgo(90) },
+      { storyId: "s1", key: "PEM-24", title: "Estancada", status: "in_progress", committedAt: daysAgo(91) },
+      { storyId: "s1", key: "PEM-24", title: "Estancada", status: "in_progress", committedAt: daysAgo(92) },
+      { storyId: "s1", key: "PEM-24", title: "Estancada", status: "in_progress", committedAt: daysAgo(93) },
+      { storyId: "s1", key: "PEM-24", title: "Estancada", status: "in_progress", committedAt: daysAgo(94) },
+    ],
+    activities: [
+      { fromValue: "Backlog", toValue: "En progreso", createdAt: enteredInFlight, card: { userStoryId: "s1" } },
+    ],
+    totalCommits: 10, // 6 matcheados de 10 totales -> cobertura 0.6
+  });
+
+  const withDefault = await drift.opDetectDrift("project-1");
+  assert.equal(withDefault.coverageBelowThreshold, false, "0.6 >= 0.5 (default): no suprime");
+  assert.equal(withDefault.alerts.length, 1);
+
+  const withCustomThreshold = await drift.opDetectDrift("project-1", { coverageThreshold: 0.9 });
+  assert.equal(withCustomThreshold.coverageBelowThreshold, true, "0.6 < 0.9 (custom): sí suprime");
+  assert.equal(withCustomThreshold.alerts.length, 0);
+});
+
+test("correlationCoverage refleja el cociente exacto de matcheados sobre el total", async (t) => {
+  stubDrift(t, {
+    rows: [
+      { storyId: "s1", key: "PEM-25", title: "Cerrada sin código adicional", status: "done", committedAt: daysAgo(1) },
+      { storyId: "s1", key: "PEM-25", title: "Cerrada sin código adicional", status: "done", committedAt: daysAgo(2) },
+      { storyId: "s1", key: "PEM-25", title: "Cerrada sin código adicional", status: "done", committedAt: daysAgo(3) },
+    ],
+    totalCommits: 4, // 3 matcheados de 4 totales -> 0.75
+  });
+
+  const report = await drift.opDetectDrift("project-1");
+
+  assert.equal(report.correlationCoverage, 0.75);
+});
+
+test("sin correlación (PEM-50), el coverageThreshold pedido sigue viajando en la respuesta", async (t) => {
+  stubDrift(t, {
+    rows: [
+      { storyId: "s1", key: "PEM-26", title: "Feature sin commits", status: "in_progress", committedAt: null },
+      { storyId: "s2", key: "PEM-27", title: "Otra feature", status: "done", committedAt: null },
+    ],
+  });
+
+  const report = await drift.opDetectDrift("project-1", { coverageThreshold: 0.8 });
+
+  assert.equal(report.correlationAvailable, false);
+  assert.equal(report.coverageThreshold, 0.8);
+  assert.equal(typeof report.correlationCoverage, "number");
+  assert.equal(report.coverageBelowThreshold, true);
 });

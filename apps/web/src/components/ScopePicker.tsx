@@ -11,6 +11,7 @@ const GROUPS: { label: string; read?: ApiScope; write?: ApiScope }[] = [
   { label: "Notas", read: "notes:read", write: "notes:write" },
   { label: "Historias", read: "stories:read", write: "stories:write" },
   { label: "Kanban", read: "board:read", write: "board:write" },
+  { label: "Skills", read: "skills:read", write: "skills:write" },
 ];
 
 const READ_SCOPES = API_SCOPES.filter((scope) => scope.endsWith(":read"));
@@ -20,6 +21,7 @@ const READ_FOR_WRITE: Partial<Record<ApiScope, ApiScope>> = {
   "stories:write": "stories:read",
   "board:write": "board:read",
   "objective:write": "objective:read",
+  "skills:write": "skills:read",
 };
 
 function presetFor(scopes: readonly ApiScope[]): ScopePreset {

@@ -6,6 +6,7 @@
 import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { logger } from "hono/logger";
+import { secureHeaders } from "hono/secure-headers";
 import { allowedOrigins, isProd } from "./env.js";
 import { registerRest } from "./rest/index.js";
 import { mcpRoutes } from "./mcp/index.js";
@@ -16,6 +17,7 @@ export function createApp(): Hono<AppEnv> {
   const app = new Hono<AppEnv>();
 
   app.use("*", logger());
+  app.use("*", securityHeaders());
   app.use("*", cors({ origin: resolveCorsOrigin, credentials: true }));
 
   // Interfaz REST (frontend web) e interfaz MCP (agentes), ambas sobre la
@@ -41,6 +43,33 @@ export function createApp(): Hono<AppEnv> {
   });
 
   return app;
+}
+
+/**
+ * Cabeceras de seguridad de las respuestas del API.
+ *
+ * Todavía sin CSP: la política del front depende de a qué host apunte
+ * VITE_POSTHOG_HOST y de los avatares de GitHub, así que se despliega aparte y
+ * en report-only primero. Además esto solo cubre lo que pasa por Hono — el HTML
+ * de la SPA lo sirve la capa estática de Vercel y necesita su propio bloque
+ * `headers` en vercel.json.
+ */
+function securityHeaders() {
+  return secureHeaders({
+    xFrameOptions: "DENY",
+    referrerPolicy: "strict-origin-when-cross-origin",
+    permissionsPolicy: { camera: [], microphone: [], geolocation: [], payment: [] },
+    // HSTS solo sobre TLS: en http://localhost el navegador recordaría que debe
+    // forzar https y dejaría el dev server inalcanzable hasta limpiar ese estado.
+    strictTransportSecurity: isProd
+      ? "max-age=63072000; includeSubDomains; preload"
+      : false,
+    // CORP sigue al despliegue: en producción front y API comparten dominio, así
+    // que `same-origin` no cuesta nada; en dev el front es otro origen (Vite en
+    // su puerto) y no vale la pena arriesgar ahí una restricción que en prod no
+    // se aplicaría nunca.
+    crossOriginResourcePolicy: isProd ? "same-origin" : false,
+  });
 }
 
 /**

@@ -1,6 +1,7 @@
-// PEM-45 + PEM-50: vista de estado del proyecto. Un solo vistazo a objetivo,
-// carga del tablero, último informe y drift (dónde el tablero no coincide con
-// la evidencia real de commits).
+// PEM-45 + PEM-50: vista de estado del proyecto. Responde "dónde estamos" con
+// dos bloques: la carga del tablero y el drift (dónde el tablero no coincide
+// con la evidencia real de commits). Objetivo e informes quedan fuera a
+// propósito: viven en su propia pestaña y repetirlos acá diluía el foco.
 
 import { useQuery } from "@tanstack/react-query";
 import type { DriftAlert, DriftAlertType, UserStoryStatus } from "@pemie/shared";
@@ -12,10 +13,8 @@ import {
   Card,
   EmptyState,
   ErrorText,
-  MarkdownBody,
   Notice,
   Skeleton,
-  SkeletonCard,
   SkeletonList,
   SkeletonStats,
   Stat,
@@ -56,12 +55,10 @@ function alertDescription(alert: DriftAlert): string {
 function SkeletonOverview() {
   return (
     <div className="space-y-6">
-      <SkeletonCard lines={2} />
       <Card>
         <Skeleton className="mb-4 h-4 w-32" />
         <SkeletonStats count={5} />
       </Card>
-      <SkeletonCard lines={3} />
       <Card>
         <Skeleton className="mb-4 h-4 w-40" />
         <SkeletonList rows={3} />
@@ -90,26 +87,15 @@ export default function OverviewTab({ ws, proj }: { ws: string; proj: string }) 
   }
   if (!data) return null;
 
-  const { objective, stats, latestReport, wip, drift } = data;
+  // `objective` y `latestReport` llegan en la respuesta pero no se pintan acá:
+  // ya tienen su lugar en la pestaña "Objetivo e informes" y repetirlos diluía
+  // el foco de esta vista. El servicio los sigue devolviendo porque
+  // get_project_context los necesita para armar el contexto del agente.
+  const { stats, wip, drift } = data;
   const totalWip = wip.reduce((sum, col) => sum + col.cardCount, 0);
 
   return (
     <div className="space-y-6">
-      {/* Objetivo vigente */}
-      <Card>
-        <h3 className="text-h4 text-ink-900">Objetivo del proyecto</h3>
-        {objective ? (
-          <p className="mt-3 text-body text-ink-800">{objective.description}</p>
-        ) : (
-          <div className="mt-4">
-            <EmptyState
-              compact
-              title="Todavía no hay objetivo definido — fíjalo desde la pestaña de Objetivo e informes."
-            />
-          </div>
-        )}
-      </Card>
-
       {/* WIP por columna */}
       <Card>
         <h3 className="text-h4 text-ink-900">Carga del tablero</h3>
@@ -132,25 +118,6 @@ export default function OverviewTab({ ws, proj }: { ws: string; proj: string }) 
           {stats.totalCommits} commit{stats.totalCommits === 1 ? "" : "s"} ingestados de{" "}
           {stats.repoCount} repo{stats.repoCount === 1 ? "" : "s"}.
         </p>
-      </Card>
-
-      {/* Último informe */}
-      <Card>
-        <h3 className="text-h4 text-ink-900">Último informe</h3>
-        {latestReport ? (
-          <div className="mt-3 space-y-2">
-            <div className="flex flex-wrap items-center gap-2 font-mono text-caption text-ink-400">
-              <span>{latestReport.date === "todos" ? "Informe general" : latestReport.date}</span>
-              {latestReport.score != null ? <Badge tone="brand" mono>{latestReport.score}/100</Badge> : null}
-              {latestReport.verdict ? <Badge tone="neutral">{latestReport.verdict}</Badge> : null}
-            </div>
-            {latestReport.comment ? <MarkdownBody>{latestReport.comment}</MarkdownBody> : null}
-          </div>
-        ) : (
-          <div className="mt-4">
-            <EmptyState compact title="Todavía no se publicó ningún informe" />
-          </div>
-        )}
       </Card>
 
       {/* Drift (PEM-50) */}

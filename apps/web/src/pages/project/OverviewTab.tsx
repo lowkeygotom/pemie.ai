@@ -10,14 +10,13 @@ import { queryKeys, STALE_TIME } from "../../lib/queryClient.js";
 import {
   Badge,
   type BadgeTone,
+  BarList,
   Card,
   EmptyState,
   ErrorText,
   Notice,
   Skeleton,
   SkeletonList,
-  SkeletonStats,
-  Stat,
 } from "../../components/ui.js";
 
 const ALERT_META: Record<DriftAlertType, { label: string; tone: BadgeTone }> = {
@@ -57,7 +56,7 @@ function SkeletonOverview() {
     <div className="space-y-6">
       <Card>
         <Skeleton className="mb-4 h-4 w-32" />
-        <SkeletonStats count={5} />
+        <SkeletonList rows={5} />
       </Card>
       <Card>
         <Skeleton className="mb-4 h-4 w-40" />
@@ -98,22 +97,23 @@ export default function OverviewTab({ ws, proj }: { ws: string; proj: string }) 
     <div className="space-y-6">
       {/* WIP por columna */}
       <Card>
-        <h3 className="text-h4 text-ink-900">Carga del tablero</h3>
-        {wip.length === 0 ? (
-          <div className="mt-4">
-            <EmptyState compact title="El tablero todavía no tiene columnas" />
-          </div>
-        ) : (
-          <div className="mt-4 grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-5">
-            <Stat value={totalWip} label="Tarjetas en total" />
-            {wip
+        <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
+          <h3 className="text-h4 text-ink-900">Carga del tablero</h3>
+          <span className="font-mono text-caption text-ink-400">
+            {plural(totalWip, "tarjeta")} en total
+          </span>
+        </div>
+        {/* Las columnas van en el orden del tablero, no por tamaño: la vista
+            tiene que leerse como el flujo Backlog → Hecho. */}
+        <div className="mt-4">
+          <BarList
+            items={wip
               .slice()
               .sort((a, b) => a.order - b.order)
-              .map((col) => (
-                <Stat key={col.name} value={col.cardCount} label={col.name} />
-              ))}
-          </div>
-        )}
+              .map((col) => ({ label: col.name, value: col.cardCount }))}
+            emptyLabel="El tablero todavía no tiene columnas"
+          />
+        </div>
         <p className="mt-4 text-caption text-ink-400">
           {stats.totalCommits} commit{stats.totalCommits === 1 ? "" : "s"} ingestados de{" "}
           {stats.repoCount} repo{stats.repoCount === 1 ? "" : "s"}.

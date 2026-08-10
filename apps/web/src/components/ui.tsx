@@ -400,6 +400,66 @@ export function Stat({
   );
 }
 
+export interface BarListItem {
+  label: string;
+  value: number;
+}
+
+/**
+ * Distribución de una magnitud sobre un conjunto chico y ORDENADO (p. ej. las
+ * columnas del tablero). Tres decisiones que conviene no revertir sin motivo:
+ *
+ * - El largo va relativo al máximo, no al total. Con un reparto desigual —28 de
+ *   44 tarjetas en una sola columna— escalar por el total deja a las demás en
+ *   slivers de dos píxeles, y la comparación, que es para lo que existe el
+ *   gráfico, se pierde.
+ * - Un solo tono con opacidad creciente en vez de cinco colores. Las etapas son
+ *   un progreso, no identidades distintas; un color por columna diría que
+ *   Backlog y Revisión no tienen relación. Y se descartó la rampa --blue-100..700
+ *   porque su paso más claro es casi blanco: sobre la superficie de la Card
+ *   desaparecería justo en la barra más larga.
+ * - El número vive en tinta, nunca en el color de la barra. El dato nunca
+ *   depende de distinguir un tono; la barra solo refuerza lo que ya dice el texto.
+ */
+export function BarList({
+  items,
+  emptyLabel = "Sin datos",
+}: {
+  items: BarListItem[];
+  emptyLabel?: string;
+}) {
+  if (items.length === 0) return <EmptyState compact title={emptyLabel} />;
+  const max = Math.max(...items.map((i) => i.value), 1);
+  const lastIndex = Math.max(items.length - 1, 1);
+
+  return (
+    <ul className="space-y-2.5">
+      {items.map((item, i) => (
+        <li
+          key={item.label}
+          className="grid grid-cols-[minmax(5rem,9rem)_1fr_auto] items-center gap-3"
+        >
+          <span className="truncate text-body-sm text-ink-600">{item.label}</span>
+          <div className="h-2.5 overflow-hidden rounded-sm bg-line-100" aria-hidden="true">
+            <div
+              className="h-full rounded-sm bg-blue-600 transition-[width] duration-300 ease-out"
+              style={{
+                // `max()` garantiza que una columna con una sola tarjeta siga
+                // siendo visible en vez de colapsar a cero ancho.
+                width: item.value === 0 ? 0 : `max(0.375rem, ${(item.value / max) * 100}%)`,
+                opacity: 0.4 + (0.6 * i) / lastIndex,
+              }}
+            />
+          </div>
+          <span className="w-8 text-right font-mono text-body-sm tabular-nums text-ink-900">
+            {item.value}
+          </span>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
 // El panel de terminal es el motivo firma de pemie: chrome macOS, prompt azul, copiar.
 export function CodeBlock({
   children,

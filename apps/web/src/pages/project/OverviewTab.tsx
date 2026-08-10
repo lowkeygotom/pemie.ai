@@ -12,6 +12,7 @@ import {
   type BadgeTone,
   BarList,
   Card,
+  Collapsible,
   EmptyState,
   ErrorText,
   Notice,
@@ -120,48 +121,49 @@ export default function OverviewTab({ ws, proj }: { ws: string; proj: string }) 
         </p>
       </Card>
 
-      {/* Drift (PEM-50) */}
-      <Card>
-        <div className="flex items-center justify-between">
-          <h3 className="text-h4 text-ink-900">Alertas de drift</h3>
-          {drift.correlationAvailable ? (
-            <span className="font-mono text-caption text-ink-400">
-              umbral: {drift.staleDaysThreshold}d sin commits · cobertura:{" "}
-              {(drift.correlationCoverage * 100).toFixed(0)}%
-            </span>
-          ) : null}
-        </div>
-
+      {/* Drift (PEM-50 + PEM-51) */}
+      <Collapsible
+        title="Alertas de drift"
+        defaultOpen
+        badge={
+          drift.correlationAvailable ? (
+            <>
+              <Badge tone={drift.alerts.length > 0 ? "danger" : "neutral"} mono>
+                {plural(drift.alerts.length, "alerta")}
+              </Badge>
+              <Badge tone={drift.coverageBelowThreshold ? "warning" : "neutral"} mono>
+                {(drift.correlationCoverage * 100).toFixed(0)}% cobertura
+              </Badge>
+            </>
+          ) : null
+        }
+      >
         {!drift.correlationAvailable ? (
-          <div className="mt-4">
-            <Notice tone="info">
-              Este proyecto no referencia keys de HU (ej. "PRJ-123") en sus commits, así que no
-              podemos comparar el tablero contra la evidencia real. El resto del resumen es igual
-              de confiable.
-            </Notice>
-          </div>
+          <Notice tone="info">
+            Este proyecto no referencia keys de HU (ej. "PRJ-123") en sus commits, así que no
+            podemos comparar el tablero contra la evidencia real. El resto del resumen es igual
+            de confiable.
+          </Notice>
         ) : (
           <>
+            <p className="mb-4 font-mono text-caption text-ink-400">
+              umbral: {drift.staleDaysThreshold}d sin commits
+            </p>
             {drift.coverageBelowThreshold ? (
-              <div className="mt-4">
+              <div className="mb-4">
                 <Notice tone="warning">
-                  Solo el {(drift.correlationCoverage * 100).toFixed(0)}% de los commits de este
-                  proyecto referencian una key de HU (umbral: {(drift.coverageThreshold * 100).toFixed(0)}%).
-                  Con esta cobertura no confiamos en la AUSENCIA de commits, así que las alertas de
-                  "estancada" están suprimidas — las de "trabajo no reportado" siguen activas porque
-                  se basan en evidencia presente, no ausente.
+                  Cobertura baja ({(drift.correlationCoverage * 100).toFixed(0)}% &lt;{" "}
+                  {(drift.coverageThreshold * 100).toFixed(0)}%): alertas de "estancada" suprimidas.
                 </Notice>
               </div>
             ) : null}
             {drift.alerts.length === 0 ? (
-              <div className="mt-4">
-                <EmptyState
-                  title="Sin alertas"
-                  description="El tablero coincide con la evidencia de commits: nada parece fuera de sincronía."
-                />
-              </div>
+              <EmptyState
+                title="Sin alertas"
+                description="El tablero coincide con la evidencia de commits: nada parece fuera de sincronía."
+              />
             ) : (
-              <div className="mt-4 divide-y divide-line-100">
+              <div className="divide-y divide-line-100">
                 {drift.alerts.map((alert) => {
                   const meta = ALERT_META[alert.evidence.type];
                   return (
@@ -188,7 +190,7 @@ export default function OverviewTab({ ws, proj }: { ws: string; proj: string }) 
             )}
           </>
         )}
-      </Card>
+      </Collapsible>
     </div>
   );
 }

@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Link, useParams, useSearchParams } from "react-router-dom";
 import { api, ApiError, type Project as Prj } from "../lib/api.js";
 import { Badge, Card, PageHeader, Spinner, Tabs } from "../components/ui.js";
+import OverviewTab from "./project/OverviewTab.js";
 import CommitsTab from "./project/CommitsTab.js";
 import ReportsTab from "./project/ReportsTab.js";
 import StoriesTab from "./project/StoriesTab.js";
@@ -11,6 +12,7 @@ import LeaderboardTab from "./project/LeaderboardTab.js";
 import ContributorsTab from "./project/ContributorsTab.js";
 import ProjectSearch from "./project/ProjectSearch.js";
 const TABS = [
+  { id: "overview", label: "Estado" },
   { id: "commits", label: "Ingesta de commits" },
   { id: "reports", label: "Objetivo e informes" },
   { id: "stories", label: "Historias de usuario" },
@@ -40,7 +42,7 @@ export default function Project() {
     ? requestedTab
     : searchParams.get("story")
       ? "stories"
-      : "commits";
+      : "overview";
 
   // `replace`, no `push`: esta tab bar es la navegación principal del proyecto y
   // una entrada de historial por clic llenaría el "atrás". La URL queda
@@ -87,6 +89,7 @@ export default function Project() {
         className="mb-6"
       />
 
+      {tab === "overview" && <OverviewTab ws={slug} proj={projectSlug} />}
       {tab === "commits" && <CommitsTab ws={slug} proj={projectSlug} project={project} />}
       {tab === "reports" && <ReportsTab ws={slug} proj={projectSlug} />}
       {tab === "stories" && <StoriesTab ws={slug} proj={projectSlug} canManage={project.role === "owner" || project.role === "admin"} />}

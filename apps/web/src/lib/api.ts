@@ -3,10 +3,12 @@
 
 import type {
   DomainConfig,
+  DriftReport,
   ObservedAgent,
   RegisteredAgent,
   Role,
   UserStoryNarrative,
+  WipColumn,
   WorkspaceAgentRosterItem,
 } from "@pemie/shared";
 
@@ -415,6 +417,16 @@ export interface Board {
   columns: Column[];
 }
 
+// ─── PEM-45 + PEM-50: vista de estado del proyecto y drift ─────────────
+export interface ProjectOverview {
+  projectId: string;
+  objective: Objective | null;
+  stats: Stats;
+  latestReport: Report | null;
+  wip: WipColumn[];
+  drift: DriftReport;
+}
+
 // ─── Búsqueda global ───────────────────────────────────────────────────
 export interface SearchHit {
   type: "story" | "commit" | "note" | "card";
@@ -476,6 +488,8 @@ export const api = {
         `/api/workspaces/${wsSlug}/projects/${projectSlug}/domain-config`,
         config
       ),
+    overview: (wsSlug: string, projectSlug: string) =>
+      get<ProjectOverview>(`${pp(wsSlug, projectSlug)}/overview`),
   },
 
   // Base de rutas por proyecto.

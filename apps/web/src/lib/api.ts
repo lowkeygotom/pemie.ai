@@ -7,6 +7,10 @@ import type {
   ObservedAgent,
   RegisteredAgent,
   Role,
+  SkillDestination,
+  SkillInstallPackage,
+  SkillSummary,
+  SkillTarget,
   UserStoryNarrative,
   WipColumn,
   WorkspaceAgentRosterItem,
@@ -427,6 +431,10 @@ export interface ProjectOverview {
   drift: DriftReport;
 }
 
+// ─── Catálogo de skills (docs/skills-catalog.md) ──────────────────────
+export type Skill = SkillSummary;
+export type SkillInstall = SkillInstallPackage;
+
 // ─── Búsqueda global ───────────────────────────────────────────────────
 export interface SearchHit {
   type: "story" | "commit" | "note" | "card";
@@ -687,5 +695,12 @@ export const api = {
       get<{ invitation: InvitationDetail }>(`/api/invitations/${token}`),
     accept: (token: string) =>
       post<{ workspace: Workspace }>(`/api/invitations/${token}/accept`),
+  },
+
+  // ─── Catálogo de skills (solo lectura: publicar es vía agente) ─────
+  skills: {
+    list: (w: string, p: string) => get<{ skills: Skill[] }>(`${pp(w, p)}/skills`),
+    get: (w: string, p: string, slug: string, target: SkillTarget, destination: SkillDestination) =>
+      get<SkillInstall>(`${pp(w, p)}/skills/${slug}${qs({ target, destination })}`),
   },
 };

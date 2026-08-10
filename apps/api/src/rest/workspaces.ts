@@ -13,9 +13,10 @@ import * as board from "../services/board.js";
 import * as leaderboard from "../services/leaderboard.js";
 import * as overview from "../services/overview.js";
 import * as searchSvc from "../services/search.js";
+import * as skills from "../services/skills.js";
 import { badRequest } from "../services/errors.js";
 import { type AppContext, type AppEnv, requireUser } from "./http.js";
-import { isSafeHttpUrl, SEARCHABLE_TYPES } from "@pemie/shared";
+import { isSafeHttpUrl, SEARCHABLE_TYPES, SKILL_DESTINATIONS, SKILL_TARGETS, type SkillDestination, type SkillTarget } from "@pemie/shared";
 
 const createWorkspaceSchema = z.object({ name: z.string().min(2) });
 const updateWorkspaceSchema = z.object({ name: z.string().min(2) });
@@ -627,6 +628,32 @@ export function workspaceRoutes() {
     const body = moveCardSchema.safeParse(await c.req.json().catch(() => null));
     if (!body.success) throw badRequest("Datos de movimiento inválidos", "invalid_body");
     return c.json({ card: await board.moveCard(user.id, c.req.param("cardId"), body.data) });
+  });
+
+  // ─── Catálogo de skills (docs/skills-catalog.md) ───────────────────
+  // Solo lectura: publicar es vía agente (list_skills/get_skill/publish_skill
+  // en mcp/index.ts). El tab web solo lista y arma el prompt de instalación.
+  app.get("/:slug/projects/:projectSlug/skills", async (c) => {
+    const user = requireUser(c);
+    const project = await resolveProject(c);
+    return c.json({ skills: await skills.listSkills(user.id, project.id) });
+  });
+
+  app.get("/:slug/projects/:projectSlug/skills/:skillSlug", async (c) => {
+    const user = requireUser(c);
+    const project = await resolveProject(c);
+    const target = c.req.query("target");
+    const destination = c.req.query("destination");
+    if (!target || !SKILL_TARGETS.includes(target as SkillTarget))
+      throw badRequest(`target inválido (usa: ${SKILL_TARGETS.join(", ")})`, "invalid_target");
+    if (!destination || !SKILL_DESTINATIONS.includes(destination as SkillDestination))
+      throw badRequest(`destination inválido (usa: ${SKILL_DESTINATIONS.join(", ")})`, "invalid_destination");
+    return c.json(
+      await skills.getSkill(user.id, project.id, c.req.param("skillSlug"), {
+        target: target as SkillTarget,
+        destination: destination as SkillDestination,
+      })
+    );
   });
 
   return app;

@@ -11,6 +11,7 @@ import AgentTab from "./project/AgentTab.js";
 import LeaderboardTab from "./project/LeaderboardTab.js";
 import ContributorsTab from "./project/ContributorsTab.js";
 import ProjectSearch from "./project/ProjectSearch.js";
+import SkillsTab from "./project/SkillsTab.js";
 const TABS = [
   { id: "overview", label: "Estado" },
   { id: "commits", label: "Ingesta de commits" },
@@ -18,6 +19,7 @@ const TABS = [
   { id: "stories", label: "Historias de usuario" },
   { id: "board", label: "Kanban" },
   { id: "leaderboard", label: "Leaderboard" },
+  { id: "skills", label: "Skills" },
   { id: "activity", label: "Actividad" },
   { id: "team", label: "Colaboradores" },
 ] as const;
@@ -95,6 +97,7 @@ export default function Project() {
       {tab === "stories" && <StoriesTab ws={slug} proj={projectSlug} canManage={project.role === "owner" || project.role === "admin"} />}
       {tab === "board" && <BoardTab ws={slug} proj={projectSlug} canManage={project.role === "owner" || project.role === "admin"} />}
       {tab === "leaderboard" && <LeaderboardTab ws={slug} proj={projectSlug} />}
+      {tab === "skills" && <SkillsTab ws={slug} proj={projectSlug} />}
       {tab === "activity" && <AgentTab ws={slug} proj={projectSlug} />}
       {tab === "team" && <ContributorsTab ws={slug} proj={projectSlug} canManage={project.role === "owner" || project.role === "admin"} />}
     </div>

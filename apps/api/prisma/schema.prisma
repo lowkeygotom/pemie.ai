@@ -149,6 +149,7 @@ model Project {
   apiKeys             ApiKey[]
   channelDefaultsFor  UserChannelConfig[]
   agentPresences      AgentPresence[]
+  skills              ProjectSkill[]
 
   @@unique([workspaceId, slug])
   @@index([workspaceId])
@@ -290,6 +291,29 @@ model Note {
 
   @@index([projectId, status, createdAt])
   @@map("notes")
+}
+
+// ─── Catálogo de skills (docs/skills-catalog.md) ───────────────────────
+
+model ProjectSkill {
+  id              String   @id @default(cuid())
+  projectId       String
+  slug            String
+  name            String
+  description     String
+  version         Int      @default(1)
+  files           Json // SkillFile[] (packages/shared): [{ path, content }]
+  contentHash     String // sha256 canónico de `files`: hace idempotente el publish
+  publishedByType String   @default("agent") // ActorType (packages/shared)
+  publishedById   String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@unique([projectId, slug])
+  @@index([projectId, updatedAt])
+  @@map("project_skills")
 }
 
 // ─── Historias de Usuario ─────────────────────────────────────────────

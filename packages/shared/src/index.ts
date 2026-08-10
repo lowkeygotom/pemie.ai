@@ -3,6 +3,7 @@
 
 export * from "./analytics.js";
 export * from "./mcp-tools.js";
+export * from "./skills.js";
 
 export type Role = "owner" | "admin" | "member" | "viewer";
 
@@ -119,6 +120,8 @@ export const API_SCOPES = [
   "board:write",
   "objective:read",
   "objective:write",
+  "skills:read",
+  "skills:write",
 ] as const;
 
 export type ApiScope = (typeof API_SCOPES)[number];

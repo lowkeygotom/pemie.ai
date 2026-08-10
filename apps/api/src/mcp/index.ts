@@ -9,11 +9,16 @@ import type { ApiKey } from "@prisma/client";
 import {
   MCP_TOOLS,
   SEARCHABLE_TYPES,
+  SKILL_DESTINATIONS,
+  SKILL_TARGETS,
   describeToolAccess,
   isToolAvailable,
   type ApiScope,
   type McpToolName,
   type SearchableType,
+  type SkillDestination,
+  type SkillFile,
+  type SkillTarget,
 } from "@pemie/shared";
 import type { AppEnv } from "../rest/http.js";
 import { ServiceError, badRequest, forbidden } from "../services/errors.js";
@@ -26,6 +31,7 @@ import * as search from "../services/search.js";
 import * as leaderboard from "../services/leaderboard.js";
 import * as drift from "../services/drift.js";
 import * as overview from "../services/overview.js";
+import * as skills from "../services/skills.js";
 
 const PROTOCOL_VERSION = "2024-11-05";
 const SERVER_INFO = { name: "pemie.ai", version: "0.1.0" };
@@ -623,6 +629,71 @@ const TOOLS: McpTool[] = [
       return board.opListCardActivities(
         card.id,
         typeof args.limit === "number" ? args.limit : undefined
+      );
+    },
+  },
+  {
+    name: "list_skills",
+    description: "Lista las skills publicadas en el proyecto (sin su contenido).",
+    inputSchema: withProjectId(),
+    handler: async (ctx, args) => {
+      const projectId = await requireProject(ctx, args, "skills:read");
+      return { skills: await skills.opListSkills(projectId) };
+    },
+  },
+  {
+    name: "get_skill",
+    description:
+      "Devuelve el paquete instalable de una skill para tu runtime y destino. El destino lo decide la persona; no lo asumas.",
+    inputSchema: withProjectId(
+      {
+        slug: { type: "string" },
+        target: { type: "string", enum: [...SKILL_TARGETS] },
+        destination: { type: "string", enum: [...SKILL_DESTINATIONS] },
+      },
+      ["slug", "target", "destination"]
+    ),
+    handler: async (ctx, args) => {
+      const projectId = await requireProject(ctx, args, "skills:read");
+      return skills.opGetSkill(projectId, String(args.slug), {
+        target: args.target as SkillTarget,
+        destination: args.destination as SkillDestination,
+      });
+    },
+  },
+  {
+    name: "publish_skill",
+    description:
+      "Publica o actualiza una skill del proyecto. Debe incluir SKILL.md en files. Idempotente: si el contenido no cambió, la version no sube.",
+    inputSchema: withProjectId(
+      {
+        slug: { type: "string", description: "kebab-case, estable." },
+        name: { type: "string" },
+        description: { type: "string" },
+        files: {
+          type: "array",
+          items: {
+            type: "object",
+            properties: { path: { type: "string" }, content: { type: "string" } },
+            required: ["path", "content"],
+          },
+        },
+      },
+      ["slug", "name", "description", "files"]
+    ),
+    handler: async (ctx, args) => {
+      const projectId = await requireProject(ctx, args, "skills:write");
+      const rawFiles = Array.isArray(args.files) ? (args.files as Record<string, unknown>[]) : [];
+      const files: SkillFile[] = rawFiles.map((f) => ({ path: String(f.path ?? ""), content: String(f.content ?? "") }));
+      return skills.opPublishSkill(
+        projectId,
+        {
+          slug: String(args.slug),
+          name: String(args.name),
+          description: String(args.description),
+          files,
+        },
+        { type: "agent", id: ctx.key.agentId ?? ctx.key.id }
       );
     },
   },

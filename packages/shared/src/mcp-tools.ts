@@ -9,6 +9,7 @@ export const MCP_TOOL_NAMES = [
   "list_contributors", "list_board", "create_card", "move_card", "link_story_to_card",
   "get_story_commit_progress", "search", "create_note", "get_user_story", "delete_user_story",
   "update_card", "list_card_activities", "delete_card", "get_project_leaderboard",
+  "list_skills", "get_skill", "publish_skill",
 ] as const;
 export type McpToolName = (typeof MCP_TOOL_NAMES)[number];
 
@@ -35,7 +36,8 @@ export type ToolGroup =
   | "Objetivo e informes"
   | "Notas"
   | "Historias de Usuario"
-  | "Kanban";
+  | "Kanban"
+  | "Skills del proyecto";
 
 export interface McpToolMeta {
   access: ToolAccess;
@@ -77,6 +79,9 @@ export const MCP_TOOLS: Record<McpToolName, McpToolMeta> = {
   list_card_activities: { access: { kind: "scope", scope: "board:read" }, summary: "actividad de una tarjeta con el nombre del actor.", group: "Kanban" },
   delete_card: { access: { kind: "scope", scope: "board:write" }, summary: "elimina una tarjeta del tablero sin borrar su HU.", group: "Kanban" },
   get_project_leaderboard: { access: { kind: "scope", scope: "board:read" }, summary: "ranking de HUs cerradas por actor (persona o agente).", group: "Kanban" },
+  list_skills: { access: { kind: "scope", scope: "skills:read" }, summary: "skills publicadas en el proyecto.", group: "Skills del proyecto" },
+  get_skill: { access: { kind: "scope", scope: "skills:read" }, summary: "paquete instalable de una skill para tu runtime y destino.", group: "Skills del proyecto" },
+  publish_skill: { access: { kind: "scope", scope: "skills:write" }, summary: "publica o actualiza una skill (idempotente por hash de contenido).", group: "Skills del proyecto" },
 };
 
 export function isToolAvailable(access: ToolAccess, scopes: readonly ApiScope[]): boolean {
@@ -143,6 +148,6 @@ export function buildAgentPrompt(input: {
   return {
     included,
     excluded,
-    text: `Eres un agente conectado a pemie.ai (workspace "${input.workspaceSlug}").\nTu trabajo es monitorear y documentar el avance del equipo: leer commits, mantener el objetivo, publicar informes, responder notas y gestionar Historias de Usuario y el tablero Kanban.\n\n${scopeInstructions}\n\n## Conexión (MCP · JSON-RPC 2.0 sobre HTTP)\n- Endpoint: ${input.mcpUrl}\n- Autenticación: cabecera "Authorization: Bearer ${key}"\n- Protocolo: envía POST con {"jsonrpc":"2.0","id":<n>,"method":<método>,"params":<obj>}.\n- Descubre las herramientas con method "tools/list"; invócalas con method "tools/call" y params {"name":"<tool>","arguments":{...}}.\n- Todo lo que haces queda auditado y está limitado por los scopes de tu API key.\n\n## Herramientas disponibles\n${toolsSection}\n\n## Cómo operar\n1. Respeta el catálogo de tools que recibes: ya está filtrado por esta key.\n2. Usa list_* para leer el estado real antes de crear o modificar nada.\n3. Sé idempotente: publish_report ya lo es por fecha+slot; evita duplicar HUs o tarjetas.\n4. Al escribir informes, fundaméntalos en list_commits y get_story_commit_progress, no inventes.\n5. Si una acción falla por scope o rol, informa qué falta en vez de reintentar a ciegas.`,
+    text: `Eres un agente conectado a pemie.ai (workspace "${input.workspaceSlug}").\nTu trabajo es monitorear y documentar el avance del equipo: leer commits, mantener el objetivo, publicar informes, responder notas y gestionar Historias de Usuario y el tablero Kanban.\n\n${scopeInstructions}\n\n## Conexión (MCP · JSON-RPC 2.0 sobre HTTP)\n- Endpoint: ${input.mcpUrl}\n- Autenticación: cabecera "Authorization: Bearer ${key}"\n- Protocolo: envía POST con {"jsonrpc":"2.0","id":<n>,"method":<método>,"params":<obj>}.\n- Descubre las herramientas con method "tools/list"; invócalas con method "tools/call" y params {"name":"<tool>","arguments":{...}}.\n- Todo lo que haces queda auditado y está limitado por los scopes de tu API key.\n\n## Herramientas disponibles\n${toolsSection}\n\n## Cómo operar\n1. Respeta el catálogo de tools que recibes: ya está filtrado por esta key.\n2. Usa list_* para leer el estado real antes de crear o modificar nada.\n3. Sé idempotente: publish_report ya lo es por fecha+slot; evita duplicar HUs o tarjetas.\n4. Al escribir informes, fundaméntalos en list_commits y get_story_commit_progress, no inventes.\n5. Si una acción falla por scope o rol, informa qué falta en vez de reintentar a ciegas.\n6. Antes de resolver una tarea, revisa list_skills: puede haber una skill del proyecto que ya cubra lo que vas a hacer. Para instalar una, pregunta a la persona el destino (project o user) — nunca lo asumas — y escribe install.files bajo install.rootPath.`,
   };
 }

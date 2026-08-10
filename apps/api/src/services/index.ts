@@ -21,4 +21,5 @@ export * as reports from "./reports.js";
 export * as agents from "./agents.js";
 export * as stories from "./stories.js";
 export * as board from "./board.js";
+export * as skills from "./skills.js";
 export { ServiceError } from "./errors.js";

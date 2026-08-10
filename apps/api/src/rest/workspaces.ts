@@ -14,7 +14,7 @@ import * as leaderboard from "../services/leaderboard.js";
 import * as searchSvc from "../services/search.js";
 import { badRequest } from "../services/errors.js";
 import { type AppContext, type AppEnv, requireUser } from "./http.js";
-import { SEARCHABLE_TYPES } from "@pemie/shared";
+import { isSafeHttpUrl, SEARCHABLE_TYPES } from "@pemie/shared";
 
 const createWorkspaceSchema = z.object({ name: z.string().min(2) });
 const updateWorkspaceSchema = z.object({ name: z.string().min(2) });
@@ -31,7 +31,10 @@ const updateMemberRoleSchema = z.object({ role: z.enum(["admin", "member", "view
 const linkRepoSchema = z.object({
   owner: z.string().min(1),
   name: z.string().min(1),
-  url: z.string().url().optional(),
+  // `.url()` de Zod acepta cualquier esquema, y este valor se pinta como `href`
+  // en la pestaña Commits: un `javascript:` guardado aquí se ejecutaría con la
+  // sesión de quien haga clic.
+  url: z.string().url().refine(isSafeHttpUrl, { message: "unsafe_url_scheme" }).optional(),
   externalId: z.string().optional(),
   // Sin `installationId`: ver el comentario de ingest.LinkRepoInput.
 });

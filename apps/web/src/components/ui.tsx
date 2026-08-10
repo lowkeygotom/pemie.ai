@@ -5,6 +5,7 @@
 import { forwardRef, useEffect, useLayoutEffect, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
+import { safeHref } from "../lib/url.js";
 import type {
   ButtonHTMLAttributes,
   HTMLAttributes,
@@ -1035,9 +1036,12 @@ export function MarkdownBody({ children, className = "" }: { children: string; c
           blockquote: ({ children }) => (
             <blockquote className="border-l-2 border-line-200 pl-3 text-ink-600">{children}</blockquote>
           ),
+          // `safeHref` y no `href` a secas: react-markdown ya filtra esquemas
+          // por defecto, pero esto es contenido que publica un agente y la
+          // garantía vale más local que heredada del default de la librería.
           a: ({ href, children }) => (
             <a
-              href={href}
+              href={safeHref(href)}
               target="_blank"
               rel="noopener noreferrer"
               className="underline underline-offset-2"

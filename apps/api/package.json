@@ -22,7 +22,7 @@
     "@prisma/client": "^6",
     "bcryptjs": "^3.0.3",
     "dotenv": "^16",
-    "hono": "^4",
+    "hono": "^4.13.1",
     "nodemailer": "^9.0.3",
     "posthog-node": "^5",
     "zod": "^3"

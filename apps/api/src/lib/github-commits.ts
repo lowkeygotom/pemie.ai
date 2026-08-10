@@ -54,7 +54,12 @@ export async function fetchCommitsWithToken(
 
   const all: NormalizedCommit[] = [];
   for (let page = 1; page <= MAX_PAGES; page++) {
-    const url = new URL(`${API}/repos/${owner}/${name}/commits`);
+    // `owner` y `name` van codificados: sin eso, `new URL` normaliza los `..`
+    // que traigan y la petición acaba en otro endpoint de la API de GitHub —
+    // con esta misma credencial.
+    const url = new URL(
+      `${API}/repos/${encodeURIComponent(owner)}/${encodeURIComponent(name)}/commits`
+    );
     url.searchParams.set("per_page", String(PER_PAGE));
     url.searchParams.set("page", String(page));
     if (since) url.searchParams.set("since", since.toISOString());

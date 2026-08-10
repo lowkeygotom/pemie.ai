@@ -128,6 +128,11 @@ const TOOLS: McpTool[] = [
         type: "number",
         description: "Días sin evidencia de commit tras los que un WIP se considera estancado (default 14).",
       },
+      coverageThreshold: {
+        type: "number",
+        description:
+          "Cobertura mínima de commits tageados con key de HU (0-1) para confiar en alertas de ausencia (stalled_wip). Por debajo, se suprimen esas alertas (default 0.5).",
+      },
     }),
     handler: async (ctx, args) => {
       const projectId = await requireProject(ctx, args, "stories:read");
@@ -137,6 +142,7 @@ const TOOLS: McpTool[] = [
       await agents.authorizeKeyForProject(ctx.key, "commits:read", ctx.resolvedWorkspaceId!);
       return drift.opDetectDrift(projectId, {
         staleDays: typeof args.staleDays === "number" ? args.staleDays : undefined,
+        coverageThreshold: typeof args.coverageThreshold === "number" ? args.coverageThreshold : undefined,
       });
     },
   },

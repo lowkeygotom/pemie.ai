@@ -83,6 +83,17 @@ export interface DriftAlert<TDate = string> {
 export interface DriftReport<TDate = string> {
   correlationAvailable: boolean;
   staleDaysThreshold: number;
+  /**
+   * Proporción de commits del proyecto que referencian alguna HU (PEM-51).
+   * Guardia distinta de `correlationAvailable`: esa cubre adopción CERO
+   * (ningún commit tagea nada); esta cubre adopción PARCIAL. Cuando
+   * `correlationAvailable` es false, viaja en 0 — valor válido pero que
+   * nunca se lee de forma aislada, la UI prioriza ese otro guard primero.
+   */
+  correlationCoverage: number;
+  coverageThreshold: number;
+  /** correlationCoverage < coverageThreshold: por debajo, se suprimen las alertas stalled_wip. */
+  coverageBelowThreshold: boolean;
   /** Ordenadas por el servicio: unreported_work → stalled_wip, y por fecha desc dentro de cada tipo. */
   alerts: DriftAlert<TDate>[];
   countsByType: Record<DriftAlertType, number>;

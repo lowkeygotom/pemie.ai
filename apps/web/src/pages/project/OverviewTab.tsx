@@ -126,7 +126,8 @@ export default function OverviewTab({ ws, proj }: { ws: string; proj: string }) 
           <h3 className="text-h4 text-ink-900">Alertas de drift</h3>
           {drift.correlationAvailable ? (
             <span className="font-mono text-caption text-ink-400">
-              umbral: {drift.staleDaysThreshold}d sin commits
+              umbral: {drift.staleDaysThreshold}d sin commits · cobertura:{" "}
+              {(drift.correlationCoverage * 100).toFixed(0)}%
             </span>
           ) : null}
         </div>
@@ -139,38 +140,53 @@ export default function OverviewTab({ ws, proj }: { ws: string; proj: string }) 
               de confiable.
             </Notice>
           </div>
-        ) : drift.alerts.length === 0 ? (
-          <div className="mt-4">
-            <EmptyState
-              title="Sin alertas"
-              description="El tablero coincide con la evidencia de commits: nada parece fuera de sincronía."
-            />
-          </div>
         ) : (
-          <div className="mt-4 divide-y divide-line-100">
-            {drift.alerts.map((alert) => {
-              const meta = ALERT_META[alert.evidence.type];
-              return (
-                <div key={`${alert.evidence.type}:${alert.story.id}`} className="flex items-start gap-3 py-3.5">
-                  <Badge tone={meta.tone} dot>
-                    {meta.label}
-                  </Badge>
-                  <div className="min-w-0 flex-1">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <span className="font-mono text-caption text-ink-400">{alert.story.key}</span>
-                      <span className="truncate text-body-sm font-medium text-ink-900">
-                        {alert.story.title}
-                      </span>
-                      <Badge tone={STATUS_META[alert.story.status].tone}>
-                        {STATUS_META[alert.story.status].label}
+          <>
+            {drift.coverageBelowThreshold ? (
+              <div className="mt-4">
+                <Notice tone="warning">
+                  Solo el {(drift.correlationCoverage * 100).toFixed(0)}% de los commits de este
+                  proyecto referencian una key de HU (umbral: {(drift.coverageThreshold * 100).toFixed(0)}%).
+                  Con esta cobertura no confiamos en la AUSENCIA de commits, así que las alertas de
+                  "estancada" están suprimidas — las de "trabajo no reportado" siguen activas porque
+                  se basan en evidencia presente, no ausente.
+                </Notice>
+              </div>
+            ) : null}
+            {drift.alerts.length === 0 ? (
+              <div className="mt-4">
+                <EmptyState
+                  title="Sin alertas"
+                  description="El tablero coincide con la evidencia de commits: nada parece fuera de sincronía."
+                />
+              </div>
+            ) : (
+              <div className="mt-4 divide-y divide-line-100">
+                {drift.alerts.map((alert) => {
+                  const meta = ALERT_META[alert.evidence.type];
+                  return (
+                    <div key={`${alert.evidence.type}:${alert.story.id}`} className="flex items-start gap-3 py-3.5">
+                      <Badge tone={meta.tone} dot>
+                        {meta.label}
                       </Badge>
+                      <div className="min-w-0 flex-1">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className="font-mono text-caption text-ink-400">{alert.story.key}</span>
+                          <span className="truncate text-body-sm font-medium text-ink-900">
+                            {alert.story.title}
+                          </span>
+                          <Badge tone={STATUS_META[alert.story.status].tone}>
+                            {STATUS_META[alert.story.status].label}
+                          </Badge>
+                        </div>
+                        <p className="mt-1 text-body-sm text-ink-500">{alertDescription(alert)}</p>
+                      </div>
                     </div>
-                    <p className="mt-1 text-body-sm text-ink-500">{alertDescription(alert)}</p>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
+                  );
+                })}
+              </div>
+            )}
+          </>
         )}
       </Card>
     </div>

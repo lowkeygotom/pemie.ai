@@ -24,10 +24,16 @@ import { projectWithAccess } from "./ingest.js";
 
 const MS_PER_DAY = 1000 * 60 * 60 * 24;
 const DEFAULT_STALE_DAYS = 14;
+// PEM-51: con cobertura ≥50%, la chance de que varios commits reales de
+// trabajo queden sin ningún tag por puro azar cae rápido; más abajo esa
+// chance se dispara y la ausencia de commits tageados deja de ser señal.
+const DEFAULT_COVERAGE_THRESHOLD = 0.5;
 
 export interface DetectDriftOptions {
   /** Días sin evidencia de commit tras los que un WIP se considera estancado. */
   staleDays?: number;
+  /** Cobertura mínima (0-1) de commits tageados con key de HU para confiar en alertas por ausencia. */
+  coverageThreshold?: number;
 }
 
 /** Alertas de drift del proyecto (viewer+). */
@@ -103,10 +109,16 @@ function zeroCounts(): Record<DriftAlertType, number> {
   return { unreported_work: 0, stalled_wip: 0 };
 }
 
-function emptyReport(staleDaysThreshold: number): DriftReport<Date> {
+function emptyReport(staleDaysThreshold: number, coverageThreshold: number): DriftReport<Date> {
   return {
     correlationAvailable: false,
     staleDaysThreshold,
+    // Sin evidencia en absoluto no hay cobertura que calcular; 0 es el valor
+    // correcto (por debajo de cualquier umbral > 0), pero la UI nunca lo lee
+    // aislado: prioriza el guard de correlationAvailable primero.
+    correlationCoverage: 0,
+    coverageThreshold,
+    coverageBelowThreshold: true,
     alerts: [],
     countsByType: zeroCounts(),
   };
@@ -136,6 +148,7 @@ export async function opDetectDrift(
   opts: DetectDriftOptions = {}
 ): Promise<DriftReport<Date>> {
   const staleDays = opts.staleDays ?? DEFAULT_STALE_DAYS;
+  const coverageThreshold = opts.coverageThreshold ?? DEFAULT_COVERAGE_THRESHOLD;
 
   const rows = await prisma.$queryRaw<StoryCommitJoinRow[]>`
     SELECT
@@ -150,7 +163,7 @@ export async function opDetectDrift(
       AND ${commitSubjectMatchesKey(Prisma.sql`c."message"`, Prisma.sql`s."key"`)}
     WHERE s."projectId" = ${projectId}
   `;
-  if (rows.length === 0) return emptyReport(staleDays);
+  if (rows.length === 0) return emptyReport(staleDays, coverageThreshold);
 
   const stories = new Map<string, StoryAccumulator>();
   for (const row of rows) {
@@ -166,7 +179,14 @@ export async function opDetectDrift(
   // correlaciona commits con HUs, así que comparar tablero contra evidencia
   // no dice nada (falsos positivos garantizados).
   const totalMatchedCommits = [...stories.values()].reduce((sum, s) => sum + s.commits.length, 0);
-  if (totalMatchedCommits === 0) return emptyReport(staleDays);
+  if (totalMatchedCommits === 0) return emptyReport(staleDays, coverageThreshold);
+
+  // PEM-51: cobertura de correlación del proyecto — cuánto de la evidencia
+  // total respalda comparar tablero contra commits. Un solo COUNT indexado
+  // (@@index([projectId, committedAt])), sin traer contenido de commit.
+  const totalCommits = await prisma.commit.count({ where: { projectId } });
+  const correlationCoverage = totalCommits > 0 ? totalMatchedCommits / totalCommits : 0;
+  const coverageBelowThreshold = correlationCoverage < coverageThreshold;
 
   const board = await prisma.board.findFirst({ where: { projectId }, select: { id: true } });
   const columns = board
@@ -227,8 +247,11 @@ export async function opDetectDrift(
       // cero días de antigüedad. Y sin ninguna de las dos referencias no se
       // puede afirmar cuánto lleva sin avanzar: se calla, porque una alerta con
       // `daysSince: 0` y las dos fechas nulas es ruido, no señal.
+      // PEM-51: con cobertura de tagging baja, la ausencia de commits
+      // tageados no prueba ausencia de trabajo — se suprime esta alerta,
+      // nunca la de unreported_work (esa depende de presencia, no de ausencia).
       const reference = lastCommitSince ?? inFlightSince;
-      if (reference && now - reference.getTime() > staleMs) {
+      if (reference && now - reference.getTime() > staleMs && !coverageBelowThreshold) {
         alerts.push({
           story,
           evidence: {
@@ -252,5 +275,13 @@ export async function opDetectDrift(
   const countsByType = zeroCounts();
   for (const alert of alerts) countsByType[alert.evidence.type]++;
 
-  return { correlationAvailable: true, staleDaysThreshold: staleDays, alerts, countsByType };
+  return {
+    correlationAvailable: true,
+    staleDaysThreshold: staleDays,
+    correlationCoverage,
+    coverageThreshold,
+    coverageBelowThreshold,
+    alerts,
+    countsByType,
+  };
 }

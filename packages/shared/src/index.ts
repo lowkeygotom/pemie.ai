@@ -43,6 +43,51 @@ export function statusForColumnOrder(order: number): UserStoryStatus | null {
   return entry ? entry[0] : null;
 }
 
+export type StoryProgressGroup = "not_started" | "in_flight" | "closed";
+
+/** Grupo de avance por estado. Record total: sumar un UserStoryStatus obliga a clasificarlo. */
+export const STATUS_PROGRESS_GROUP: Record<UserStoryStatus, StoryProgressGroup> = {
+  backlog: "not_started",
+  ready: "not_started",
+  in_progress: "in_flight",
+  review: "in_flight",
+  done: "closed",
+};
+
+/**
+ * Solo se alerta lo que tiene una acción detrás. Una HU cerrada sin commits que
+ * la referencien NO es una alerta: hay HUs que se cierran legítimamente sin
+ * código (investigación, spike, decisión de producto), y pedirle a alguien que
+ * descarte esa alerta una por una convierte la herramienta en burocracia. Ese
+ * dato vive como cobertura agregada (PEM-46), que se lee sin exigir nada.
+ */
+export const DRIFT_ALERT_TYPES = ["unreported_work", "stalled_wip"] as const;
+export type DriftAlertType = (typeof DRIFT_ALERT_TYPES)[number];
+
+/** Evidencia distinta por tipo: el discriminante evita campos opcionales que mienten. */
+export type DriftEvidence<TDate = string> =
+  | { type: "unreported_work"; commitCount: number; lastCommitAt: TDate }
+  | {
+      type: "stalled_wip";
+      /** Último commit posterior a `inFlightSince`: el avance de ESTE ciclo, no de uno anterior. */
+      lastCommitAt: TDate | null;
+      inFlightSince: TDate | null;
+      daysSince: number;
+    };
+
+export interface DriftAlert<TDate = string> {
+  story: { id: string; key: string; title: string; status: UserStoryStatus };
+  evidence: DriftEvidence<TDate>;
+}
+
+export interface DriftReport<TDate = string> {
+  correlationAvailable: boolean;
+  staleDaysThreshold: number;
+  /** Ordenadas por el servicio: unreported_work → stalled_wip, y por fecha desc dentro de cada tipo. */
+  alerts: DriftAlert<TDate>[];
+  countsByType: Record<DriftAlertType, number>;
+}
+
 /** Scopes de API key para agentes (MCP + REST de agente). */
 export const API_SCOPES = [
   "commits:read",

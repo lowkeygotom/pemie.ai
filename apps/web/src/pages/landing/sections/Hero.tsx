@@ -15,7 +15,7 @@ export function Hero({ githubUrl }: { githubUrl: string }) {
           verdad a tu equipo y a tus agentes — con permisos de verdad.
         </p>
         <div className="animate-fade-up flex flex-wrap justify-center gap-3.5 [animation-delay:320ms]">
-          <a href="#empezar">
+          <a href="/login">
             <Button size="lg">Empezar</Button>
           </a>
           <a href={githubUrl}>

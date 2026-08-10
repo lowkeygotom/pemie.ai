@@ -17,7 +17,9 @@ import {
   type StoryProgressGroup,
   type UserStoryStatus,
 } from "@pemie/shared";
+import { Prisma } from "@prisma/client";
 import { prisma } from "../db.js";
+import { commitSubjectMatchesKey } from "./commit-keys.js";
 import { projectWithAccess } from "./ingest.js";
 
 const MS_PER_DAY = 1000 * 60 * 60 * 24;
@@ -123,9 +125,9 @@ function sortableDate(alert: DriftAlert<Date>): Date {
  * Operación (ya autorizada): detecta drift entre el tablero y la evidencia
  * real de commits.
  *
- * Una sola query batcheada trae, por HU, cada commit que referencia su key
- * (mismo patrón `~* '\y…\y'` que `stories.opGetStoryCommitProgress`, para no
- * repetir la N+1 que ese comentario ya documenta). El resto de datos
+ * Una sola query batcheada trae, por HU, cada commit cuyo asunto referencia su
+ * key (regla compartida en `commit-keys.ts`, la misma que usa el avance por HU,
+ * sin repetir su N+1). El resto de datos
  * (columnas del tablero, historial de movimientos) también se trae en batch:
  * nunca una query por HU.
  */
@@ -145,7 +147,7 @@ export async function opDetectDrift(
     FROM "user_stories" s
     LEFT JOIN "commits" c
       ON c."projectId" = s."projectId"
-      AND c."message" ~* ('\\y' || s."key" || '\\y')
+      AND ${commitSubjectMatchesKey(Prisma.sql`c."message"`, Prisma.sql`s."key"`)}
     WHERE s."projectId" = ${projectId}
   `;
   if (rows.length === 0) return emptyReport(staleDays);

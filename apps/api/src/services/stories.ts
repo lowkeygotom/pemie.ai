@@ -10,6 +10,7 @@ import type {
   AcceptanceCriterion,
 } from "@pemie/shared";
 import { prisma } from "../db.js";
+import { commitSubjectMatchesKey } from "./commit-keys.js";
 import { badRequest, notFound } from "./errors.js";
 import { projectWithAccess } from "./ingest.js";
 import { normalizeEmail, requireMembership } from "./tenancy.js";
@@ -467,15 +468,10 @@ export async function updateContributorEmail(userId: string, contributorId: stri
 }
 
 /**
- * Cuenta y lista los commits del proyecto cuyo mensaje referencia la key de la
- * HU (ej. PRJ-123).
- *
- * El match va por regex y no por `contains`: como substring, «PEM-1» también
- * aparece dentro de «PEM-19», así que cada HU de un dígito se quedaba con el
- * avance de todas sus vecinas de dos. `\y` es la frontera de palabra de
- * Postgres — exige que la key termine donde termina su número, y deja pasar
- * paréntesis, dos puntos o fin de línea alrededor. `~*` conserva el match sin
- * distinguir mayúsculas que traía `mode: "insensitive"`.
+ * Cuenta y lista los commits del proyecto cuyo asunto referencia la key de la
+ * HU (ej. PRJ-123). La regla de correlación vive en `commit-keys.ts`, compartida
+ * con la detección de drift para que el avance por HU y las alertas no puedan
+ * discrepar.
  */
 export async function opGetStoryCommitProgress(story: { id: string; projectId: string; key: string }) {
   const commits = await prisma.$queryRaw<
@@ -484,7 +480,7 @@ export async function opGetStoryCommitProgress(story: { id: string; projectId: s
     SELECT "id", "sha", "message", "committedAt"
     FROM "commits"
     WHERE "projectId" = ${story.projectId}
-      AND "message" ~* ('\\y' || ${story.key} || '\\y')
+      AND ${commitSubjectMatchesKey(Prisma.sql`"message"`, Prisma.sql`${story.key}`)}
     ORDER BY "committedAt" DESC
   `;
   return { storyId: story.id, key: story.key, commitCount: commits.length, commits };

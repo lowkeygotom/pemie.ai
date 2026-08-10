@@ -19,12 +19,13 @@ import type { AppEnv } from "../rest/http.js";
 import { ServiceError, badRequest, forbidden } from "../services/errors.js";
 import * as agents from "../services/agents.js";
 import * as ingest from "../services/ingest.js";
-import * as stats from "../services/stats.js";
 import * as reports from "../services/reports.js";
 import * as stories from "../services/stories.js";
 import * as board from "../services/board.js";
 import * as search from "../services/search.js";
 import * as leaderboard from "../services/leaderboard.js";
+import * as drift from "../services/drift.js";
+import * as overview from "../services/overview.js";
 
 const PROTOCOL_VERSION = "2024-11-05";
 const SERVER_INFO = { name: "pemie.ai", version: "0.1.0" };
@@ -111,16 +112,32 @@ const TOOLS: McpTool[] = [
   },
   {
     name: "get_project_context",
-    description: "Objetivo actual, stats de commits y último informe del proyecto.",
+    description: "Objetivo, stats, WIP, drift y último informe del proyecto.",
     inputSchema: withProjectId(),
     handler: async (ctx, args) => {
       const projectId = await requireProject(ctx, args, "commits:read");
-      const [objective, projectStats, latest] = await Promise.all([
-        reports.opGetObjective(projectId),
-        stats.opProjectStats(projectId),
-        reports.opListReports(projectId, { limit: 1 }),
-      ]);
-      return { projectId, objective, stats: projectStats, latestReport: latest[0] ?? null };
+      return overview.opProjectOverview(projectId);
+    },
+  },
+  {
+    name: "get_project_drift",
+    description:
+      "Alertas donde el tablero no coincide con la evidencia de commits: trabajo no reportado (HU sin arrancar con commits) y WIP estancado.",
+    inputSchema: withProjectId({
+      staleDays: {
+        type: "number",
+        description: "Días sin evidencia de commit tras los que un WIP se considera estancado (default 14).",
+      },
+    }),
+    handler: async (ctx, args) => {
+      const projectId = await requireProject(ctx, args, "stories:read");
+      // get_project_drift también exige commits:read: la alerta compara el
+      // tablero contra commits, así que sin ese scope estaría leyendo datos
+      // que la key no tiene permiso de ver aunque el resultado no los liste tal cual.
+      await agents.authorizeKeyForProject(ctx.key, "commits:read", ctx.resolvedWorkspaceId!);
+      return drift.opDetectDrift(projectId, {
+        staleDays: typeof args.staleDays === "number" ? args.staleDays : undefined,
+      });
     },
   },
   {

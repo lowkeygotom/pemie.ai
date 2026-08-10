@@ -2,7 +2,8 @@ import type { ApiKeyScopeLevel, ApiScope } from "./index.js";
 
 /** Nombres de las tools MCP: el mapa de abajo es total sobre esta lista. */
 export const MCP_TOOL_NAMES = [
-  "list_workspaces", "list_projects", "get_project_context", "list_commits", "get_evaluation",
+  "list_workspaces", "list_projects", "get_project_context", "get_project_drift", "list_commits",
+  "get_evaluation",
   "publish_report", "list_notes", "answer_note", "get_objective", "update_objective",
   "list_user_stories", "create_user_story", "update_user_story", "assign_user_story",
   "list_contributors", "list_board", "create_card", "move_card", "link_story_to_card",
@@ -49,7 +50,8 @@ export interface McpToolMeta {
 export const MCP_TOOLS: Record<McpToolName, McpToolMeta> = {
   list_workspaces: { access: { kind: "public" }, summary: "workspaces accesibles con tu key.", group: "Descubrimiento" },
   list_projects: { access: { kind: "public" }, summary: "proyectos accesibles (opcional: filtrar por workspaceId).", group: "Descubrimiento" },
-  get_project_context: { access: { kind: "scope", scope: "commits:read" }, summary: "objetivo, stats de commits y último informe.", group: "Contexto y commits" },
+  get_project_context: { access: { kind: "scope", scope: "commits:read" }, summary: "objetivo, stats, WIP, drift y último informe.", group: "Contexto y commits" },
+  get_project_drift: { access: { kind: "scope", scope: "stories:read" }, summary: "alertas donde el tablero no coincide con la evidencia de commits.", group: "Contexto y commits" },
   list_commits: { access: { kind: "scope", scope: "commits:read" }, summary: "commits del proyecto (filtrable por dominio o contribuidor).", group: "Contexto y commits" },
   get_evaluation: { access: { kind: "scope", scope: "reports:read" }, summary: "últimos informes de avance.", group: "Objetivo e informes" },
   publish_report: { access: { kind: "scope", scope: "reports:write" }, summary: "publica o actualiza un informe (idempotente por fecha+slot).", group: "Objetivo e informes" },

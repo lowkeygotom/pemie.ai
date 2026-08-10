@@ -413,11 +413,13 @@ export interface BarListItem {
  *   44 tarjetas en una sola columna— escalar por el total deja a las demás en
  *   slivers de dos píxeles, y la comparación, que es para lo que existe el
  *   gráfico, se pierde.
- * - Un solo tono con opacidad creciente en vez de cinco colores. Las etapas son
+ * - Un solo tono con opacidad decreciente en vez de cinco colores. Las etapas son
  *   un progreso, no identidades distintas; un color por columna diría que
  *   Backlog y Revisión no tienen relación. Y se descartó la rampa --blue-100..700
  *   porque su paso más claro es casi blanco: sobre la superficie de la Card
  *   desaparecería justo en la barra más larga.
+ *   La rampa va de fuerte a tenue siguiendo el flujo: el trabajo pendiente es el
+ *   que reclama atención, y lo ya terminado retrocede en vez de dominar la vista.
  * - El número vive en tinta, nunca en el color de la barra. El dato nunca
  *   depende de distinguir un tono; la barra solo refuerza lo que ya dice el texto.
  */
@@ -447,7 +449,7 @@ export function BarList({
                 // `max()` garantiza que una columna con una sola tarjeta siga
                 // siendo visible en vez de colapsar a cero ancho.
                 width: item.value === 0 ? 0 : `max(0.375rem, ${(item.value / max) * 100}%)`,
-                opacity: 0.4 + (0.6 * i) / lastIndex,
+                opacity: 1 - (0.6 * i) / lastIndex,
               }}
             />
           </div>

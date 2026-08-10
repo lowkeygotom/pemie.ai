@@ -4,7 +4,9 @@ const schema = z.object({
   NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
   PORT: z.coerce.number().default(4000),
   DATABASE_URL: z.string().min(1),
-  SESSION_SECRET: z.string().min(16).default("dev-session-secret-change-me-please"),
+  // Sin SESSION_SECRET: las sesiones son tokens opacos de 32 bytes guardados en
+  // la tabla `sessions` (services/auth.ts), no cookies firmadas. Declararlo
+  // sugería una firma que nunca existió.
 
   // Origen del frontend. En el deploy monolítico de Vercel (front + API en el
   // mismo dominio) no hace falta setearlo: se resuelve del dominio del deploy y

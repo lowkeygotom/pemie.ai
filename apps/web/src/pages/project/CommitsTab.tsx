@@ -9,6 +9,7 @@ import {
   type SyncResult,
 } from "../../lib/api.js";
 import { queryKeys, STALE_TIME } from "../../lib/queryClient.js";
+import { safeHref } from "../../lib/url.js";
 import { track } from "../../lib/analytics/index.js";
 import {
   Badge,
@@ -376,7 +377,7 @@ export default function CommitsTab({ ws, proj, project }: { ws: string; proj: st
                 >
                   <div className="flex min-w-0 flex-1 items-baseline gap-x-2">
                     <a
-                      href={r.url ?? undefined}
+                      href={safeHref(r.url)}
                       target="_blank"
                       rel="noreferrer"
                       className="min-w-0 truncate text-body font-medium text-ink-900 hover:text-blue-600 hover:underline"

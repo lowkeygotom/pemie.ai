@@ -17,7 +17,7 @@ import { prisma } from "../db.js";
 import { badRequest, conflict, forbidden, notFound } from "./errors.js";
 import { requireMembership } from "./tenancy.js";
 import * as board from "./board.js";
-import { fetchRecentCommits, githubAppConfigured } from "../lib/github-app.js";
+import { fetchRecentCommits, githubAppConfigured, listInstallationRepos } from "../lib/github-app.js";
 import {
   fetchCommitsWithToken,
   GithubApiError,
@@ -63,12 +63,17 @@ export async function listUserGithubRepos(userId: string) {
   return fetchUserRepos(await userGithubToken(userId));
 }
 
+/**
+ * `installationId` no está aquí a propósito: quién puede usar las credenciales
+ * de la GitHub App no lo decide quien vincula el repo. Lo fija `ingestPushEvent`
+ * cuando llega el primer push firmado por esa instalación, que es la única
+ * prueba de que la instalación realmente cubre este repo.
+ */
 export interface LinkRepoInput {
   owner: string;
   name: string;
   url?: string;
   externalId?: string;
-  installationId?: string;
 }
 
 /** Vincula un repo de GitHub a un proyecto (member+). */
@@ -91,7 +96,6 @@ export async function linkRepo(userId: string, projectId: string, input: LinkRep
       name,
       url: input.url?.trim() || `https://github.com/${owner}/${name}`,
       externalId: input.externalId ?? null,
-      installationId: input.installationId ?? null,
     },
   });
 
@@ -135,6 +139,28 @@ export function opListRepos(projectId: string) {
       _count: { select: { commits: true } },
     },
   });
+}
+
+/**
+ * Repos que puede ver una instalación de la GitHub App ya vinculada a este
+ * proyecto (viewer+).
+ *
+ * El `installationId` se contrasta contra los repos del proyecto en vez de
+ * usarse tal cual: acuñar un installation token ejerce el privilegio de la App,
+ * que es mayor que el de cualquier usuario. Quién puede pedirlo no puede
+ * decidirlo quien pregunta — si no, un id ajeno (son enteros correlativos)
+ * devuelve el inventario de repos privados de otra organización.
+ */
+export async function listProjectInstallationRepos(
+  userId: string,
+  projectId: string,
+  installationId: string
+) {
+  await projectWithAccess(userId, projectId);
+  const linked = await prisma.repo.findFirst({ where: { projectId, installationId } });
+  if (!linked)
+    throw forbidden("Esa instalación de GitHub no está vinculada a este proyecto");
+  return listInstallationRepos(installationId);
 }
 
 /** Desvincula un repo (member+). Elimina también sus commits por cascade. */

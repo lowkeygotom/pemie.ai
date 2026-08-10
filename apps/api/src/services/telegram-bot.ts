@@ -7,6 +7,7 @@ import {
   isAllowedModel,
   type ChannelLlmProvider,
 } from "@pemie/shared";
+import { timingSafeEqual } from "node:crypto";
 import { env } from "../env.js";
 import { decryptSecret } from "../lib/secrets.js";
 import { invokeMcpTool, listMcpToolDefs } from "../mcp/index.js";
@@ -739,11 +740,18 @@ async function runOpenAiCompatTurn(
   return TOOL_LIMIT_REACHED;
 }
 
-/** Verifica el secret token del webhook de Telegram. */
+/**
+ * Verifica el secret token del webhook de Telegram, en tiempo constante — igual
+ * que la firma del webhook de GitHub (lib/github-app.ts). `===` corta en el
+ * primer byte distinto, así que su duración depende del prefijo acertado.
+ */
 export function verifyTelegramSecret(header: string | undefined): boolean {
   const expected = env.TELEGRAM_WEBHOOK_SECRET?.trim();
-  if (!expected) return false;
-  return header === expected;
+  if (!expected || !header) return false;
+  const received = Buffer.from(header);
+  const wanted = Buffer.from(expected);
+  // timingSafeEqual exige longitudes iguales; la longitud no es el secreto.
+  return received.length === wanted.length && timingSafeEqual(received, wanted);
 }
 
 export function isTelegramConfigured(): boolean {

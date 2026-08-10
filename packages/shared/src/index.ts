@@ -209,6 +209,25 @@ export function classifyCommit(
   return config.fallback;
 }
 
+/**
+ * ¿La URL sirve como destino de un enlace?
+ *
+ * Sólo `http:` y `https:`. Tanto `new URL()` como el `.url()` de Zod aceptan
+ * cualquier esquema —`javascript:` incluido—, así que comprobar "es una URL" no
+ * alcanza para un valor que después acaba en un `href`. La comprobación se
+ * comparte entre api y web para que lo que se guarda y lo que se pinta digan lo
+ * mismo, en vez de depender de que ambos lados se acuerden por separado.
+ */
+export function isSafeHttpUrl(raw: string | null | undefined): raw is string {
+  if (!raw) return false;
+  try {
+    const { protocol } = new URL(raw.trim());
+    return protocol === "http:" || protocol === "https:";
+  } catch {
+    return false;
+  }
+}
+
 /** Narrativa canónica de una Historia de Usuario. */
 export interface UserStoryNarrative {
   role: string; // Como <role>

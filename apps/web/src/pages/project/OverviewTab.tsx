@@ -124,14 +124,13 @@ export default function OverviewTab({ ws, proj }: { ws: string; proj: string }) 
       {/* Drift (PEM-50 + PEM-51) */}
       <Collapsible
         title="Alertas de drift"
-        defaultOpen
         badge={
           drift.correlationAvailable ? (
             <>
               <Badge tone={drift.alerts.length > 0 ? "danger" : "neutral"} mono>
                 {plural(drift.alerts.length, "alerta")}
               </Badge>
-              <Badge tone={drift.coverageBelowThreshold ? "warning" : "neutral"} mono>
+              <Badge tone="neutral" mono>
                 {(drift.correlationCoverage * 100).toFixed(0)}% cobertura
               </Badge>
             </>
@@ -151,7 +150,7 @@ export default function OverviewTab({ ws, proj }: { ws: string; proj: string }) 
             </p>
             {drift.coverageBelowThreshold ? (
               <div className="mb-4">
-                <Notice tone="warning">
+                <Notice tone="info">
                   Cobertura baja ({(drift.correlationCoverage * 100).toFixed(0)}% &lt;{" "}
                   {(drift.coverageThreshold * 100).toFixed(0)}%): alertas de "estancada" suprimidas.
                 </Notice>

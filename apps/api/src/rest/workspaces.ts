@@ -13,7 +13,6 @@ import * as board from "../services/board.js";
 import * as leaderboard from "../services/leaderboard.js";
 import * as searchSvc from "../services/search.js";
 import { badRequest } from "../services/errors.js";
-import { listInstallationRepos } from "../lib/github-app.js";
 import { type AppContext, type AppEnv, requireUser } from "./http.js";
 import { SEARCHABLE_TYPES } from "@pemie/shared";
 
@@ -34,7 +33,7 @@ const linkRepoSchema = z.object({
   name: z.string().min(1),
   url: z.string().url().optional(),
   externalId: z.string().optional(),
-  installationId: z.string().optional(),
+  // Sin `installationId`: ver el comentario de ingest.LinkRepoInput.
 });
 const objectiveSchema = z.object({ description: z.string().min(3) });
 const publishReportSchema = z.object({
@@ -272,12 +271,16 @@ export function workspaceRoutes() {
     return c.json({ repo, ingested, syncError }, 201);
   });
 
-  // Repos disponibles vía una instalación de la GitHub App (para elegir cuál vincular).
+  // Repos visibles por una instalación de la GitHub App ya vinculada al proyecto.
+  // El servicio decide si esta instalación es de este proyecto; aquí solo se parsea.
   app.get("/:slug/projects/:projectSlug/github/repos", async (c) => {
-    await resolveProject(c);
+    const user = requireUser(c);
+    const project = await resolveProject(c);
     const installationId = c.req.query("installationId");
     if (!installationId) throw badRequest("Falta installationId", "missing_installation");
-    return c.json({ repos: await listInstallationRepos(installationId) });
+    return c.json({
+      repos: await ingest.listProjectInstallationRepos(user.id, project.id, installationId),
+    });
   });
 
   app.delete("/:slug/projects/:projectSlug/repos/:repoId", async (c) => {

@@ -88,6 +88,13 @@ export interface DriftReport<TDate = string> {
   countsByType: Record<DriftAlertType, number>;
 }
 
+/** Columna del Kanban con su carga actual (WIP del overview). */
+export interface WipColumn {
+  name: string;
+  order: number;
+  cardCount: number;
+}
+
 /** Scopes de API key para agentes (MCP + REST de agente). */
 export const API_SCOPES = [
   "commits:read",

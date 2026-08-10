@@ -11,6 +11,7 @@ import * as agentsSvc from "../services/agents.js";
 import * as stories from "../services/stories.js";
 import * as board from "../services/board.js";
 import * as leaderboard from "../services/leaderboard.js";
+import * as overview from "../services/overview.js";
 import * as searchSvc from "../services/search.js";
 import { badRequest } from "../services/errors.js";
 import { type AppContext, type AppEnv, requireUser } from "./http.js";
@@ -321,6 +322,12 @@ export function workspaceRoutes() {
   app.get("/:slug/projects/:projectSlug/leaderboard", async (c) => {
     const project = await resolveProject(c);
     return c.json({ leaderboard: await leaderboard.opProjectLeaderboard(project.id) });
+  });
+
+  // PEM-45: vista de estado del proyecto (objetivo, stats, WIP, drift, último informe).
+  app.get("/:slug/projects/:projectSlug/overview", async (c) => {
+    const project = await resolveProject(c);
+    return c.json(await overview.opProjectOverview(project.id));
   });
 
   app.get("/:slug/projects/:projectSlug/search", async (c) => {

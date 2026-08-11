@@ -102,8 +102,8 @@ export default function Workspace() {
 
       <div className="space-y-8">
         <ProjectsSection slug={slug} projects={projects} onChange={loadCore} />
-        <TeamSection slug={slug} projects={projects} canManage={canManage} />
         <TeamResourcesSection slug={slug} />
+        <TeamSection slug={slug} projects={projects} canManage={canManage} />
       </div>
     </div>
   );

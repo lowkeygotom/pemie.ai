@@ -55,7 +55,7 @@ export const queryKeys = {
   cardActivities: (ws: string, proj: string, cardId: string) =>
     ["cardActivities", ws, proj, cardId] as const,
   projectAudit: (ws: string, proj: string) => ["projectAudit", ws, proj] as const,
-  skills: (ws: string, proj: string) => ["skills", ws, proj] as const,
-  skillInstall: (ws: string, proj: string, slug: string, target: string, destination: string) =>
-    ["skillInstall", ws, proj, slug, target, destination] as const,
+  skills: (ws: string) => ["skills", ws] as const,
+  skillInstall: (ws: string, slug: string, target: string, destination: string) =>
+    ["skillInstall", ws, slug, target, destination] as const,
 };

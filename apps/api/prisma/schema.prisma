@@ -87,6 +87,8 @@ model Workspace {
   apiKeys     ApiKey[]
   auditLogs   AuditLog[]
   agentPresences AgentPresence[]
+  skills         WorkspaceSkill[]
+  skillUploads   SkillUpload[]
 
   @@map("workspaces")
 }
@@ -149,7 +151,6 @@ model Project {
   apiKeys             ApiKey[]
   channelDefaultsFor  UserChannelConfig[]
   agentPresences      AgentPresence[]
-  skills              ProjectSkill[]
 
   @@unique([workspaceId, slug])
   @@index([workspaceId])
@@ -294,26 +295,75 @@ model Note {
 }
 
 // ─── Catálogo de skills (docs/skills-catalog.md) ───────────────────────
+// Una fila por archivo (no JSON blob): el metadata queda liviano y el
+// paquete se puede servir en streaming sin materializar 8 MiB en cada query.
 
-model ProjectSkill {
+model WorkspaceSkill {
   id              String   @id @default(cuid())
-  projectId       String
+  workspaceId     String
   slug            String
   name            String
   description     String
   version         Int      @default(1)
-  files           Json // SkillFile[] (packages/shared): [{ path, content }]
-  contentHash     String // sha256 canónico de `files`: hace idempotente el publish
+  contentHash     String // sha256 canónico: mantiene el publish idempotente
+  totalBytes      Int // suma de los archivos: evita un SUM() para decidir inline vs download
   publishedByType String   @default("agent") // ActorType (packages/shared)
   publishedById   String?
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
-  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  workspace Workspace            @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  files     WorkspaceSkillFile[]
+  downloads SkillDownload[]
 
-  @@unique([projectId, slug])
-  @@index([projectId, updatedAt])
-  @@map("project_skills")
+  @@unique([workspaceId, slug])
+  @@index([workspaceId, updatedAt])
+  @@map("workspace_skills")
+}
+
+model WorkspaceSkillFile {
+  id      String @id @default(cuid())
+  skillId String
+  path    String
+  content String @db.Text
+  bytes   Int
+
+  skill WorkspaceSkill @relation(fields: [skillId], references: [id], onDelete: Cascade)
+
+  @@unique([skillId, path])
+  @@map("workspace_skill_files")
+}
+
+model SkillUpload {
+  id          String   @id @default(cuid())
+  workspaceId String
+  slug        String
+  name        String
+  description String
+  tokenHash   String   @unique // sha256 del token; mismo patrón que las API keys
+  actorType   String
+  actorId     String?
+  expiresAt   DateTime
+  createdAt   DateTime @default(now())
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([expiresAt])
+  @@map("skill_uploads")
+}
+
+model SkillDownload {
+  id        String   @id @default(cuid())
+  skillId   String
+  tokenHash String   @unique
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  // Cascade: al hard-delete de la skill, las URLs viejas 404ean solas.
+  skill WorkspaceSkill @relation(fields: [skillId], references: [id], onDelete: Cascade)
+
+  @@index([expiresAt])
+  @@map("skill_downloads")
 }
 
 // ─── Historias de Usuario ─────────────────────────────────────────────

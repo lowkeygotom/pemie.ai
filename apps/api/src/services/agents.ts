@@ -375,11 +375,18 @@ export function requireScope(key: ApiKey, scope: ApiScope) {
  * que el bloqueo lo vuelva invisible. Por eso el `update` tampoco toca
  * `blockedAt` ni `blockedById`: usar la key no levanta su propio bloqueo.
  */
-export async function admitAgentToWorkspace(key: ApiKey, workspaceId: string, projectId: string) {
+export async function admitAgentToWorkspace(
+  key: ApiKey,
+  workspaceId: string,
+  projectId?: string | null
+) {
   const presence = await prisma.agentPresence.upsert({
     where: { apiKeyId_workspaceId: { apiKeyId: key.id, workspaceId } },
-    create: { apiKeyId: key.id, workspaceId, lastProjectId: projectId },
-    update: { lastSeenAt: new Date(), lastProjectId: projectId },
+    create: { apiKeyId: key.id, workspaceId, lastProjectId: projectId ?? null },
+    update: {
+      lastSeenAt: new Date(),
+      ...(projectId ? { lastProjectId: projectId } : {}),
+    },
   });
 
   if (presence.blockedAt)
@@ -491,6 +498,14 @@ export async function resolveProjectForKey(
  * write/read. Para keys de proyecto sin owner, solo exige el scope.
  */
 export async function authorizeKeyForProject(key: ApiKey, scope: ApiScope, workspaceId: string) {
+  return authorizeKeyForWorkspace(key, scope, workspaceId);
+}
+
+/**
+ * Exige scope en la key y rol mínimo del dueño en el workspace.
+ * Extraído para tools de catálogo de skills (workspace-scoped).
+ */
+export async function authorizeKeyForWorkspace(key: ApiKey, scope: ApiScope, workspaceId: string) {
   requireScope(key, scope);
 
   const level = key.scopeLevel as ApiKeyScopeLevel;
@@ -511,6 +526,38 @@ export async function authorizeKeyForProject(key: ApiKey, scope: ApiScope, works
         ? "Se requiere rol member+ para scopes de escritura"
         : "Se requiere rol viewer+ para este scope"
     );
+}
+
+/**
+ * Resuelve el workspace efectivo para tools de catálogo (skills).
+ * Keys project/workspace usan el workspace fijado; keys user exigen args.
+ */
+export async function resolveWorkspaceForKey(
+  key: ApiKey,
+  workspaceIdFromArgs?: string | null
+): Promise<string> {
+  const level = key.scopeLevel as ApiKeyScopeLevel;
+
+  if (level === "project" || level === "workspace") {
+    if (!key.workspaceId) throw forbidden("Esta API key no está vinculada a un workspace");
+    if (workspaceIdFromArgs && workspaceIdFromArgs !== key.workspaceId)
+      throw forbidden("Esta API key solo puede operar en su workspace fijado");
+    await admitAgentToWorkspace(key, key.workspaceId, key.projectId);
+    return key.workspaceId;
+  }
+
+  if (!workspaceIdFromArgs)
+    throw badRequest(
+      "Esta API key requiere workspaceId en los argumentos de la tool (usa list_workspaces)",
+      "workspace_id_required"
+    );
+
+  const allowed = await listWorkspacesForKey(key);
+  if (!allowed.some((w) => w.id === workspaceIdFromArgs))
+    throw forbidden("El workspace no es accesible con esta API key");
+
+  await admitAgentToWorkspace(key, workspaceIdFromArgs, null);
+  return workspaceIdFromArgs;
 }
 
 /** Lista workspaces donde el dueño de la key es miembro (workspace/user keys). */

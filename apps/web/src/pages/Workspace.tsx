@@ -90,6 +90,9 @@ export default function Workspace() {
         title={ws.name}
         actions={
           <div className="flex items-center gap-3">
+            <Link to={`/w/${slug}/skills`} className="text-body-sm text-blue-700 hover:underline">
+              Skills
+            </Link>
             {canManage ? (
               <Link to={`/w/${slug}/settings`} className="text-body-sm text-blue-700 hover:underline">
                 Ajustes

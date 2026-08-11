@@ -216,6 +216,17 @@ export interface Contributor {
   notify: "member" | "external" | "none";
   suggestedEmail: string | null;
 }
+/** Candidato asignable a una HU/Card: contributor real o miembro del workspace sin contributor todavía. */
+export interface AssigneeCandidate {
+  id: string;
+  origin: "contributor" | "member";
+  userId: string | null;
+  githubLogin: string | null;
+  name: string | null;
+  avatarUrl: string | null;
+  email: string | null;
+  notify: "member" | "external" | "none";
+}
 export interface Commit {
   id: string;
   sha: string;
@@ -584,6 +595,9 @@ export const api = {
     list: (w: string, p: string) => get<{ contributors: Contributor[] }>(`${pp(w, p)}/contributors`),
     update: (w: string, p: string, id: string, email: string | null) =>
       patch<{ contributor: Contributor }>(`${pp(w, p)}/contributors/${id}`, { email }),
+  },
+  assignees: {
+    list: (w: string, p: string) => get<{ assignees: AssigneeCandidate[] }>(`${pp(w, p)}/assignees`),
   },
 
   // ─── F4: agentes / API keys / audit ────────────────────────────────

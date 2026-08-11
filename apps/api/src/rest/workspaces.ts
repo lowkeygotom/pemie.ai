@@ -10,6 +10,7 @@ import * as reports from "../services/reports.js";
 import * as agentsSvc from "../services/agents.js";
 import * as stories from "../services/stories.js";
 import * as board from "../services/board.js";
+import * as assignees from "../services/assignees.js";
 import * as leaderboard from "../services/leaderboard.js";
 import * as overview from "../services/overview.js";
 import * as searchSvc from "../services/search.js";
@@ -545,6 +546,12 @@ export function workspaceRoutes() {
     const user = requireUser(c);
     const project = await resolveProject(c);
     return c.json({ contributors: await stories.listContributors(user.id, project.id) });
+  });
+
+  app.get("/:slug/projects/:projectSlug/assignees", async (c) => {
+    const user = requireUser(c);
+    const project = await resolveProject(c);
+    return c.json({ assignees: await assignees.listAssignableCandidates(user.id, project.id) });
   });
 
   app.patch("/:slug/projects/:projectSlug/contributors/:contributorId", async (c) => {

@@ -23,6 +23,7 @@ import {
   Skeleton,
   Textarea,
 } from "../../components/ui.js";
+import { AssigneeNotice, AssigneeSelect } from "./AssigneeField.js";
 
 function activityLabel(a: CardActivity): string {
   switch (a.action) {
@@ -110,11 +111,11 @@ export default function CardDetailModal({
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
 
-  // Contributors y stories comparten caché con StoriesTab: si esa pestaña ya se
-  // visitó, el modal abre sin esperar un round-trip.
-  const contributorsQuery = useQuery({
-    queryKey: queryKeys.contributors(ws, proj),
-    queryFn: () => api.contributors.list(ws, proj).then((r) => r.contributors),
+  // Candidatos asignables y stories comparten caché con StoriesTab: si esa
+  // pestaña ya se visitó, el modal abre sin esperar un round-trip.
+  const assigneesQuery = useQuery({
+    queryKey: queryKeys.assignees(ws, proj),
+    queryFn: () => api.assignees.list(ws, proj).then((r) => r.assignees),
     staleTime: STALE_TIME.live,
   });
   const storiesQuery = useQuery({
@@ -128,11 +129,11 @@ export default function CardDetailModal({
     queryFn: () => api.board.activities(ws, proj, card.id).then((r) => r.activities),
     staleTime: STALE_TIME.live,
   });
-  const contributors = contributorsQuery.data ?? [];
+  const assigneeCandidates = assigneesQuery.data ?? [];
   const stories = storiesQuery.data ?? [];
   const activities = activitiesQuery.data ?? [];
-  const metaLoading = contributorsQuery.isLoading || storiesQuery.isLoading || activitiesQuery.isLoading;
-  const loadError = contributorsQuery.error ?? storiesQuery.error ?? activitiesQuery.error;
+  const metaLoading = assigneesQuery.isLoading || storiesQuery.isLoading || activitiesQuery.isLoading;
+  const loadError = assigneesQuery.error ?? storiesQuery.error ?? activitiesQuery.error;
   const error =
     actionError ?? (loadError ? (loadError instanceof ApiError ? loadError.message : "No se pudieron cargar los datos") : null);
 
@@ -236,20 +237,7 @@ export default function CardDetailModal({
         ) : (
           <>
             <div className="grid min-w-0 gap-3 sm:grid-cols-2">
-              <Field label="Asignado">
-                <Select
-                  value={assigneeId}
-                  onChange={(e) => setAssigneeId(e.target.value)}
-                  aria-label="Asignado"
-                >
-                  <option value="">Sin asignar</option>
-                  {contributors.map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.name || c.githubLogin}
-                    </option>
-                  ))}
-                </Select>
-              </Field>
+              <AssigneeSelect value={assigneeId} onChange={setAssigneeId} candidates={assigneeCandidates} />
               <Field label="Historia de usuario">
                 <Select
                   value={userStoryId}
@@ -266,17 +254,12 @@ export default function CardDetailModal({
               </Field>
             </div>
 
-            {assigneeId && contributorsQuery.data ? (() => {
-              const assignee = contributors.find((c) => c.id === assigneeId);
-              if (!assignee || assignee.notify === "member") return null;
-              return (
-                <div className={assignee.notify === "none" ? "rounded-md border border-amber-600 bg-amber-100 p-3 text-body-sm text-amber-700" : "rounded-md border border-blue-600 bg-blue-100 p-3 text-body-sm text-blue-700"}>
-                  {assignee.notify === "none"
-                    ? <>Sin correo: se asignará, pero no recibirá aviso. {canManage ? "Agrégalo desde Colaboradores antes de guardar." : "Un owner o admin puede agregarlo desde Colaboradores."}</>
-                    : "Recibirá un aviso sin el detalle de la HU: no tiene cuenta en el workspace."}
-                </div>
-              );
-            })() : null}
+            {assigneeId && assigneesQuery.data ? (
+              <AssigneeNotice
+                candidate={assigneeCandidates.find((c) => c.id === assigneeId)}
+                canManage={canManage}
+              />
+            ) : null}
 
             <div className="min-w-0 border-t border-line-100 pt-4">
               <h4 className="mb-2 text-body-sm font-semibold text-ink-800">Actividad</h4>

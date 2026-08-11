@@ -16,6 +16,7 @@ import { badRequest, notFound } from "./errors.js";
 import { projectWithAccess } from "./ingest.js";
 import { resolveActorNames } from "./actor.js";
 import { notifyStoryAssigned, type AssignmentNotificationResult } from "./notifications.js";
+import { resolveAssigneeId } from "./assignees.js";
 
 const CARD_TYPES: CardType[] = ["story", "task", "bug"];
 // Los `order` son el otro extremo de STATUS_COLUMN_ORDER (@pemie/shared): esta
@@ -170,6 +171,8 @@ export async function opCreateCard(projectId: string, input: CreateCardInput, ac
   });
   const order = (last?.order ?? 0) + 1;
 
+  const resolvedAssigneeId = input.assigneeId ? await resolveAssigneeId(projectId, input.assigneeId) : null;
+
   const card = await prisma.card.create({
     data: {
       boardId: board.id,
@@ -179,7 +182,7 @@ export async function opCreateCard(projectId: string, input: CreateCardInput, ac
       title,
       description: input.description?.trim() || null,
       userStoryId: input.userStoryId ?? null,
-      assigneeId: input.assigneeId ?? null,
+      assigneeId: resolvedAssigneeId,
       labels: asJson(input.labels),
     },
   });
@@ -344,12 +347,6 @@ const CARD_INCLUDE = {
   assignee: { select: { id: true, githubLogin: true, name: true, avatarUrl: true } },
 } as const;
 
-async function validateCardAssignee(projectId: string, assigneeId: string) {
-  const contributor = await prisma.contributor.findUnique({ where: { id: assigneeId } });
-  if (!contributor || contributor.projectId !== projectId)
-    throw badRequest("El asignado no pertenece al proyecto", "assignee_mismatch");
-}
-
 export interface UpdateCardInput {
   title?: string;
   description?: string | null;
@@ -409,16 +406,17 @@ export async function opUpdateCard(
       activities.push({ action: "updated", from: card.type, to: patch.type });
     }
   }
+  let resolvedAssigneeId: string | null | undefined = patch.assigneeId;
   if (patch.assigneeId !== undefined) {
-    if (patch.assigneeId) await validateCardAssignee(projectId, patch.assigneeId);
-    if (patch.assigneeId !== card.assigneeId) {
-      data.assignee = patch.assigneeId
-        ? { connect: { id: patch.assigneeId } }
+    resolvedAssigneeId = patch.assigneeId ? await resolveAssigneeId(projectId, patch.assigneeId) : null;
+    if (resolvedAssigneeId !== card.assigneeId) {
+      data.assignee = resolvedAssigneeId
+        ? { connect: { id: resolvedAssigneeId } }
         : { disconnect: true };
       activities.push({
         action: "assigned",
         from: card.assigneeId,
-        to: patch.assigneeId,
+        to: resolvedAssigneeId,
       });
       assigneeChanged = true;
     }
@@ -466,11 +464,11 @@ export async function opUpdateCard(
   let assignmentNotification: AssignmentNotificationResult | undefined;
   if (assigneeChanged) {
     const nextUserStoryId = patch.userStoryId !== undefined ? patch.userStoryId : card.userStoryId;
-    await syncCardAssigneeToStory(nextUserStoryId, patch.assigneeId ?? null);
+    await syncCardAssigneeToStory(nextUserStoryId, resolvedAssigneeId ?? null);
     if (nextUserStoryId) {
       assignmentNotification = await notifyStoryAssigned({
         storyId: nextUserStoryId,
-        assigneeId: patch.assigneeId ?? null,
+        assigneeId: resolvedAssigneeId ?? null,
         actor,
       });
     }

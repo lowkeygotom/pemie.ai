@@ -13,6 +13,7 @@ import {
   Skeleton,
   TrashIcon,
 } from "../../components/ui.js";
+import { AssigneeNotice, AssigneeSelect } from "./AssigneeField.js";
 
 const STATUSES = ["backlog", "ready", "in_progress", "review", "done"];
 const PRIORITIES = ["low", "medium", "high", "critical"];
@@ -69,14 +70,14 @@ export default function StoryDetailModal({
   const [saving, setSaving] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
 
-  // Contributors no viaja con la lista de HUs (StoriesTab no los necesita para
-  // otra cosa): se piden acá, con el mismo caché que usa CardDetailModal.
-  const contributorsQuery = useQuery({
-    queryKey: queryKeys.contributors(ws, proj),
-    queryFn: () => api.contributors.list(ws, proj).then((r) => r.contributors),
+  // Candidatos asignables no viajan con la lista de HUs (StoriesTab no los
+  // necesita para otra cosa): se piden acá, con el mismo caché que usa CardDetailModal.
+  const assigneesQuery = useQuery({
+    queryKey: queryKeys.assignees(ws, proj),
+    queryFn: () => api.assignees.list(ws, proj).then((r) => r.assignees),
     staleTime: STALE_TIME.live,
   });
-  const contributors = contributorsQuery.data ?? [];
+  const assigneeCandidates = assigneesQuery.data ?? [];
 
   function updateCriterion(index: number, patch: Partial<CriterionRow>) {
     setCriteria((prev) => prev.map((c, i) => (i === index ? { ...c, ...patch } : c)));
@@ -198,7 +199,7 @@ export default function StoryDetailModal({
           </Field>
         </div>
 
-        {contributorsQuery.isLoading ? (
+        {assigneesQuery.isLoading ? (
           <div className="grid min-w-0 gap-3 sm:grid-cols-2">
             <div>
               <Skeleton className="mb-1.5 h-4 w-16" />
@@ -221,30 +222,16 @@ export default function StoryDetailModal({
                 ))}
               </Select>
             </Field>
-            <Field label="Asignado">
-              <Select value={assigneeId} onChange={(e) => setAssigneeId(e.target.value)} aria-label="Asignado">
-                <option value="">Sin asignar</option>
-                {contributors.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.name || c.githubLogin}{c.notify === "none" ? " · sin correo" : ""}
-                  </option>
-                ))}
-              </Select>
-            </Field>
+            <AssigneeSelect value={assigneeId} onChange={setAssigneeId} candidates={assigneeCandidates} />
           </div>
         )}
 
-        {assigneeId && contributorsQuery.data ? (() => {
-          const assignee = contributors.find((c) => c.id === assigneeId);
-          if (!assignee || assignee.notify === "member") return null;
-          return (
-            <div className={assignee.notify === "none" ? "rounded-md border border-amber-600 bg-amber-100 p-3 text-body-sm text-amber-700" : "rounded-md border border-blue-600 bg-blue-100 p-3 text-body-sm text-blue-700"}>
-              {assignee.notify === "none"
-                ? <>Sin correo: se asignará, pero no recibirá aviso. {canManage ? "Agrégalo desde Colaboradores antes de guardar." : "Un owner o admin puede agregarlo desde Colaboradores."}</>
-                : "Recibirá un aviso sin el detalle de la HU: no tiene cuenta en el workspace."}
-            </div>
-          );
-        })() : null}
+        {assigneeId && assigneesQuery.data ? (
+          <AssigneeNotice
+            candidate={assigneeCandidates.find((c) => c.id === assigneeId)}
+            canManage={canManage}
+          />
+        ) : null}
 
         <div className="min-w-0 border-t border-line-100 pt-4">
           <div className="mb-2 flex items-center justify-between">

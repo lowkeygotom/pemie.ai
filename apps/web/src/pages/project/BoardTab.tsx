@@ -126,7 +126,9 @@ function CardBody({ card }: { card: CardData }) {
               className="h-4 w-4 rounded-full"
             />
           ) : null}
-          <span className="font-mono">{card.assignee.githubLogin}</span>
+          <span className={card.assignee.name ? undefined : "font-mono"}>
+            {card.assignee.name || card.assignee.githubLogin}
+          </span>
         </p>
       )}
     </>

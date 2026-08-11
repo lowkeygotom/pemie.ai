@@ -27,6 +27,7 @@ import * as ingest from "../services/ingest.js";
 import * as reports from "../services/reports.js";
 import * as stories from "../services/stories.js";
 import * as board from "../services/board.js";
+import * as assignees from "../services/assignees.js";
 import * as search from "../services/search.js";
 import * as leaderboard from "../services/leaderboard.js";
 import * as drift from "../services/drift.js";
@@ -398,7 +399,7 @@ const TOOLS: McpTool[] = [
   {
     name: "assign_user_story",
     description:
-      "Asigna (o desasigna, con assigneeId null) una HU a un contributor del proyecto; sincroniza la Card vinculada.",
+      "Asigna (o desasigna, con assigneeId null) una HU a un candidato de list_assignees (contributor o miembro del workspace); sincroniza la Card vinculada.",
     inputSchema: withProjectId(
       {
         storyId: { type: "string" },
@@ -423,6 +424,16 @@ const TOOLS: McpTool[] = [
     inputSchema: withProjectId(),
     handler: async (ctx, args) =>
       stories.opListContributors(await requireProject(ctx, args, "stories:read")),
+  },
+  {
+    name: "list_assignees",
+    description:
+      "Lista candidatos asignables del proyecto: contributors reales y miembros del workspace sin contributor todavía. El campo `id` de cada candidato es el valor a pasar a assign_user_story/update_card.",
+    inputSchema: withProjectId(),
+    handler: async (ctx, args) => {
+      const projectId = await requireProject(ctx, args, "stories:read");
+      return assignees.opListAssignableCandidates(projectId, ctx.resolvedWorkspaceId!);
+    },
   },
   {
     name: "list_board",

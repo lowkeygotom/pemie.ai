@@ -17,6 +17,7 @@ import { normalizeEmail, requireMembership } from "./tenancy.js";
 import * as board from "./board.js";
 import type { CardActor } from "./board.js";
 import { notifyStoryAssigned, resolveContributorRecipients } from "./notifications.js";
+import { resolveAssigneeId } from "./assignees.js";
 
 const PRIORITIES = ["low", "medium", "high", "critical"] as const;
 const STATUSES: UserStoryStatus[] = ["backlog", "ready", "in_progress", "review", "done"];
@@ -112,13 +113,6 @@ function asJson(v: unknown) {
   return v as Prisma.InputJsonValue;
 }
 
-/** Verifica que el contributor exista y pertenezca al proyecto de la HU. */
-async function validateAssignee(projectId: string, assigneeId: string) {
-  const contributor = await prisma.contributor.findUnique({ where: { id: assigneeId } });
-  if (!contributor || contributor.projectId !== projectId)
-    throw badRequest("El asignado no pertenece al proyecto", "assignee_mismatch");
-}
-
 /**
  * Reserva la siguiente key (PRJ-N) consumiendo el contador del proyecto.
  *
@@ -168,7 +162,7 @@ export async function opCreateStory(
     if (!epic || epic.projectId !== projectId)
       throw badRequest("La épica no pertenece al proyecto", "epic_mismatch");
   }
-  if (input.assigneeId) await validateAssignee(projectId, input.assigneeId);
+  const resolvedAssigneeId = input.assigneeId ? await resolveAssigneeId(projectId, input.assigneeId) : null;
 
   let story: Awaited<ReturnType<typeof prisma.userStory.create>> | undefined;
   for (let attempt = 0; attempt < 5; attempt++) {
@@ -185,7 +179,7 @@ export async function opCreateStory(
           status,
           storyPoints: input.storyPoints ?? null,
           epicId: input.epicId ?? null,
-          assigneeId: input.assigneeId ?? null,
+          assigneeId: resolvedAssigneeId,
           createdById: actor.createdById ?? null,
           createdByAgentId: actor.createdByAgentId ?? null,
         },
@@ -299,10 +293,12 @@ export async function opUpdateStory(
       data.epic = { disconnect: true };
     }
   }
-  // Se valida antes de cualquier escritura: opAssignStory vuelve a validarlo
-  // porque también es una operación pública de MCP, pero acá un patch inválido
-  // tiene que rechazarse entero, no después de guardar título o estado.
-  if (patch.assigneeId) await validateAssignee(story.projectId, patch.assigneeId);
+  // Se resuelve antes de cualquier escritura: un patch inválido tiene que
+  // rechazarse entero, no después de guardar título o estado. El id ya
+  // resuelto se reenvía a opAssignStory para no volver a resolverlo.
+  const resolvedAssigneeId: string | null = patch.assigneeId
+    ? await resolveAssigneeId(story.projectId, patch.assigneeId)
+    : null;
   const updated = Object.keys(data).length
     ? await prisma.userStory.update({ where: { id: story.id }, data })
     : await getStoryById(story.id);
@@ -317,7 +313,7 @@ export async function opUpdateStory(
 
   return patch.assigneeId === undefined
     ? updated
-    : opAssignStory(story.id, patch.assigneeId, actor);
+    : opAssignStory(story.id, resolvedAssigneeId, actor);
 }
 
 /** Elimina una HU (member+). */
@@ -380,19 +376,19 @@ export async function opDeleteStory(
 export async function opAssignStory(storyId: string, assigneeId: string | null, actor: CardActor) {
   const story = await getStoryById(storyId);
   if (!story) throw notFound("HU no encontrada");
-  if (assigneeId) await validateAssignee(story.projectId, assigneeId);
+  const resolvedAssigneeId = assigneeId ? await resolveAssigneeId(story.projectId, assigneeId) : null;
 
-  if (story.assigneeId === assigneeId) return story;
+  if (story.assigneeId === resolvedAssigneeId) return story;
 
   const updated = await prisma.userStory.update({
     where: { id: story.id },
-    data: { assigneeId },
+    data: { assigneeId: resolvedAssigneeId },
   });
 
   const card = await prisma.card.findUnique({ where: { userStoryId: story.id } });
-  if (card) await board.opAssignCard(card, assigneeId, actor);
+  if (card) await board.opAssignCard(card, resolvedAssigneeId, actor);
 
-  const assignmentNotification = await notifyStoryAssigned({ storyId: updated.id, assigneeId, actor });
+  const assignmentNotification = await notifyStoryAssigned({ storyId: updated.id, assigneeId: resolvedAssigneeId, actor });
   return { ...updated, assignmentNotification };
 }
 

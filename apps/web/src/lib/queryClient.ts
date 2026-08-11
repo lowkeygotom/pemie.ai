@@ -51,6 +51,7 @@ export const queryKeys = {
   epics: (ws: string, proj: string) => ["epics", ws, proj] as const,
   stories: (ws: string, proj: string) => ["stories", ws, proj] as const,
   contributors: (ws: string, proj: string) => ["contributors", ws, proj] as const,
+  assignees: (ws: string, proj: string) => ["assignees", ws, proj] as const,
   board: (ws: string, proj: string) => ["board", ws, proj] as const,
   cardActivities: (ws: string, proj: string, cardId: string) =>
     ["cardActivities", ws, proj, cardId] as const,

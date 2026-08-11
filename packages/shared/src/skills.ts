@@ -1,4 +1,4 @@
-// Catálogo de skills por proyecto (docs/skills-catalog.md): un agente publica
+// Catálogo de skills por workspace (docs/skills-catalog.md): un agente publica
 // el contenido canónico de una skill y otro agente (o persona) la instala en
 // su runtime eligiendo destino. Runtime-agnóstico: sin imports de Node ni del
 // navegador — tanto el servicio (Node) como la web (browser) comparten esto.
@@ -31,6 +31,11 @@ export interface SkillFile {
   content: string;
 }
 
+export interface SkillFileManifestEntry {
+  path: string;
+  bytes: number;
+}
+
 export interface SkillSummary<TDate = string> {
   slug: string;
   name: string;
@@ -40,18 +45,45 @@ export interface SkillSummary<TDate = string> {
   updatedAt: TDate;
 }
 
+/**
+ * Paquete instalable. `files` solo viaja inline si `totalBytes <= SKILL_INLINE_MAX_BYTES`;
+ * si no, el agente baja el tar.gz con `downloadUrl`/`command`.
+ */
 export interface SkillInstallPackage<TDate = string> extends SkillSummary<TDate> {
   install: {
     target: SkillTarget;
     destination: SkillDestination;
     rootPath: string;
-    files: SkillFile[];
+    manifest: SkillFileManifestEntry[];
+    totalBytes: number;
+    files?: SkillFile[];
+    downloadUrl?: string;
+    /** `curl -sL "$URL" | tar xz -C <rootPath>` listo para el shell del agente. */
+    command?: string;
   };
   availableTargets: readonly SkillTarget[];
 }
 
-export const SKILL_MAX_TOTAL_BYTES = 512 * 1024;
-export const SKILL_MAX_FILES = 50;
+/** Ticket de upload que devuelve `publish_skill`: el contenido viaja fuera del tool call. */
+export interface SkillUploadTicket {
+  uploadUrl: string;
+  expiresAt: string;
+  /** `tar czf - -C <dir> <slug> | curl --upload-file - "$UPLOAD_URL"` listo para el shell. */
+  command: string;
+  slug: string;
+  name: string;
+  description: string;
+}
+
+// impeccable ≈ 3.2 MB / 147 archivos: margen por encima de ese caso real.
+export const SKILL_MAX_TOTAL_BYTES = 8 * 1024 * 1024;
+export const SKILL_MAX_FILES = 500;
+export const SKILL_MAX_FILE_BYTES = 1 * 1024 * 1024;
+/** Por debajo de este umbral, get_skill puede devolver files inline. */
+export const SKILL_INLINE_MAX_BYTES = 64 * 1024;
+export const SKILL_UPLOAD_TTL_MS = 15 * 60 * 1000;
+/** TTL del token de descarga (multi-uso dentro de la ventana). */
+export const SKILL_DOWNLOAD_TTL_MS = 15 * 60 * 1000;
 export const SKILL_ENTRY_FILE = "SKILL.md";
 
 const SKILL_SLUG_RE = /^[a-z0-9]+(-[a-z0-9]+)*$/;

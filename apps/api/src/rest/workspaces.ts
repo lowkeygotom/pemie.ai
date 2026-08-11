@@ -15,7 +15,7 @@ import * as overview from "../services/overview.js";
 import * as searchSvc from "../services/search.js";
 import * as skills from "../services/skills.js";
 import { badRequest } from "../services/errors.js";
-import { type AppContext, type AppEnv, requireUser } from "./http.js";
+import { type AppContext, type AppEnv, apiOrigin, requireUser } from "./http.js";
 import { isSafeHttpUrl, SEARCHABLE_TYPES, SKILL_DESTINATIONS, SKILL_TARGETS, type SkillDestination, type SkillTarget } from "@pemie/shared";
 
 const createWorkspaceSchema = z.object({ name: z.string().min(2) });
@@ -631,17 +631,17 @@ export function workspaceRoutes() {
   });
 
   // ─── Catálogo de skills (docs/skills-catalog.md) ───────────────────
-  // Solo lectura: publicar es vía agente (list_skills/get_skill/publish_skill
-  // en mcp/index.ts). El tab web solo lista y arma el prompt de instalación.
-  app.get("/:slug/projects/:projectSlug/skills", async (c) => {
+  // Scope workspace: listar/obtener/borrar por sesión; el upload de bytes
+  // viaja por /api/skill-uploads (token), no por estas rutas.
+  app.get("/:slug/skills", async (c) => {
     const user = requireUser(c);
-    const project = await resolveProject(c);
-    return c.json({ skills: await skills.listSkills(user.id, project.id) });
+    const ws = await tenancy.getWorkspace(user.id, c.req.param("slug"));
+    return c.json({ skills: await skills.listSkills(user.id, ws.id) });
   });
 
-  app.get("/:slug/projects/:projectSlug/skills/:skillSlug", async (c) => {
+  app.get("/:slug/skills/:skillSlug", async (c) => {
     const user = requireUser(c);
-    const project = await resolveProject(c);
+    const ws = await tenancy.getWorkspace(user.id, c.req.param("slug"));
     const target = c.req.query("target");
     const destination = c.req.query("destination");
     if (!target || !SKILL_TARGETS.includes(target as SkillTarget))
@@ -649,11 +649,39 @@ export function workspaceRoutes() {
     if (!destination || !SKILL_DESTINATIONS.includes(destination as SkillDestination))
       throw badRequest(`destination inválido (usa: ${SKILL_DESTINATIONS.join(", ")})`, "invalid_destination");
     return c.json(
-      await skills.getSkill(user.id, project.id, c.req.param("skillSlug"), {
+      await skills.getSkill(user.id, ws.id, c.req.param("skillSlug"), {
         target: target as SkillTarget,
         destination: destination as SkillDestination,
+        apiBaseUrl: apiOrigin(c),
       })
     );
+  });
+
+  app.post("/:slug/skills", async (c) => {
+    const user = requireUser(c);
+    const ws = await tenancy.getWorkspace(user.id, c.req.param("slug"));
+    const body = z
+      .object({
+        slug: z.string().min(1),
+        name: z.string().min(1),
+        description: z.string().min(1),
+      })
+      .safeParse(await c.req.json().catch(() => null));
+    if (!body.success) throw badRequest("Datos de skill inválidos", "invalid_body");
+    const ticket = await skills.startSkillUpload(
+      user.id,
+      ws.id,
+      body.data,
+      { type: "user", id: user.id },
+      apiOrigin(c)
+    );
+    return c.json(ticket, 201);
+  });
+
+  app.delete("/:slug/skills/:skillSlug", async (c) => {
+    const user = requireUser(c);
+    const ws = await tenancy.getWorkspace(user.id, c.req.param("slug"));
+    return c.json(await skills.deleteSkill(user.id, ws.id, c.req.param("skillSlug")));
   });
 
   return app;

@@ -10,6 +10,7 @@ import Register from "./pages/Register.js";
 import Workspaces from "./pages/Workspaces.js";
 import Workspace from "./pages/Workspace.js";
 import WorkspaceSettings from "./pages/workspace/Settings.js";
+import WorkspaceSkills from "./pages/workspace/Skills.js";
 import Project from "./pages/Project.js";
 import AcceptInvite from "./pages/AcceptInvite.js";
 import Settings from "./pages/Settings.js";
@@ -47,6 +48,7 @@ export default function App() {
       <Route path="/settings" element={<Protected><Settings /></Protected>} />
       <Route path="/w/:slug" element={<Protected><Workspace /></Protected>} />
       <Route path="/w/:slug/settings" element={<Protected><WorkspaceSettings /></Protected>} />
+      <Route path="/w/:slug/skills" element={<Protected><WorkspaceSkills /></Protected>} />
       <Route path="/w/:slug/agents" element={<Protected><LegacyAgentsRedirect /></Protected>} />
       <Route path="/w/:slug/p/:projectSlug" element={<Protected><Project /></Protected>} />
 

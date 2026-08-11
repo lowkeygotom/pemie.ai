@@ -17,11 +17,11 @@ import {
   type McpToolName,
   type SearchableType,
   type SkillDestination,
-  type SkillFile,
   type SkillTarget,
 } from "@pemie/shared";
 import type { AppEnv } from "../rest/http.js";
 import { ServiceError, badRequest, forbidden } from "../services/errors.js";
+import { env } from "../env.js";
 import * as agents from "../services/agents.js";
 import * as ingest from "../services/ingest.js";
 import * as reports from "../services/reports.js";
@@ -41,8 +41,8 @@ interface McpContext {
   /** Proyecto fijado en la key (solo scopeLevel=project). */
   projectId: string | null;
   /**
-   * Workspace que resolvió `requireProject` en esta llamada, para que el
-   * AuditLog no repita la resolución. Mutable y por llamada: ver `tools/call`.
+   * Workspace que resolvió `requireProject`/`requireWorkspace` en esta llamada,
+   * para que el AuditLog no repita la resolución. Mutable y por llamada.
    */
   resolvedWorkspaceId: string | null;
 }
@@ -59,6 +59,13 @@ const PROJECT_ID_PROP = {
   },
 };
 
+const WORKSPACE_ID_PROP = {
+  workspaceId: {
+    type: "string",
+    description: "ID del workspace. Obligatorio con keys de usuario; omitible si la key ya fija proyecto o workspace.",
+  },
+};
+
 function withProjectId(
   properties: Record<string, unknown> = {},
   required: string[] = []
@@ -66,6 +73,18 @@ function withProjectId(
   return {
     type: "object",
     properties: { ...PROJECT_ID_PROP, ...properties },
+    ...(required.length ? { required } : {}),
+    additionalProperties: false,
+  };
+}
+
+function withWorkspaceId(
+  properties: Record<string, unknown> = {},
+  required: string[] = []
+): Record<string, unknown> {
+  return {
+    type: "object",
+    properties: { ...WORKSPACE_ID_PROP, ...properties },
     ...(required.length ? { required } : {}),
     additionalProperties: false,
   };
@@ -80,6 +99,15 @@ async function requireProject(ctx: McpContext, args: Record<string, unknown>, sc
   await agents.authorizeKeyForProject(ctx.key, scope, workspaceId);
   ctx.resolvedWorkspaceId = workspaceId;
   return project.id;
+}
+
+/** Resuelve el workspace efectivo para tools del catálogo de skills. */
+async function requireWorkspace(ctx: McpContext, args: Record<string, unknown>, scope: ApiScope): Promise<string> {
+  const fromArgs = typeof args.workspaceId === "string" ? args.workspaceId : null;
+  const workspaceId = await agents.resolveWorkspaceForKey(ctx.key, fromArgs);
+  await agents.authorizeKeyForWorkspace(ctx.key, scope, workspaceId);
+  ctx.resolvedWorkspaceId = workspaceId;
+  return workspaceId;
 }
 
 // ─── Registro de tools ─────────────────────────────────────────────────────
@@ -634,18 +662,18 @@ const TOOLS: McpTool[] = [
   },
   {
     name: "list_skills",
-    description: "Lista las skills publicadas en el proyecto (sin su contenido).",
-    inputSchema: withProjectId(),
+    description: "Lista las skills publicadas en el workspace (sin su contenido).",
+    inputSchema: withWorkspaceId(),
     handler: async (ctx, args) => {
-      const projectId = await requireProject(ctx, args, "skills:read");
-      return { skills: await skills.opListSkills(projectId) };
+      const workspaceId = await requireWorkspace(ctx, args, "skills:read");
+      return { skills: await skills.opListSkills(workspaceId) };
     },
   },
   {
     name: "get_skill",
     description:
-      "Devuelve el paquete instalable de una skill para tu runtime y destino. El destino lo decide la persona; no lo asumas.",
-    inputSchema: withProjectId(
+      "Devuelve el paquete instalable de una skill. Si es grande, incluye downloadUrl/command (tar.gz); si es chica, files inline. El destino lo decide la persona; no lo asumas.",
+    inputSchema: withWorkspaceId(
       {
         slug: { type: "string" },
         target: { type: "string", enum: [...SKILL_TARGETS] },
@@ -654,47 +682,50 @@ const TOOLS: McpTool[] = [
       ["slug", "target", "destination"]
     ),
     handler: async (ctx, args) => {
-      const projectId = await requireProject(ctx, args, "skills:read");
-      return skills.opGetSkill(projectId, String(args.slug), {
+      const workspaceId = await requireWorkspace(ctx, args, "skills:read");
+      const apiBaseUrl = env.PUBLIC_API_URL?.replace(/\/+$/, "") || env.WEB_ORIGIN;
+      return skills.opGetSkill(workspaceId, String(args.slug), {
         target: args.target as SkillTarget,
         destination: args.destination as SkillDestination,
+        apiBaseUrl,
       });
     },
   },
   {
     name: "publish_skill",
     description:
-      "Publica o actualiza una skill del proyecto. Debe incluir SKILL.md en files. Idempotente: si el contenido no cambió, la version no sube.",
-    inputSchema: withProjectId(
+      "Paso 1 de 2: crea un ticket de upload (uploadUrl + command). NO envíes files aquí — el contenido viaja fuera del tool call. Paso 2: ejecutá el command en tu shell (`tar czf - -C <dir> <slug> | curl --upload-file - \"$UPLOAD_URL\"`). Idempotente por hash de contenido.",
+    inputSchema: withWorkspaceId(
       {
         slug: { type: "string", description: "kebab-case, estable." },
         name: { type: "string" },
         description: { type: "string" },
-        files: {
-          type: "array",
-          items: {
-            type: "object",
-            properties: { path: { type: "string" }, content: { type: "string" } },
-            required: ["path", "content"],
-          },
-        },
       },
-      ["slug", "name", "description", "files"]
+      ["slug", "name", "description"]
     ),
     handler: async (ctx, args) => {
-      const projectId = await requireProject(ctx, args, "skills:write");
-      const rawFiles = Array.isArray(args.files) ? (args.files as Record<string, unknown>[]) : [];
-      const files: SkillFile[] = rawFiles.map((f) => ({ path: String(f.path ?? ""), content: String(f.content ?? "") }));
-      return skills.opPublishSkill(
-        projectId,
+      const workspaceId = await requireWorkspace(ctx, args, "skills:write");
+      const apiBaseUrl = env.PUBLIC_API_URL?.replace(/\/+$/, "") || env.WEB_ORIGIN;
+      return skills.opStartSkillUpload(
+        workspaceId,
         {
           slug: String(args.slug),
           name: String(args.name),
           description: String(args.description),
-          files,
         },
-        { type: "agent", id: ctx.key.agentId ?? ctx.key.id }
+        { type: "agent", id: ctx.key.agentId ?? ctx.key.id },
+        apiBaseUrl
       );
+    },
+  },
+  {
+    name: "delete_skill",
+    description:
+      "Borra una skill del workspace de forma IRREVERSIBLE (hard delete). Confirmá el slug con la persona antes de llamarla.",
+    inputSchema: withWorkspaceId({ slug: { type: "string" } }, ["slug"]),
+    handler: async (ctx, args) => {
+      const workspaceId = await requireWorkspace(ctx, args, "skills:write");
+      return skills.opDeleteSkill(workspaceId, String(args.slug));
     },
   },
 ];
@@ -732,6 +763,20 @@ function withoutProjectId(schema: Record<string, unknown>): Record<string, unkno
   return next;
 }
 
+/** Omite workspaceId cuando la key ya fija proyecto o workspace. */
+function withoutWorkspaceId(schema: Record<string, unknown>): Record<string, unknown> {
+  const properties = schema.properties as Record<string, unknown> | undefined;
+  if (!properties || !("workspaceId" in properties)) return schema;
+  const { workspaceId: _pinned, ...rest } = properties;
+  const next: Record<string, unknown> = { ...schema, properties: rest };
+  const required = (schema.required as string[] | undefined)?.filter((r) => r !== "workspaceId");
+  if (required) {
+    if (required.length) next.required = required;
+    else delete next.required;
+  }
+  return next;
+}
+
 /**
  * Definiciones de tools para un cliente LLM. Con `key`, devuelve solo lo que esa
  * key puede ejecutar de verdad:
@@ -740,6 +785,7 @@ function withoutProjectId(schema: Record<string, unknown>): Record<string, unkno
  *   ronda e invita al modelo a llamadas que terminan en 403.
  * - Omite `projectId` si la key es de proyecto: ahí el proyecto ya está fijado y
  *   mandar uno distinto es un 403 (ver agents.resolveProjectForKey).
+ * - Omite `workspaceId` si la key fija proyecto o workspace.
  *
  * Esto es una optimización del catálogo, NO un control de acceso: `tools/call`
  * sigue exigiendo el scope aunque alguien invoque una tool que no vio listada.
@@ -747,13 +793,19 @@ function withoutProjectId(schema: Record<string, unknown>): Record<string, unkno
 export function listMcpToolDefs(key?: ApiKey) {
   const scopes = key ? (key.scopes as ApiScope[]) : null;
   const projectPinned = key ? key.scopeLevel === "project" : false;
+  const workspacePinned = key ? key.scopeLevel === "project" || key.scopeLevel === "workspace" : false;
   return TOOLS.filter((t) => scopes === null || isToolAvailable(MCP_TOOLS[t.name].access, scopes)).map(
-    (t) => ({
-      name: t.name,
-      description: t.description,
-      inputSchema: projectPinned ? withoutProjectId(t.inputSchema) : t.inputSchema,
-      access: MCP_TOOLS[t.name].access,
-    })
+    (t) => {
+      let inputSchema = t.inputSchema;
+      if (projectPinned) inputSchema = withoutProjectId(inputSchema);
+      if (workspacePinned) inputSchema = withoutWorkspaceId(inputSchema);
+      return {
+        name: t.name,
+        description: t.description,
+        inputSchema,
+        access: MCP_TOOLS[t.name].access,
+      };
+    }
   );
 }
 

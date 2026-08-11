@@ -1,27 +1,29 @@
-// Catálogo de skills por proyecto (docs/skills-catalog.md): un agente publica
-// el contenido canónico de una skill y otro agente (o persona) la instala en
-// su runtime eligiendo destino. `files[].path` es lo único que este servicio
-// deja escribir en el disco de quien instala, así que se valida tanto al
-// publicar como al servir el paquete instalable (ver isSafeSkillFilePath).
+// Catálogo de skills por workspace (docs/skills-catalog.md).
+// El modelo decide *qué* publicar; el transporte de bytes es otra capa
+// (tar.gz vía skill-transfer). Aquí vive validación, autorización y persistencia.
 
-import { createHash } from "node:crypto";
-import { Prisma } from "@prisma/client";
+import { createHash, randomBytes } from "node:crypto";
 import {
   isSafeSkillFilePath,
   isValidSkillSlug,
   resolveSkillRootPath,
   SKILL_DESTINATIONS,
+  SKILL_DOWNLOAD_TTL_MS,
   SKILL_ENTRY_FILE,
+  SKILL_INLINE_MAX_BYTES,
+  SKILL_MAX_FILE_BYTES,
   SKILL_MAX_FILES,
   SKILL_MAX_TOTAL_BYTES,
   SKILL_TARGETS,
+  SKILL_UPLOAD_TTL_MS,
   type SkillDestination,
   type SkillFile,
   type SkillTarget,
 } from "@pemie/shared";
 import { prisma } from "../db.js";
 import { badRequest, notFound } from "./errors.js";
-import { projectWithAccess } from "./ingest.js";
+import { requireMembership } from "./tenancy.js";
+import { packSkillTarGz } from "./skill-archive.js";
 
 /** Quién publica: usuario autenticado (REST) o agente vía MCP. */
 export interface SkillActor {
@@ -29,58 +31,92 @@ export interface SkillActor {
   id: string | null;
 }
 
-export interface PublishSkillInput {
+export interface StartSkillUploadInput {
   slug: string;
   name: string;
   description: string;
-  files: SkillFile[];
 }
 
 /**
  * Hash canónico del contenido: paths ordenados antes de serializar para que
  * reordenar `files` en el publish no cuente como un cambio de contenido.
  */
-function hashFiles(files: SkillFile[]): string {
+export function hashFiles(files: SkillFile[]): string {
   const canonical = [...files]
     .sort((a, b) => a.path.localeCompare(b.path))
     .map((f) => ({ path: f.path, content: f.content }));
   return createHash("sha256").update(JSON.stringify(canonical)).digest("hex");
 }
 
-/** Valida forma, paths y tamaño de `files`. Lanza el primer error encontrado. */
-function validateFiles(files: SkillFile[]) {
-  if (!Array.isArray(files) || files.length === 0)
-    throw badRequest("La skill no tiene archivos", "empty_files");
-  if (files.length > SKILL_MAX_FILES)
-    throw badRequest(`Demasiados archivos (máx ${SKILL_MAX_FILES})`, "too_many_files");
-  if (!files.some((f) => f.path === SKILL_ENTRY_FILE))
-    throw badRequest(`Falta ${SKILL_ENTRY_FILE}`, "missing_skill_md");
+function hashToken(raw: string): string {
+  return createHash("sha256").update(raw).digest("hex");
+}
 
+/** Valida slug/name/description; compartido por start upload (antes en opPublishSkill). */
+export function validateSkillMeta(input: StartSkillUploadInput) {
+  const slug = input.slug.trim();
+  if (!isValidSkillSlug(slug)) throw badRequest("Slug inválido (usa kebab-case)", "invalid_slug");
+  const name = input.name.trim();
+  if (!name) throw badRequest("El nombre es obligatorio", "invalid_name");
+  const description = input.description.trim();
+  if (!description) throw badRequest("La descripción es obligatoria", "invalid_description");
+  return { slug, name, description };
+}
+
+/**
+ * Acumula un AsyncIterable validando por entrada y abortando al cruzar límites
+ * (misma defensa que el parser de tar: no materializar de más).
+ */
+export async function accumulateSkillFiles(
+  source: AsyncIterable<SkillFile>
+): Promise<{ files: SkillFile[]; totalBytes: number }> {
+  const files: SkillFile[] = [];
   const seen = new Set<string>();
   let totalBytes = 0;
-  for (const file of files) {
+
+  for await (const file of source) {
     if (!isSafeSkillFilePath(file.path))
       throw badRequest(`Path de archivo inválido: ${file.path}`, "invalid_path");
     if (seen.has(file.path)) throw badRequest(`Path duplicado: ${file.path}`, "invalid_path");
     seen.add(file.path);
-    totalBytes += Buffer.byteLength(file.content, "utf8");
+
+    const bytes = Buffer.byteLength(file.content, "utf8");
+    if (bytes > SKILL_MAX_FILE_BYTES)
+      throw badRequest(
+        `Archivo supera el límite de ${SKILL_MAX_FILE_BYTES} bytes: ${file.path}`,
+        "file_too_large"
+      );
+    totalBytes += bytes;
+    if (files.length + 1 > SKILL_MAX_FILES)
+      throw badRequest(`Demasiados archivos (máx ${SKILL_MAX_FILES})`, "too_many_files");
+    if (totalBytes > SKILL_MAX_TOTAL_BYTES)
+      throw badRequest(
+        `La skill supera el límite de ${SKILL_MAX_TOTAL_BYTES} bytes`,
+        "skill_too_large"
+      );
+
+    files.push({ path: file.path, content: file.content });
   }
-  if (totalBytes > SKILL_MAX_TOTAL_BYTES)
-    throw badRequest(`La skill supera el límite de ${SKILL_MAX_TOTAL_BYTES} bytes`, "skill_too_large");
+
+  if (files.length === 0) throw badRequest("La skill no tiene archivos", "empty_files");
+  if (!files.some((f) => f.path === SKILL_ENTRY_FILE))
+    throw badRequest(`Falta ${SKILL_ENTRY_FILE}`, "missing_skill_md");
+
+  return { files, totalBytes };
 }
 
 // ─── Lectura ───────────────────────────────────────────────────────────────
 
-/** Lista las skills del proyecto, sin `files` (viewer+). */
-export async function listSkills(userId: string, projectId: string) {
-  await projectWithAccess(userId, projectId);
-  return opListSkills(projectId);
+/** Lista las skills del workspace, sin archivos (viewer+). */
+export async function listSkills(userId: string, workspaceId: string) {
+  await requireMembership(userId, workspaceId);
+  return opListSkills(workspaceId);
 }
 
 /** Operación (ya autorizada): summaries ordenados por actualización reciente. */
-export function opListSkills(projectId: string) {
-  return prisma.projectSkill.findMany({
-    where: { projectId },
+export function opListSkills(workspaceId: string) {
+  return prisma.workspaceSkill.findMany({
+    where: { workspaceId },
     orderBy: { updatedAt: "desc" },
     select: {
       slug: true,
@@ -89,6 +125,7 @@ export function opListSkills(projectId: string) {
       version: true,
       publishedByType: true,
       updatedAt: true,
+      totalBytes: true,
     },
   });
 }
@@ -96,104 +133,309 @@ export function opListSkills(projectId: string) {
 export interface GetSkillOptions {
   target: SkillTarget;
   destination: SkillDestination;
+  /** Origen público del API para construir downloadUrl absolutas. */
+  apiBaseUrl: string;
 }
 
 /** Paquete instalable de una skill para un runtime/destino dados (viewer+). */
-export async function getSkill(userId: string, projectId: string, slug: string, opts: GetSkillOptions) {
-  await projectWithAccess(userId, projectId);
-  return opGetSkill(projectId, slug, opts);
+export async function getSkill(
+  userId: string,
+  workspaceId: string,
+  slug: string,
+  opts: GetSkillOptions
+) {
+  await requireMembership(userId, workspaceId);
+  return opGetSkill(workspaceId, slug, opts);
 }
 
 /** Operación (ya autorizada): arma el paquete instalable. Ver `getSkill`. */
-export async function opGetSkill(projectId: string, slug: string, opts: GetSkillOptions) {
+export async function opGetSkill(workspaceId: string, slug: string, opts: GetSkillOptions) {
   if (!SKILL_TARGETS.includes(opts.target))
     throw badRequest(`target inválido: ${opts.target}`, "invalid_target");
   if (!SKILL_DESTINATIONS.includes(opts.destination))
     throw badRequest(`destination inválido: ${opts.destination}`, "invalid_destination");
 
-  const skill = await prisma.projectSkill.findUnique({ where: { projectId_slug: { projectId, slug } } });
+  const skill = await prisma.workspaceSkill.findUnique({
+    where: { workspaceId_slug: { workspaceId, slug } },
+    include: { files: { select: { path: true, content: true, bytes: true }, orderBy: { path: "asc" } } },
+  });
   if (!skill) throw notFound("Skill no encontrada");
 
-  const files = skill.files as unknown as SkillFile[];
   // Los paths ya se validaron al publicar, pero esto es lo único que un agente
-  // escribe en disco: si un dato llegó por otra vía (seed, migración, edición
-  // directa) con un path inseguro, se corta acá y no en el disco de quien instala.
-  const unsafe = files.find((f) => !isSafeSkillFilePath(f.path));
+  // escribe en disco: si un dato llegó por otra vía (seed, migración) con un
+  // path inseguro, se corta acá y no en el disco de quien instala.
+  const unsafe = skill.files.find((f) => !isSafeSkillFilePath(f.path));
   if (unsafe) throw badRequest(`La skill tiene un path inválido: ${unsafe.path}`, "invalid_path");
 
-  return {
+  const manifest = skill.files.map((f) => ({ path: f.path, bytes: f.bytes }));
+  const rootPath = resolveSkillRootPath(opts.target, opts.destination, skill.slug);
+  const base = {
     slug: skill.slug,
     name: skill.name,
     description: skill.description,
     version: skill.version,
-    publishedByType: skill.publishedByType,
+    publishedByType: skill.publishedByType as "user" | "agent",
     updatedAt: skill.updatedAt,
     install: {
       target: opts.target,
       destination: opts.destination,
-      rootPath: resolveSkillRootPath(opts.target, opts.destination, skill.slug),
-      files,
+      rootPath,
+      manifest,
+      totalBytes: skill.totalBytes,
     },
     availableTargets: SKILL_TARGETS,
   };
-}
 
-// ─── Publish ─────────────────────────────────────────────────────────────
-
-/** Publica (crea o actualiza) una skill (member+). Idempotente por `contentHash`. */
-export async function publishSkill(
-  userId: string,
-  projectId: string,
-  input: PublishSkillInput,
-  actor: SkillActor
-) {
-  await projectWithAccess(userId, projectId, "member");
-  return opPublishSkill(projectId, input, actor);
-}
-
-/** Operación (ya autorizada): upsert por [projectId, slug]. Ver `publishSkill`. */
-export async function opPublishSkill(projectId: string, input: PublishSkillInput, actor: SkillActor) {
-  const slug = input.slug.trim();
-  if (!isValidSkillSlug(slug)) throw badRequest("Slug inválido (usa kebab-case)", "invalid_slug");
-  const name = input.name.trim();
-  if (!name) throw badRequest("El nombre es obligatorio", "invalid_name");
-  const description = input.description.trim();
-  if (!description) throw badRequest("La descripción es obligatoria", "invalid_description");
-
-  validateFiles(input.files);
-  const contentHash = hashFiles(input.files);
-
-  const existing = await prisma.projectSkill.findUnique({ where: { projectId_slug: { projectId, slug } } });
-
-  if (existing && existing.contentHash === contentHash) {
-    // Mismo contenido: solo se refresca metadata. La version NO sube — volver a
-    // publicar sin cambios no debe inflar el historial de versiones.
-    return prisma.projectSkill.update({
-      where: { id: existing.id },
-      data: { name, description, publishedByType: actor.type, publishedById: actor.id },
-    });
+  if (skill.totalBytes <= SKILL_INLINE_MAX_BYTES) {
+    return {
+      ...base,
+      install: {
+        ...base.install,
+        files: skill.files.map((f) => ({ path: f.path, content: f.content })),
+      },
+    };
   }
 
-  return prisma.projectSkill.upsert({
-    where: { projectId_slug: { projectId, slug } },
-    update: {
-      name,
-      description,
-      files: input.files as unknown as Prisma.InputJsonValue,
-      contentHash,
-      version: { increment: 1 },
-      publishedByType: actor.type,
-      publishedById: actor.id,
+  const { downloadUrl, command } = await mintDownloadTicket(skill.id, skill.slug, opts.apiBaseUrl);
+  return {
+    ...base,
+    install: {
+      ...base.install,
+      downloadUrl,
+      command,
     },
-    create: {
-      projectId,
+  };
+}
+
+async function mintDownloadTicket(skillId: string, slug: string, apiBaseUrl: string) {
+  // Purga oportunista: sin cron, mismo criterio de minimalismo del resto del repo.
+  await prisma.skillDownload.deleteMany({ where: { expiresAt: { lt: new Date() } } });
+
+  const rawToken = randomBytes(24).toString("hex");
+  const expiresAt = new Date(Date.now() + SKILL_DOWNLOAD_TTL_MS);
+  await prisma.skillDownload.create({
+    data: { skillId, tokenHash: hashToken(rawToken), expiresAt },
+  });
+
+  const downloadUrl = `${apiBaseUrl.replace(/\/+$/, "")}/api/skill-downloads/${rawToken}`;
+  const command = `mkdir -p "${slug}" && curl -sL "${downloadUrl}" | tar xz -C "${slug}"`;
+  return { downloadUrl, command, expiresAt };
+}
+
+// ─── Upload (publish en dos pasos) ─────────────────────────────────────────
+
+/** Crea el ticket de upload (member+). El contenido llega después por PUT. */
+export async function startSkillUpload(
+  userId: string,
+  workspaceId: string,
+  input: StartSkillUploadInput,
+  actor: SkillActor,
+  apiBaseUrl: string
+) {
+  await requireMembership(userId, workspaceId, "member");
+  return opStartSkillUpload(workspaceId, input, actor, apiBaseUrl);
+}
+
+/** Operación (ya autorizada): crea SkillUpload y devuelve el ticket. */
+export async function opStartSkillUpload(
+  workspaceId: string,
+  input: StartSkillUploadInput,
+  actor: SkillActor,
+  apiBaseUrl: string
+) {
+  const { slug, name, description } = validateSkillMeta(input);
+  const rawToken = randomBytes(24).toString("hex");
+  const expiresAt = new Date(Date.now() + SKILL_UPLOAD_TTL_MS);
+
+  await prisma.skillUpload.deleteMany({ where: { expiresAt: { lt: new Date() } } });
+  await prisma.skillUpload.create({
+    data: {
+      workspaceId,
       slug,
       name,
       description,
-      files: input.files as unknown as Prisma.InputJsonValue,
-      contentHash,
-      publishedByType: actor.type,
-      publishedById: actor.id,
+      tokenHash: hashToken(rawToken),
+      actorType: actor.type,
+      actorId: actor.id,
+      expiresAt,
     },
   });
+
+  const uploadUrl = `${apiBaseUrl.replace(/\/+$/, "")}/api/skill-uploads/${rawToken}`;
+  const command = `tar czf - -C <dir-padre> ${slug} | curl --upload-file - "${uploadUrl}"`;
+  return {
+    uploadUrl,
+    expiresAt: expiresAt.toISOString(),
+    command,
+    slug,
+    name,
+    description,
+  };
+}
+
+/**
+ * Consume el ticket (un solo uso) y persiste la skill.
+ * `source` es agnóstico de HTTP: tar parseado o partes multipart.
+ */
+export async function opCompleteSkillUpload(rawToken: string, source: AsyncIterable<SkillFile>) {
+  const tokenHash = hashToken(rawToken);
+  const draft = await prisma.skillUpload.findUnique({ where: { tokenHash } });
+  if (!draft) throw notFound("Ticket de upload no encontrado o ya usado");
+  if (draft.expiresAt.getTime() < Date.now()) {
+    await prisma.skillUpload.delete({ where: { id: draft.id } }).catch(() => undefined);
+    throw badRequest("El ticket de upload expiró", "upload_expired");
+  }
+
+  // Un solo uso: se borra al consumirlo, antes de parsear el cuerpo completo,
+  // para que un reintento paralelo no publique dos veces el mismo ticket.
+  await prisma.skillUpload.delete({ where: { id: draft.id } });
+
+  const { files, totalBytes } = await accumulateSkillFiles(source);
+  const contentHash = hashFiles(files);
+  const actor = { type: draft.actorType as "user" | "agent", id: draft.actorId };
+
+  return persistSkillFiles({
+    workspaceId: draft.workspaceId,
+    slug: draft.slug,
+    name: draft.name,
+    description: draft.description,
+    files,
+    totalBytes,
+    contentHash,
+    actor,
+  });
+}
+
+async function persistSkillFiles(input: {
+  workspaceId: string;
+  slug: string;
+  name: string;
+  description: string;
+  files: SkillFile[];
+  totalBytes: number;
+  contentHash: string;
+  actor: SkillActor;
+}) {
+  const existing = await prisma.workspaceSkill.findUnique({
+    where: { workspaceId_slug: { workspaceId: input.workspaceId, slug: input.slug } },
+  });
+
+  if (existing && existing.contentHash === input.contentHash) {
+    // Mismo contenido: solo se refresca metadata. La version NO sube — volver a
+    // publicar sin cambios no debe inflar el historial de versiones.
+    return prisma.workspaceSkill.update({
+      where: { id: existing.id },
+      data: {
+        name: input.name,
+        description: input.description,
+        publishedByType: input.actor.type,
+        publishedById: input.actor.id,
+      },
+    });
+  }
+
+  return prisma.$transaction(async (tx) => {
+    const skill = await tx.workspaceSkill.upsert({
+      where: { workspaceId_slug: { workspaceId: input.workspaceId, slug: input.slug } },
+      update: {
+        name: input.name,
+        description: input.description,
+        contentHash: input.contentHash,
+        totalBytes: input.totalBytes,
+        version: { increment: 1 },
+        publishedByType: input.actor.type,
+        publishedById: input.actor.id,
+      },
+      create: {
+        workspaceId: input.workspaceId,
+        slug: input.slug,
+        name: input.name,
+        description: input.description,
+        contentHash: input.contentHash,
+        totalBytes: input.totalBytes,
+        publishedByType: input.actor.type,
+        publishedById: input.actor.id,
+      },
+    });
+
+    await tx.workspaceSkillFile.deleteMany({ where: { skillId: skill.id } });
+    if (input.files.length > 0) {
+      await tx.workspaceSkillFile.createMany({
+        data: input.files.map((f) => ({
+          skillId: skill.id,
+          path: f.path,
+          content: f.content,
+          bytes: Buffer.byteLength(f.content, "utf8"),
+        })),
+      });
+    }
+    return skill;
+  });
+}
+
+// ─── Archive de bajada ─────────────────────────────────────────────────────
+
+/** Resuelve un token de descarga y arma el stream tar.gz (multi-uso dentro del TTL). */
+export async function opBuildSkillArchiveByToken(rawToken: string) {
+  const row = await prisma.skillDownload.findUnique({
+    where: { tokenHash: hashToken(rawToken) },
+    include: { skill: true },
+  });
+  if (!row) throw notFound("Token de descarga no encontrado");
+  if (row.expiresAt.getTime() < Date.now()) {
+    await prisma.skillDownload.delete({ where: { id: row.id } }).catch(() => undefined);
+    throw badRequest("El token de descarga expiró", "download_expired");
+  }
+  return opBuildSkillArchive(row.skill.workspaceId, row.skill.slug);
+}
+
+/**
+ * Arma el tar.gz leyendo archivos en páginas para no cargar 8 MiB de una vez
+ * en un solo array si la skill es grande.
+ */
+export async function opBuildSkillArchive(workspaceId: string, slug: string) {
+  const skill = await prisma.workspaceSkill.findUnique({
+    where: { workspaceId_slug: { workspaceId, slug } },
+  });
+  if (!skill) throw notFound("Skill no encontrada");
+
+  const PAGE = 50;
+  async function* pages() {
+    let cursor: string | undefined;
+    for (;;) {
+      const batch = await prisma.workspaceSkillFile.findMany({
+        where: { skillId: skill!.id },
+        orderBy: { path: "asc" },
+        take: PAGE,
+        ...(cursor ? { skip: 1, cursor: { id: cursor } } : {}),
+        select: { id: true, path: true, content: true },
+      });
+      if (batch.length === 0) break;
+      for (const row of batch) yield { path: row.path, content: row.content };
+      cursor = batch[batch.length - 1]!.id;
+      if (batch.length < PAGE) break;
+    }
+  }
+
+  return {
+    slug: skill.slug,
+    stream: packSkillTarGz(pages()),
+  };
+}
+
+// ─── Borrado ───────────────────────────────────────────────────────────────
+
+/** Hard delete de una skill (member+). Cascade limpia archivos y download tokens. */
+export async function deleteSkill(userId: string, workspaceId: string, slug: string) {
+  await requireMembership(userId, workspaceId, "member");
+  return opDeleteSkill(workspaceId, slug);
+}
+
+export async function opDeleteSkill(workspaceId: string, slug: string) {
+  const skill = await prisma.workspaceSkill.findUnique({
+    where: { workspaceId_slug: { workspaceId, slug } },
+  });
+  if (!skill) throw notFound("Skill no encontrada");
+  await prisma.workspaceSkill.delete({ where: { id: skill.id } });
+  return { ok: true as const, slug };
 }

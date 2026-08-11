@@ -985,6 +985,117 @@ export function SkeletonList({ rows = 4, className = "" }: { rows?: number; clas
   );
 }
 
+/**
+ * Zona de arrastre de archivos/carpetas. El input webkitdirectory es el
+ * fallback accesible cuando el drag no está disponible.
+ */
+export function DropZone({
+  onFiles,
+  disabled = false,
+  label = "Arrastrá una carpeta de skill acá",
+  hint = "o hacé clic para elegirla",
+  className = "",
+}: {
+  onFiles: (files: FileList) => void;
+  disabled?: boolean;
+  label?: string;
+  hint?: string;
+  className?: string;
+}) {
+  const [over, setOver] = useState(false);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  return (
+    <div
+      role="button"
+      tabIndex={disabled ? -1 : 0}
+      aria-disabled={disabled}
+      aria-label={label}
+      onKeyDown={(e) => {
+        if (disabled) return;
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          inputRef.current?.click();
+        }
+      }}
+      onClick={() => {
+        if (!disabled) inputRef.current?.click();
+      }}
+      onDragEnter={(e) => {
+        e.preventDefault();
+        if (!disabled) setOver(true);
+      }}
+      onDragOver={(e) => {
+        e.preventDefault();
+        if (!disabled) setOver(true);
+      }}
+      onDragLeave={() => setOver(false)}
+      onDrop={(e) => {
+        e.preventDefault();
+        setOver(false);
+        if (disabled) return;
+        if (e.dataTransfer.files?.length) onFiles(e.dataTransfer.files);
+      }}
+      className={`cursor-pointer rounded-lg border border-dashed px-6 py-10 text-center transition-[border-color,background-color] duration-150 focus-visible:outline-none focus-visible:shadow-focus ${
+        over ? "border-blue-600 bg-blue-100" : "border-line-200 bg-surface-50"
+      } ${disabled ? "cursor-not-allowed opacity-50" : "hover:border-ink-300"} ${className}`}
+    >
+      <p className="text-h4 text-ink-900">{label}</p>
+      <p className="mt-1 text-body-sm text-ink-500">{hint}</p>
+      <input
+        ref={inputRef}
+        type="file"
+        className="hidden"
+        // @ts-expect-error webkitdirectory no está en el tipado estándar de React
+        webkitdirectory=""
+        directory=""
+        multiple
+        disabled={disabled}
+        onChange={(e) => {
+          if (e.target.files?.length) onFiles(e.target.files);
+          e.target.value = "";
+        }}
+      />
+    </div>
+  );
+}
+
+/** Barra de progreso determinista (0–100) para uploads. */
+export function ProgressBar({
+  value,
+  label,
+  className = "",
+}: {
+  value: number;
+  label?: string;
+  className?: string;
+}) {
+  const clamped = Math.max(0, Math.min(100, value));
+  return (
+    <div className={className}>
+      {label ? (
+        <div className="mb-1.5 flex justify-between text-caption text-ink-600">
+          <span>{label}</span>
+          <span className="font-mono">{Math.round(clamped)}%</span>
+        </div>
+      ) : null}
+      <div
+        className="h-2 overflow-hidden rounded-sm bg-line-200"
+        role="progressbar"
+        aria-valuenow={Math.round(clamped)}
+        aria-valuemin={0}
+        aria-valuemax={100}
+        aria-label={label}
+      >
+        <div
+          className="h-full rounded-sm bg-blue-600 transition-[width] duration-200"
+          style={{ width: `${clamped}%` }}
+        />
+      </div>
+    </div>
+  );
+}
+
 /** Fila de stats skeleton (para dashboards con Stat). */
 export function SkeletonStats({ count = 3 }: { count?: number }) {
   return (

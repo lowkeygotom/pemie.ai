@@ -11,6 +11,7 @@ import type {
   SkillInstallPackage,
   SkillSummary,
   SkillTarget,
+  SkillUploadTicket,
   UserStoryNarrative,
   WipColumn,
   WorkspaceAgentRosterItem,
@@ -697,10 +698,20 @@ export const api = {
       post<{ workspace: Workspace }>(`/api/invitations/${token}/accept`),
   },
 
-  // ─── Catálogo de skills (solo lectura: publicar es vía agente) ─────
+  // ─── Catálogo de skills (workspace) ────────────────────────────────
   skills: {
-    list: (w: string, p: string) => get<{ skills: Skill[] }>(`${pp(w, p)}/skills`),
-    get: (w: string, p: string, slug: string, target: SkillTarget, destination: SkillDestination) =>
-      get<SkillInstall>(`${pp(w, p)}/skills/${slug}${qs({ target, destination })}`),
+    list: (w: string) => get<{ skills: Skill[] }>(`/api/workspaces/${w}/skills`),
+    get: (w: string, slug: string, target: SkillTarget, destination: SkillDestination) =>
+      get<SkillInstall>(`/api/workspaces/${w}/skills/${slug}${qs({ target, destination })}`),
+    create: (w: string, input: { slug: string; name: string; description: string }) =>
+      post<SkillUploadTicket>(`/api/workspaces/${w}/skills`, input),
+    /** PUT multipart al uploadUrl del ticket (token, no sesión). */
+    upload: async (uploadUrl: string, form: FormData) => {
+      const res = await fetch(uploadUrl, { method: "PUT", body: form, credentials: "omit" });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new ApiError(res.status, data?.error ?? `Error ${res.status}`, data?.code);
+      return data as { slug: string; version: number; totalBytes: number };
+    },
+    remove: (w: string, slug: string) => del<{ ok: true; slug: string }>(`/api/workspaces/${w}/skills/${slug}`),
   },
 };

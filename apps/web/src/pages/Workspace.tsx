@@ -90,9 +90,6 @@ export default function Workspace() {
         title={ws.name}
         actions={
           <div className="flex items-center gap-3">
-            <Link to={`/w/${slug}/skills`} className="text-body-sm text-blue-700 hover:underline">
-              Skills
-            </Link>
             {canManage ? (
               <Link to={`/w/${slug}/settings`} className="text-body-sm text-blue-700 hover:underline">
                 Ajustes
@@ -106,8 +103,26 @@ export default function Workspace() {
       <div className="space-y-8">
         <ProjectsSection slug={slug} projects={projects} onChange={loadCore} />
         <TeamSection slug={slug} projects={projects} canManage={canManage} />
+        <TeamResourcesSection slug={slug} />
       </div>
     </div>
+  );
+}
+
+/** Recursos compartidos por el equipo del workspace (hoy: Skills). */
+function TeamResourcesSection({ slug }: { slug: string }) {
+  return (
+    <section>
+      <h2 className="mb-4 text-h3 text-ink-900">Recursos de equipo</h2>
+      <Link to={`/w/${slug}/skills`}>
+        <Card interactive>
+          <h3 className="text-body font-semibold text-ink-900">Skills</h3>
+          <p className="mt-1 text-body-sm text-ink-500">
+            Prompts y guías reutilizables por el equipo.
+          </p>
+        </Card>
+      </Link>
+    </section>
   );
 }
 

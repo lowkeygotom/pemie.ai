@@ -262,7 +262,10 @@ export async function opStartSkillUpload(
   });
 
   const uploadUrl = `${apiBaseUrl.replace(/\/+$/, "")}/api/skill-uploads/${rawToken}`;
-  const command = `tar czf - -C <dir-padre> ${slug} | curl --upload-file - "${uploadUrl}"`;
+  // COPYFILE_DISABLE evita que el tar de macOS meta sidecars AppleDouble
+  // (._archivo); uno de esos cae en la raíz del paquete y rompe el strip de
+  // prefijo común en parseSkillTarGz (SKILL.md deja de encontrarse).
+  const command = `COPYFILE_DISABLE=1 tar czf - -C <dir-padre> ${slug} | curl --upload-file - "${uploadUrl}"`;
   return {
     uploadUrl,
     expiresAt: expiresAt.toISOString(),

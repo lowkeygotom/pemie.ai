@@ -694,7 +694,7 @@ const TOOLS: McpTool[] = [
   {
     name: "publish_skill",
     description:
-      "Paso 1 de 2: crea un ticket de upload (uploadUrl + command). NO envíes files aquí — el contenido viaja fuera del tool call. Paso 2: ejecutá el command en tu shell (`tar czf - -C <dir> <slug> | curl --upload-file - \"$UPLOAD_URL\"`). Idempotente por hash de contenido.",
+      "Paso 1 de 2: crea un ticket de upload (uploadUrl + command). NO envíes files aquí — el contenido viaja fuera del tool call. Paso 2: ejecutá el command en tu shell (`COPYFILE_DISABLE=1 tar czf - -C <dir> <slug> | curl --upload-file - \"$UPLOAD_URL\"`). Idempotente por hash de contenido.",
     inputSchema: withWorkspaceId(
       {
         slug: { type: "string", description: "kebab-case, estable." },

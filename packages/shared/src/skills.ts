@@ -68,7 +68,7 @@ export interface SkillInstallPackage<TDate = string> extends SkillSummary<TDate>
 export interface SkillUploadTicket {
   uploadUrl: string;
   expiresAt: string;
-  /** `tar czf - -C <dir> <slug> | curl --upload-file - "$UPLOAD_URL"` listo para el shell. */
+  /** `COPYFILE_DISABLE=1 tar czf - -C <dir> <slug> | curl --upload-file - "$UPLOAD_URL"` listo para el shell. */
   command: string;
   slug: string;
   name: string;

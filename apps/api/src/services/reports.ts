@@ -6,10 +6,12 @@
 // y se apoya en los commits ingestados en F2 para calcular métricas.
 
 import { Prisma } from "@prisma/client";
-import type { ReportScope } from "@pemie/shared";
+import type { DayMetrics, ReportScope } from "@pemie/shared";
 import { prisma } from "../db.js";
 import { badRequest, notFound } from "./errors.js";
 import { projectWithAccess } from "./ingest.js";
+
+export type { DayMetrics };
 
 // ─── Objetivo ──────────────────────────────────────────────────────────────
 
@@ -84,26 +86,56 @@ async function reportWithAccess(userId: string, reportId: string, minRole: "view
 }
 
 /**
- * Métricas deterministas de un día a partir de los commits ingestados:
- * total, desglose por dominio y nº de contribuidores. Devuelve null si la
- * fecha no es un día válido (p. ej. informe general).
+ * Métricas deterministas de un día: commits ingestados (total, por dominio,
+ * contribuidores) + actividad de tablero (`CardActivity` action "moved").
+ * Un moved con `userStoryId` es cambio de estado de HU; sin él, movimiento
+ * genérico de tarjeta. Devuelve null solo si la fecha no es un día válido.
  */
-async function computeDayMetrics(projectId: string, date: string) {
+export async function computeDayMetrics(
+  projectId: string,
+  date: string
+): Promise<DayMetrics | null> {
   const start = new Date(`${date}T00:00:00.000Z`);
   if (Number.isNaN(start.getTime())) return null;
   const end = new Date(start.getTime() + 24 * 60 * 60 * 1000);
 
-  const commits = await prisma.commit.findMany({
-    where: { projectId, committedAt: { gte: start, lt: end } },
-    select: { domain: true, contributorId: true },
-  });
+  const [commits, moves] = await Promise.all([
+    prisma.commit.findMany({
+      where: { projectId, committedAt: { gte: start, lt: end } },
+      select: { domain: true, contributorId: true },
+    }),
+    // CardActivity no tiene projectId: se filtra por card.board.projectId.
+    prisma.cardActivity.findMany({
+      where: {
+        action: "moved",
+        createdAt: { gte: start, lt: end },
+        card: { board: { projectId } },
+      },
+      select: { card: { select: { userStoryId: true } } },
+    }),
+  ]);
+
   const byDomain: Record<string, number> = {};
   const contributors = new Set<string>();
   for (const c of commits) {
     byDomain[c.domain] = (byDomain[c.domain] ?? 0) + 1;
     contributors.add(c.contributorId);
   }
-  return { commits: commits.length, contributors: contributors.size, byDomain };
+
+  let cardMoves = 0;
+  let storyStatusChanges = 0;
+  for (const m of moves) {
+    if (m.card.userStoryId != null) storyStatusChanges += 1;
+    else cardMoves += 1;
+  }
+
+  return {
+    commits: commits.length,
+    contributors: contributors.size,
+    byDomain,
+    cardMoves,
+    storyStatusChanges,
+  };
 }
 
 export interface PublishReportInput {
@@ -113,14 +145,15 @@ export interface PublishReportInput {
   comment?: string;
   verdict?: string;
   score?: number;
-  metrics?: unknown; // si no se pasa y es "day", se calculan de los commits
+  metrics?: unknown; // si no se pasa y es "day", se calculan server-side (DayMetrics)
   agentId?: string; // sólo lo setea la interfaz MCP (F4); en REST va null
 }
 
 /**
  * Publica un informe (member+). Idempotente por (projectId, date, slot): volver
  * a publicar el mismo día/slot actualiza el informe existente. Para informes de
- * día sin métricas explícitas, las calcula de los commits de esa fecha.
+ * día sin métricas explícitas, las calcula server-side (commits + actividad de
+ * tablero del día).
  */
 export async function publishReport(userId: string, projectId: string, input: PublishReportInput) {
   await projectWithAccess(userId, projectId, "member");
@@ -149,7 +182,7 @@ export async function opPublishReport(projectId: string, input: PublishReportInp
     verdict: input.verdict?.trim() || null,
     score: input.score ?? null,
     // Json nullable: SQL NULL se pasa como Prisma.JsonNull, no como null crudo.
-    metrics: metrics == null ? Prisma.JsonNull : (metrics as Prisma.InputJsonValue),
+    metrics: metrics == null ? Prisma.JsonNull : (metrics as unknown as Prisma.InputJsonValue),
     agentId: input.agentId ?? null,
   };
 

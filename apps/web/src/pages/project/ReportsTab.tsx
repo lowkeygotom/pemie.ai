@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import type { DayMetrics } from "@pemie/shared";
 import { api, analyticsFailureReason, ApiError } from "../../lib/api.js";
 import { queryKeys, STALE_TIME } from "../../lib/queryClient.js";
 import { track } from "../../lib/analytics/index.js";
@@ -16,6 +17,18 @@ import {
   Stat,
   Textarea,
 } from "../../components/ui.js";
+
+/** Informes antiguos o scope general pueden traer metrics null / incompleto. */
+function dayMetricsForDisplay(metrics: DayMetrics | null): DayMetrics | null {
+  if (!metrics || typeof metrics.commits !== "number") return null;
+  return {
+    commits: metrics.commits,
+    contributors: metrics.contributors ?? 0,
+    byDomain: metrics.byDomain ?? {},
+    cardMoves: metrics.cardMoves ?? 0,
+    storyStatusChanges: metrics.storyStatusChanges ?? 0,
+  };
+}
 
 export default function ReportsTab({ ws, proj }: { ws: string; proj: string }) {
   const queryClient = useQueryClient();
@@ -152,7 +165,9 @@ export default function ReportsTab({ ws, proj }: { ws: string; proj: string }) {
             />
           ) : (
             <div className="divide-y divide-line-100">
-              {reports.map((r) => (
+              {reports.map((r) => {
+                const metrics = r.scope === "day" ? dayMetricsForDisplay(r.metrics) : null;
+                return (
                 <article
                   key={r.id}
                   className="-mx-6 space-y-3 px-6 py-4 hover:bg-surface-50"
@@ -186,6 +201,14 @@ export default function ReportsTab({ ws, proj }: { ws: string; proj: string }) {
                       <Stat value={Math.round(r.score)} label="score" />
                     )}
                   </div>
+                  {metrics && (
+                    <div className="flex flex-wrap gap-6">
+                      <Stat value={metrics.commits} label="commits" />
+                      <Stat value={metrics.contributors} label="contribuidores" />
+                      <Stat value={metrics.cardMoves} label="movimientos" />
+                      <Stat value={metrics.storyStatusChanges} label="cambios de HU" />
+                    </div>
+                  )}
                   {r.comment ? (
                     <div className="rounded-md border border-line-100 bg-surface-0 p-4">
                       <MarkdownBody>{r.comment}</MarkdownBody>
@@ -194,7 +217,8 @@ export default function ReportsTab({ ws, proj }: { ws: string; proj: string }) {
                     <p className="text-body-sm text-ink-400">Sin comentario.</p>
                   )}
                 </article>
-              ))}
+                );
+              })}
             </div>
           )}
         </div>

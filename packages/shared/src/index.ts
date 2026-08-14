@@ -9,6 +9,21 @@ export type Role = "owner" | "admin" | "member" | "viewer";
 
 export type ReportScope = "day" | "general";
 
+/**
+ * Métricas deterministas de un informe de día: commits ingestados + actividad
+ * de tablero (movimientos genéricos y cambios de estado de HU). Las calcula
+ * el servidor en `computeDayMetrics`; el cliente solo las renderiza.
+ */
+export interface DayMetrics {
+  commits: number;
+  contributors: number;
+  byDomain: Record<string, number>;
+  /** Movimientos de tarjeta sin HU vinculada. */
+  cardMoves: number;
+  /** Cambios de columna de tarjetas con HU (= cambio de estado de la HU). */
+  storyStatusChanges: number;
+}
+
 export type NoteStatus = "pending" | "processed";
 
 export type CardType = "story" | "task" | "bug";

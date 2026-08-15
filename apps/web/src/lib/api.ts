@@ -2,6 +2,7 @@
 // lógica de negocio vive en el backend. Aquí solo hay transporte + tipos.
 
 import type {
+  AgentReliabilityReport,
   DomainConfig,
   DriftReport,
   ObservedAgent,
@@ -510,6 +511,11 @@ export const api = {
       ),
     overview: (wsSlug: string, projectSlug: string) =>
       get<ProjectOverview>(`${pp(wsSlug, projectSlug)}/overview`),
+    agentReliability: (
+      wsSlug: string,
+      projectSlug: string,
+      q?: { windowDays?: number; settleHours?: number }
+    ) => get<AgentReliabilityReport>(`${pp(wsSlug, projectSlug)}/agent-reliability${qs(q)}`),
   },
 
   // Base de rutas por proyecto.

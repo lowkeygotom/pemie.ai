@@ -3,6 +3,7 @@
 
 import type {
   AgentReliabilityReport,
+  DayMetrics,
   DomainConfig,
   DriftReport,
   ObservedAgent,
@@ -267,7 +268,7 @@ export interface Report {
   comment: string | null;
   verdict: string | null;
   score: number | null;
-  metrics: unknown;
+  metrics: DayMetrics | null;
   createdAt: string;
   agent?: { id: string; name: string } | null;
   _count?: { notes: number };

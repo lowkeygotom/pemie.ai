@@ -13,6 +13,7 @@ import * as board from "../services/board.js";
 import * as assignees from "../services/assignees.js";
 import * as leaderboard from "../services/leaderboard.js";
 import * as overview from "../services/overview.js";
+import * as agentReliability from "../services/agent-reliability.js";
 import * as searchSvc from "../services/search.js";
 import * as skills from "../services/skills.js";
 import { badRequest } from "../services/errors.js";
@@ -330,6 +331,25 @@ export function workspaceRoutes() {
   app.get("/:slug/projects/:projectSlug/overview", async (c) => {
     const project = await resolveProject(c);
     return c.json(await overview.opProjectOverview(project.id));
+  });
+
+  // PEM-48: proporción de acciones de agente que un humano no deshizo.
+  app.get("/:slug/projects/:projectSlug/agent-reliability", async (c) => {
+    const project = await resolveProject(c);
+    const windowDaysRaw = c.req.query("windowDays");
+    const settleHoursRaw = c.req.query("settleHours");
+    return c.json(
+      await agentReliability.opAgentReliability(project.id, {
+        windowDays:
+          windowDaysRaw != null && Number.isFinite(Number(windowDaysRaw))
+            ? Number(windowDaysRaw)
+            : undefined,
+        settleHours:
+          settleHoursRaw != null && Number.isFinite(Number(settleHoursRaw))
+            ? Number(settleHoursRaw)
+            : undefined,
+      })
+    );
   });
 
   app.get("/:slug/projects/:projectSlug/search", async (c) => {

@@ -9,6 +9,7 @@ export const MCP_TOOL_NAMES = [
   "list_contributors", "list_assignees", "list_board", "create_card", "move_card", "link_story_to_card",
   "get_story_commit_progress", "search", "create_note", "get_user_story", "delete_user_story",
   "update_card", "list_card_activities", "delete_card", "get_project_leaderboard",
+  "get_agent_reliability",
   "list_skills", "get_skill", "publish_skill", "delete_skill",
 ] as const;
 export type McpToolName = (typeof MCP_TOOL_NAMES)[number];
@@ -80,6 +81,7 @@ export const MCP_TOOLS: Record<McpToolName, McpToolMeta> = {
   list_card_activities: { access: { kind: "scope", scope: "board:read" }, summary: "actividad de una tarjeta con el nombre del actor.", group: "Kanban" },
   delete_card: { access: { kind: "scope", scope: "board:write" }, summary: "elimina una tarjeta del tablero sin borrar su HU.", group: "Kanban" },
   get_project_leaderboard: { access: { kind: "scope", scope: "board:read" }, summary: "ranking de HUs cerradas por actor (persona o agente).", group: "Kanban" },
+  get_agent_reliability: { access: { kind: "scope", scope: "board:read" }, summary: "proporción de movimientos y asignaciones de agente que una persona no deshizo.", group: "Kanban" },
   list_skills: { access: { kind: "scope", scope: "skills:read" }, summary: "skills publicadas en el workspace.", group: "Skills del workspace" },
   get_skill: { access: { kind: "scope", scope: "skills:read" }, summary: "paquete instalable de una skill (inline o downloadUrl según tamaño).", group: "Skills del workspace" },
   publish_skill: { access: { kind: "scope", scope: "skills:write" }, summary: "crea un ticket de upload; el contenido viaja por tar|curl, no en el tool call.", group: "Skills del workspace" },

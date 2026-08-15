@@ -31,6 +31,7 @@ import * as assignees from "../services/assignees.js";
 import * as search from "../services/search.js";
 import * as leaderboard from "../services/leaderboard.js";
 import * as drift from "../services/drift.js";
+import * as agentReliability from "../services/agent-reliability.js";
 import * as overview from "../services/overview.js";
 import * as skills from "../services/skills.js";
 
@@ -188,6 +189,29 @@ const TOOLS: McpTool[] = [
     handler: async (ctx, args) => {
       const projectId = await requireProject(ctx, args, "board:read");
       return { projectId, leaderboard: await leaderboard.opProjectLeaderboard(projectId) };
+    },
+  },
+  {
+    name: "get_agent_reliability",
+    description:
+      "Proporción de movimientos y asignaciones de agente que una persona no deshizo. El cálculo vive en el servicio de dominio: misma forma que el REST.",
+    inputSchema: withProjectId({
+      windowDays: {
+        type: "number",
+        description: "Días hacia atrás de acciones de agente que entran al cálculo (default 30).",
+      },
+      settleHours: {
+        type: "number",
+        description:
+          "Horas de asentamiento: excluye acciones demasiado recientes para no inflar el score (default 2).",
+      },
+    }),
+    handler: async (ctx, args) => {
+      const projectId = await requireProject(ctx, args, "board:read");
+      return agentReliability.opAgentReliability(projectId, {
+        windowDays: typeof args.windowDays === "number" ? args.windowDays : undefined,
+        settleHours: typeof args.settleHours === "number" ? args.settleHours : undefined,
+      });
     },
   },
   {

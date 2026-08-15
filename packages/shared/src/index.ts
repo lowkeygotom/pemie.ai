@@ -100,6 +100,22 @@ export interface DriftReport<TDate = string> {
   countsByType: Record<DriftAlertType, number>;
 }
 
+/**
+ * Indicador de "agentes fluidos" (PEM-48): qué proporción de movimientos y
+ * asignaciones de agente quedan en pie, contando corrección solo cuando un
+ * humano deshace el cambio concreto (fromValue/toValue), no cuando sigue
+ * trabajando encima.
+ */
+export interface AgentReliabilityReport {
+  windowDays: number;
+  settleHours: number;
+  agentActions: number;
+  revertedActions: number;
+  /** null cuando agentActions === 0: sin acciones no hay tasa, y 0 ó 100 mentirían. */
+  survivalRate: number | null;
+  byAction: Record<"moved" | "assigned", { actions: number; reverted: number }>;
+}
+
 /** Columna del Kanban con su carga actual (WIP del overview). */
 export interface WipColumn {
   name: string;

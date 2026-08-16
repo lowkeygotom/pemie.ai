@@ -12,7 +12,7 @@ export function CommitsDomains() {
         <SectionIntro
           eyebrow="Ingesta de commits · Dominios"
           titleId={TITLE_ID}
-          title="Cada commit, clasificado. El avance deja de ser una opinión."
+          title="Cada commit se clasifica solo, sin que nadie tenga que opinar sobre el avance."
           description="Define los dominios de tu proyecto — los que tú quieras, no una taxonomía impuesta. Pemie clasifica la ingesta automáticamente y el avance por dominio se calcula solo."
         />
         <Card padding="none" className="divide-y divide-line-100 p-5 font-mono text-body-sm">

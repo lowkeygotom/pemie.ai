@@ -45,7 +45,7 @@ export function ReportsSection() {
         <SectionIntro
           eyebrow="Objetivo e informes"
           titleId={TITLE_ID}
-          title="Informes con evidencia, no con adjetivos."
+          title="Informes que citan el commit exacto detrás de cada afirmación."
           description="Cada informe de avance cita los commits y las HUs que lo respaldan. El objetivo del proyecto es el norte; la evidencia, el mapa. Nadie discute contra un hash."
         />
       </div>

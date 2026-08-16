@@ -30,7 +30,7 @@ export function TelegramSection() {
           <SectionIntro
             eyebrow="Canal Telegram · BYOK"
             titleId={TITLE_ID}
-            title="Pregunta en Telegram. Responde el proyecto."
+            title="El proyecto responde tus preguntas en Telegram."
             description="Trae tu propia key — Anthropic, OpenAI o DeepSeek — y el canal responde con datos del proyecto, con los scopes que tú definas. Tu modelo, tus límites, tu factura."
             className="mb-4.5"
           />

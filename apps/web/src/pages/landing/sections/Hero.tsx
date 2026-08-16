@@ -12,7 +12,7 @@ export function Hero({ githubUrl }: { githubUrl: string }) {
         </p>
         <p className="animate-fade-up m-0 max-w-[620px] text-body-lg leading-relaxed text-ink-600 [animation-delay:220ms]">
           Pemie conecta tu GitHub, clasifica el trabajo real por dominio y expone la misma
-          verdad a tu equipo y a tus agentes — con permisos de verdad.
+          verdad a tu equipo y a tus agentes, con permisos de verdad.
         </p>
         <div className="animate-fade-up flex flex-wrap justify-center gap-3.5 [animation-delay:320ms]">
           <a href="/login">

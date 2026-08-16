@@ -11,7 +11,7 @@ export function StoriesKanban() {
       <SectionIntro
         eyebrow="Historias de usuario · Kanban"
         titleId={TITLE_ID}
-        title="Un tablero que refleja el repo, no la memoria del standup."
+        title="Un tablero que se actualiza con cada commit vinculado a la HU."
         description="Las HUs viven junto a los commits que las implementan. Personas y agentes las mueven por el Kanban con los mismos permisos y el mismo rastro."
         className="mb-10 max-w-narrow sm:mb-14"
       />

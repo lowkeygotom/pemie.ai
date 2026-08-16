@@ -21,8 +21,8 @@ export function ProblemSection() {
             Los chatbots inventan: responden desde memoria de chat, no desde el proyecto.
           </p>
           <p className="m-0 border-l-2 border-blue-600 pl-4.5 text-on-ink">
-            Pemie ancla cada informe y cada acción de agente a datos del proyecto. Si no está en
-            el repo, no está en el informe.
+            Pemie ancla cada informe y cada acción de agente a datos verificables del repo:
+            commits, PRs y HUs reales.
           </p>
         </div>
       </div>

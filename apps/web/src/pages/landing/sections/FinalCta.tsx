@@ -11,7 +11,7 @@ export function FinalCta({ githubUrl }: { githubUrl: string }) {
           Una sola fuente de verdad para todos los que preguntan "¿cómo vamos?"
         </h2>
         <p className="m-0 text-body-lg leading-relaxed text-on-ink-soft">
-          Conecta tu primer repo en minutos. Sin migraciones, sin ceremonia.
+          Conecta tu primer repo en minutos, sin migraciones ni ceremonia.
         </p>
         <div className="flex flex-wrap justify-center gap-3.5">
           <a href="/register">

@@ -17,7 +17,7 @@ export function McpSection() {
           <SectionIntro
             eyebrow="Agente (MCP)"
             titleId={TITLE_ID}
-            title="Un agente con permisos. No un bot con permiso para todo."
+            title="Cada agente entra con los permisos exactos que le diste."
             description="MCP sobre HTTP: apunta Cursor o Hermes al endpoint, pega tu key y listo. Cada key tiene scopes por proyecto y cada llamada queda en el audit log."
             onInk
             className="mb-5"
@@ -31,7 +31,7 @@ export function McpSection() {
                 </span>
               ))}
             </li>
-            <li className="text-on-ink-muted">Scopes explícitos. Lo que no está, no se puede.</li>
+            <li className="text-on-ink-muted">Cada key opera solo con los scopes que le diste.</li>
           </ul>
         </div>
         <div className="overflow-hidden rounded-lg border border-line-onink bg-surface-ink-deep">

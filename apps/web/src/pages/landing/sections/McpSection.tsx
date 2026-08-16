@@ -1,11 +1,12 @@
+import { DemoVideo } from "../components/DemoVideo.js";
 import { Section, sectionTitleId } from "../components/Section.js";
 import { SectionIntro } from "../components/SectionIntro.js";
 
 const TITLE_ID = sectionTitleId("mcp");
 const SCOPES = ["reports:read", "commits:read", "stories:write"];
 const AUDIT_LINES = [
-  "audit · tl-cursor · get_report · reports:read · 09:41",
-  "audit · tl-cursor · move_story HU-12 · stories:write · 09:44",
+  "audit · tl-cursor · get_evaluation · reports:read · 09:41",
+  "audit · tl-cursor · update_user_story HU-12 · stories:write · 09:44",
 ];
 
 export function McpSection() {
@@ -53,6 +54,15 @@ export function McpSection() {
             ))}
           </div>
         </div>
+      </div>
+      <div className="mt-12 sm:mt-16">
+        <DemoVideo
+          src="/videos/hermie.mp4"
+          label="hermes · mcp.pemie.ai"
+          caption="caso real · Hermes conectado a pemie"
+          ariaLabel="Video: caso de uso real con Hermes ya conectado a pemie por MCP"
+          onInk
+        />
       </div>
     </Section>
   );

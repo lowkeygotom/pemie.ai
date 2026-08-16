@@ -1,3 +1,4 @@
+import { DemoVideo } from "../components/DemoVideo.js";
 import { Section, sectionTitleId } from "../components/Section.js";
 import { SectionIntro } from "../components/SectionIntro.js";
 import { HOW_IT_WORKS_STEPS } from "../data/howItWorks.js";
@@ -21,6 +22,14 @@ export function HowItWorks() {
             <p className="m-0 text-body-sm leading-relaxed text-ink-600">{s.description}</p>
           </div>
         ))}
+      </div>
+      <div className="mt-12 sm:mt-16">
+        <DemoVideo
+          src="/videos/connect-to-hermes.mp4"
+          label="app.pemie.ai · conectar agente"
+          caption="demo real · conectar Hermes con pemie"
+          ariaLabel="Video tutorial: cómo conectar Hermes con pemie, paso a paso"
+        />
       </div>
     </Section>
   );

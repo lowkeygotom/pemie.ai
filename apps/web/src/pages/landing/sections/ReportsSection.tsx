@@ -1,4 +1,5 @@
 import { Card } from "../../../components/ui.js";
+import { DemoVideo } from "../components/DemoVideo.js";
 import { Section, sectionTitleId } from "../components/Section.js";
 import { SectionIntro } from "../components/SectionIntro.js";
 
@@ -46,6 +47,14 @@ export function ReportsSection() {
           titleId={TITLE_ID}
           title="Informes con evidencia, no con adjetivos."
           description="Cada informe de avance cita los commits y las HUs que lo respaldan. El objetivo del proyecto es el norte; la evidencia, el mapa. Nadie discute contra un hash."
+        />
+      </div>
+      <div className="mt-12 sm:mt-16">
+        <DemoVideo
+          src="/videos/report-full.mp4"
+          label="app.pemie.ai · informe semanal"
+          caption="caso real · un informe completo, de principio a fin"
+          ariaLabel="Video: informe completo de avance generado en pemie"
         />
       </div>
     </Section>

@@ -4,6 +4,7 @@ build/
 .env
 .env.local
 *.local
+CLAUDE.local.md
 .DS_Store
 coverage/
 *.tsbuildinfo

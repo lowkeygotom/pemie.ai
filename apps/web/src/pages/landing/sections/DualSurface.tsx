@@ -8,7 +8,7 @@ export function DualSurface() {
   return (
     <Section tone="subtle" titleId={TITLE_ID}>
       <SectionIntro
-        eyebrow="Dos superficies, una verdad"
+        eyebrow="Dos superficies, un dato"
         titleId={TITLE_ID}
         title="Lo que ve tu equipo es lo que lee tu agente."
         align="center"

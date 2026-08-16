@@ -15,7 +15,8 @@ export function ProblemSection() {
         </div>
         <div className="flex flex-col gap-5.5 text-body-lg leading-relaxed text-on-ink-soft">
           <p className="m-0 border-l-2 border-blue-600 pl-4.5">
-            Los tableros mienten: se actualizan a mano, cuando alguien se acuerda.
+            Los tableros mienten: se actualizan a mano, después del standup, cuando alguien se
+            acuerda.
           </p>
           <p className="m-0 border-l-2 border-blue-600 pl-4.5">
             Los chatbots inventan: responden desde memoria de chat, no desde el proyecto.

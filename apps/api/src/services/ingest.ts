@@ -331,7 +331,7 @@ export async function ingestPushEvent(payload: PushEvent) {
   const commits = payload.commits ?? [];
   const installationId = payload.installation?.id != null ? String(payload.installation.id) : null;
 
-  if (!owner || !name) return { ingested: 0, reason: "evento sin repo" };
+  if (!owner || !name) return { ingested: 0, reason: "no_repo" };
 
   const repos = await prisma.repo.findMany({ where: { provider: "github", owner, name } });
   // Si el push trae installationId, solo repos con esa instalación (o sin una fijada aún).
@@ -339,7 +339,7 @@ export async function ingestPushEvent(payload: PushEvent) {
     ? repos.filter((r) => !r.installationId || r.installationId === installationId)
     : repos;
 
-  if (targets.length === 0) return { ingested: 0, reason: "repo no vinculado a ningún proyecto" };
+  if (targets.length === 0) return { ingested: 0, reason: "repo_not_linked" };
 
   const normalized: NormalizedCommit[] = commits.map((c) => ({
     sha: c.id,

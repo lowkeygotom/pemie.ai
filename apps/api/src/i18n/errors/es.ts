@@ -166,4 +166,7 @@ export const es: Record<ErrorCode, string | ((params?: ErrorParams) => string)> 
   card_not_in_project: "La tarjeta no pertenece a este proyecto",
   no_read_scope_for_search: "La API key no tiene ningún scope de lectura para buscar",
   api_key_missing_permission: (p) => `La API key no tiene el permiso requerido: ${p?.permission}`,
+  invalid_webhook_signature: "Firma inválida",
+  invalid_webhook_payload: "Payload inválido",
+  invalid_telegram_secret: "Secret inválido",
 };

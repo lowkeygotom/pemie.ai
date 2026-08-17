@@ -164,4 +164,7 @@ export const en: Record<keyof typeof es, string | ((params?: ErrorParams) => str
   card_not_in_project: "The card doesn't belong to this project",
   no_read_scope_for_search: "The API key doesn't have any read scope to search with",
   api_key_missing_permission: (p) => `The API key doesn't have the required permission: ${p?.permission}`,
+  invalid_webhook_signature: "Invalid signature",
+  invalid_webhook_payload: "Invalid payload",
+  invalid_telegram_secret: "Invalid secret",
 };

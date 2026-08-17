@@ -226,6 +226,20 @@ interface IncomingMessage {
   username: string | null;
 }
 
+/** Token de comando en minúsculas ("modelo" para "/modelo@bot arg"), o "" si no es un comando. */
+function commandToken(text: string): string {
+  const match = text.match(/^\/(\w+)/);
+  return match ? match[1].toLowerCase() : "";
+}
+
+/**
+ * Compara por token exacto, no por prefijo: así un alias corto ("/model") no
+ * matchea por accidente un comando más largo que empieza igual ("/modelo").
+ */
+function isCommand(text: string, ...names: string[]): boolean {
+  return names.includes(commandToken(text));
+}
+
 /** Comandos y turno LLM, ya deduplicado y acotado a chat privado. */
 async function dispatchMessage({
   telegramUserId,
@@ -261,7 +275,7 @@ async function dispatchMessage({
   const session = await channels.loadBotSession(telegramUserId);
   if (session) locale = session.link.user.locale;
 
-  if (text.startsWith("/ayuda") || text.startsWith("/help")) {
+  if (isCommand(text, "ayuda", "help")) {
     await tgSend(chatId, t(locale, "help", { historyKeep: channels.HISTORY_KEEP }));
     return;
   }
@@ -271,13 +285,13 @@ async function dispatchMessage({
     return;
   }
 
-  if (text.startsWith("/desvincular")) {
+  if (isCommand(text, "desvincular", "unlink")) {
     await channels.disconnectChannel(session.link.userId, session.link.user.analyticsEnabled);
     await tgSend(chatId, t(locale, "disconnected"));
     return;
   }
 
-  if (text.startsWith("/estado")) {
+  if (isCommand(text, "estado", "status")) {
     const st = await channels.getChannelStatus(session.link.userId);
     const keyed = CHANNEL_LLM_PROVIDERS.filter((p) => st.providers[p].hasKey)
       .map((p) => `${p}(…${st.providers[p].last4})`)
@@ -302,14 +316,14 @@ async function dispatchMessage({
     return;
   }
 
-  if (text.startsWith("/reset") || text.startsWith("/nueva")) {
+  if (isCommand(text, "reset", "nueva", "new")) {
     await channels.clearChannelMessages(session.link.userId);
     await tgSend(chatId, t(locale, "reset_done"));
     return;
   }
 
-  if (text.startsWith("/modelo")) {
-    const arg = text.replace(/^\/modelo(@\w+)?\s*/, "").trim();
+  if (isCommand(text, "modelo", "model")) {
+    const arg = text.replace(/^\/\w+(@\w+)?\s*/, "").trim();
     const st = await channels.getChannelStatus(session.link.userId);
     if (!arg) {
       await tgSend(
@@ -333,8 +347,8 @@ async function dispatchMessage({
     return;
   }
 
-  if (text.startsWith("/proveedor")) {
-    const arg = text.replace(/^\/proveedor(@\w+)?\s*/, "").trim().toLowerCase();
+  if (isCommand(text, "proveedor", "provider")) {
+    const arg = text.replace(/^\/\w+(@\w+)?\s*/, "").trim().toLowerCase();
     const st = await channels.getChannelStatus(session.link.userId);
     if (!arg) {
       const lines = CHANNEL_LLM_PROVIDERS.map((p) => {
@@ -363,8 +377,8 @@ async function dispatchMessage({
     return;
   }
 
-  if (text.startsWith("/proyecto")) {
-    const slug = text.replace(/^\/proyecto(@\w+)?\s*/, "").trim();
+  if (isCommand(text, "proyecto", "project")) {
+    const slug = text.replace(/^\/\w+(@\w+)?\s*/, "").trim();
     if (!slug) {
       await tgSend(chatId, t(locale, "project_usage"));
       return;

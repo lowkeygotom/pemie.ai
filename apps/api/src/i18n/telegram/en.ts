@@ -10,20 +10,20 @@ export const en: Record<keyof typeof es, string | ((params?: TelegramCopyParams)
   start_missing_token:
     "To link Pemie, open the link from the Agent tab on the web, or paste /start <token>.",
   start_linked:
-    "Account linked. Set your LLM API key in Pemie (Agent → Telegram) and use /estado to check.",
+    "Account linked. Set your LLM API key in Pemie (Agent → Telegram) and use /status to check.",
   start_link_failed: "Could not link the account",
 
   help: (p?: TelegramCopyParams) => `Pemie commands:
 /start <token> — link your account (from the web)
-/ayuda — this help
-/estado — link, LLM, model and project status
-/proyecto <slug> — set the default project
-/modelo — see models for the active provider
-/modelo <id> — change model
-/proveedor — see providers with a saved key
-/proveedor <name> — activate anthropic|openai|deepseek
-/reset — clear the chat history (also /nueva)
-/desvincular — unlink Telegram
+/help — this help
+/status — link, LLM, model and project status
+/project <slug> — set the default project
+/model — see models for the active provider
+/model <id> — change model
+/provider — see providers with a saved key
+/provider <name> — activate anthropic|openai|deepseek
+/reset — clear the chat history (also /new)
+/unlink — unlink Telegram
 
 Write in natural language to query or act on your projects (via MCP).
 I remember the last ${p?.historyKeep} messages and a short summary of what came before.`,
@@ -46,12 +46,12 @@ I remember the last ${p?.historyKeep} messages and a short summary of what came 
   model_list_provider: (p?: TelegramCopyParams) => `Provider: ${p?.provider}`,
   model_list_current: (p?: TelegramCopyParams) => `Current: ${p?.model}`,
   model_list_available: (p?: TelegramCopyParams) => `Available:\n${p?.models}`,
-  model_list_hint: "Change with: /modelo <id>",
+  model_list_hint: "Change with: /model <id>",
   model_set: (p?: TelegramCopyParams) => `Active model: ${p?.model}`,
   model_set_failed: "Could not change the model",
 
   provider_list_header: (p?: TelegramCopyParams) => `Providers:\n${p?.lines}`,
-  provider_list_hint: "Change with: /proveedor anthropic|openai|deepseek",
+  provider_list_hint: "Change with: /provider anthropic|openai|deepseek",
   provider_line_with_key: (p?: TelegramCopyParams) => `· ${p?.provider}${p?.mark} — key …${p?.last4}`,
   provider_line_without_key: (p?: TelegramCopyParams) =>
     `· ${p?.provider}${p?.mark} — no key (paste it on the web)`,
@@ -59,7 +59,7 @@ I remember the last ${p?.historyKeep} messages and a short summary of what came 
   provider_set: (p?: TelegramCopyParams) => `Active provider: ${p?.provider}\nModel: ${p?.model}`,
   provider_set_failed: "Could not change the provider",
 
-  project_usage: "Usage: /proyecto <slug>",
+  project_usage: "Usage: /project <slug>",
   project_not_found: (p?: TelegramCopyParams) => `Couldn't find "${p?.slug}". Projects: ${p?.projects}`,
   project_none: "(none)",
   project_set: (p?: TelegramCopyParams) => `Default project: ${p?.slug} (${p?.id})`,

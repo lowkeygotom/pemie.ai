@@ -1,4 +1,5 @@
 import { useRef } from "react";
+import { useTranslation } from "react-i18next";
 import type { WorkspaceSummary } from "../../lib/api.js";
 import { Button, ErrorText, Eyebrow, Field, Input, Kbd } from "../../components/ui.js";
 import { greetingFor, stampFor } from "./greeting.js";
@@ -27,6 +28,7 @@ export function LaunchpadList({
   busy: boolean;
   error: string | null;
 }) {
+  const { t } = useTranslation("workspaces");
   const rowRefs = useRef<(HTMLAnchorElement | null)[]>([]);
   const now = new Date();
 
@@ -37,12 +39,12 @@ export function LaunchpadList({
       <div className="launchpad-glow" />
       <div className="relative mb-11 flex flex-col items-center gap-2.5 text-center">
         <Eyebrow>{stampFor(now)}</Eyebrow>
-        <h1 className="text-h1 text-ink-900">{greetingFor(now, userName)}</h1>
-        <p className="text-body-lg text-ink-600">¿Dónde trabajamos hoy?</p>
+        <h1 className="text-h1 text-ink-900">{t(greetingFor(now))}{userName ? `, ${userName}` : ""}</h1>
+        <p className="text-body-lg text-ink-600">{t("launchpadSubtitle")}</p>
       </div>
 
       <div className="relative flex flex-col gap-3.5">
-        <Eyebrow className="mb-1 block">Tus workspaces</Eyebrow>
+        <Eyebrow className="mb-1 block">{t("yourWorkspaces")}</Eyebrow>
         {workspaces.map((ws, i) => (
           <WorkspaceRow
             key={ws.id}
@@ -56,12 +58,12 @@ export function LaunchpadList({
           <div className="rounded-lg border border-line-200 bg-surface-0 p-6">
             <form onSubmit={onCreate} className="flex items-end gap-3">
               <div className="flex-1">
-                <Field label="Nombre del workspace">
+                <Field label={t("workspaceName")}>
                   <Input value={name} onChange={(e) => onNameChange(e.target.value)} required autoFocus />
                 </Field>
               </div>
               <Button type="submit" disabled={busy}>
-                {busy ? "Creando…" : "Crear"}
+                {busy ? t("creating") : t("create")}
               </Button>
             </form>
             <div className="mt-2">
@@ -77,14 +79,14 @@ export function LaunchpadList({
             <span className="flex h-[52px] w-[52px] flex-shrink-0 items-center justify-center rounded-lg border border-dashed border-ink-300 text-h3 text-ink-400">
               +
             </span>
-            <span className="flex-1 text-body font-semibold text-ink-700">Nuevo workspace</span>
+            <span className="flex-1 text-body font-semibold text-ink-700">{t("newWorkspace")}</span>
             <Kbd>⌘N</Kbd>
           </button>
         )}
       </div>
 
       <span className="relative mt-7 text-center font-mono text-caption text-ink-300">
-        ↑↓ para navegar · enter para entrar
+        {t("keyboardNavigate")}
       </span>
     </div>
   );

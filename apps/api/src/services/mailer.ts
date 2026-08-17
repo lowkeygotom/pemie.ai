@@ -217,8 +217,27 @@ export async function sendStoryAssignedEmail(opts: {
   assignerName: string;
   storyUrl: string;
   contentLite?: boolean;
+  locale?: "es" | "en";
 }): Promise<SendResult> {
-  const { to, storyKey, storyTitle, projectName, assignerName, storyUrl, contentLite = false } = opts;
+  const { to, storyKey, storyTitle, projectName, assignerName, storyUrl, contentLite = false, locale = "es" } = opts;
+  if (locale === "en") {
+    if (contentLite) {
+      return sendEmail({
+        to,
+        subject: `You were assigned a User Story in ${projectName}`,
+        text: `${assignerName} assigned you a User Story in ${projectName}.\n\nSign in to see it:\n${storyUrl}`,
+        html: `<div style="font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;max-width:480px;margin:0 auto;color:#1a1f2e"><h2 style="font-size:20px;margin:0 0 12px">You were assigned a User Story</h2><p style="font-size:14px;line-height:1.6;color:#4b5563"><strong>${escapeHtml(assignerName)}</strong> assigned you a User Story in <strong>${escapeHtml(projectName)}</strong>.</p><p style="margin:24px 0"><a href="${escapeHtml(storyUrl)}" style="display:inline-block;background:#2563eb;color:#fff;text-decoration:none;padding:10px 20px;border-radius:8px;font-size:14px;font-weight:600">View User Story</a></p></div>`,
+      });
+    }
+    return sendEmail({
+      to,
+      subject: `You were assigned ${storyKey} · ${storyTitle} in ${projectName}`,
+      text:
+        `${assignerName} assigned you ${storyKey} · ${storyTitle} in ${projectName}.\n\n` +
+        `View User Story:\n${storyUrl}`,
+      html: `<div style="font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;max-width:480px;margin:0 auto;color:#1a1f2e"><h2 style="font-size:20px;margin:0 0 12px">You were assigned a User Story</h2><p style="font-size:14px;line-height:1.6;color:#4b5563"><strong>${escapeHtml(assignerName)}</strong> assigned you <strong>${escapeHtml(storyKey)}</strong> · ${escapeHtml(storyTitle)} in <strong>${escapeHtml(projectName)}</strong>.</p><p style="margin:24px 0"><a href="${escapeHtml(storyUrl)}" style="display:inline-block;background:#2563eb;color:#fff;text-decoration:none;padding:10px 20px;border-radius:8px;font-size:14px;font-weight:600">View User Story</a></p><p style="font-size:12px;color:#9ca3af;line-height:1.6">Or copy this link:<br><span style="word-break:break-all">${escapeHtml(storyUrl)}</span></p></div>`,
+    });
+  }
   if (contentLite) {
     return sendEmail({
       to,

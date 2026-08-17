@@ -50,7 +50,7 @@ function isSettingsTab(value: string | null): value is SettingsTab {
 
 /** Ajustes del workspace, separados del flujo diario de Equipo. */
 export default function WorkspaceSettings() {
-  const { t } = useTranslation("configuration");
+  const { t } = useTranslation(["configuration", "account"]);
   const { user } = useAuth();
   const { slug = "" } = useParams();
   const [params, setParams] = useSearchParams();
@@ -64,12 +64,14 @@ export default function WorkspaceSettings() {
   const [keyName, setKeyName] = useState("");
   const [scopeLevel, setScopeLevel] = useState<Extract<ApiKeyScopeLevel, "workspace" | "user">>("workspace");
   const [scopes, setScopes] = useState<ApiScope[]>([...API_SCOPES]);
+  const [keyLocale, setKeyLocale] = useState<"es" | "en">(user?.locale ?? "es");
   const [creating, setCreating] = useState(false);
   const [newKey, setNewKey] = useState<string | null>(null);
   const [confirmedSaved, setConfirmedSaved] = useState(false);
   const [pendingRevoke, setPendingRevoke] = useState<ApiKeyPublic | null>(null);
   const [revoking, setRevoking] = useState(false);
   const [revokeError, setRevokeError] = useState<string | null>(null);
+  const [localeUpdatingId, setLocaleUpdatingId] = useState<string | null>(null);
 
   const requestedTab = params.get("tab");
   const tab: SettingsTab = isSettingsTab(requestedTab) ? requestedTab : "general";
@@ -128,7 +130,7 @@ export default function WorkspaceSettings() {
     setError(null);
     setNewKey(null);
     try {
-      const result = await api.apiKeys.create(slug, { name: keyName.trim(), scopeLevel, scopes });
+      const result = await api.apiKeys.create(slug, { name: keyName.trim(), scopeLevel, scopes, locale: keyLocale });
       track("api_key_created", { scope_level: scopeLevel });
       setNewKey(result.key);
       setConfirmedSaved(false);
@@ -139,6 +141,20 @@ export default function WorkspaceSettings() {
       setError(err instanceof ApiError ? err.message : t("keyCreate"));
     } finally {
       setCreating(false);
+    }
+  }
+
+  async function changeKeyLocale(key: ApiKeyPublic, locale: "es" | "en") {
+    if (key.locale === locale) return;
+    setLocaleUpdatingId(key.id);
+    setError(null);
+    try {
+      await api.apiKeys.updateLocale(slug, key.id, locale);
+      await load();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : t("keyLocaleUpdate"));
+    } finally {
+      setLocaleUpdatingId(null);
     }
   }
 
@@ -189,7 +205,7 @@ export default function WorkspaceSettings() {
     return (
       <div>
         <Link to={`/w/${slug}`} className="mb-1 block text-body-sm text-ink-400 hover:text-ink-700">← {ws.name}</Link>
-        <PageHeader title="Ajustes" />
+        <PageHeader title={t("settings", { ns: "common" })} />
         <Card><ErrorText>{t("adminOnly")}</ErrorText></Card>
       </div>
     );
@@ -211,7 +227,7 @@ export default function WorkspaceSettings() {
               <h2 className="text-h4 text-ink-900">{t("credentialsTitle")}</h2>
               <p className="mt-2 text-body-sm text-ink-600">{t("credentialsDescription")}</p>
               <form onSubmit={createKey} className="mt-5 space-y-4">
-                <div className="grid gap-3 sm:grid-cols-2">
+                <div className="grid gap-3 sm:grid-cols-3">
                   <Field label={t("scope")}>
                     <Select value={scopeLevel} onChange={(event) => setScopeLevel(event.target.value as Extract<ApiKeyScopeLevel, "workspace" | "user">)}>
                       <option value="workspace">{t("workspace")}</option>
@@ -220,6 +236,16 @@ export default function WorkspaceSettings() {
                   </Field>
                   <Field label={t("keyName")} hint={keyName.trim().length < 2 ? t("minChars") : undefined}>
                     <Input value={keyName} onChange={(event) => setKeyName(event.target.value)} placeholder="Ej: reportes-global" required />
+                  </Field>
+                  <Field label={t("keyLocale")} hint={t("keyLocaleHint")}>
+                    <Select
+                      aria-label={t("keyLocale")}
+                      value={keyLocale}
+                      onChange={(event) => setKeyLocale(event.target.value as "es" | "en")}
+                    >
+                      <option value="es">{t("account:spanish")}</option>
+                      <option value="en">{t("account:english")}</option>
+                    </Select>
                   </Field>
                 </div>
                 <Field label={t("permissions")} hint={t("permissionsHint")}>
@@ -247,7 +273,19 @@ export default function WorkspaceSettings() {
                           </div>
                           <p className="mt-1 font-mono text-caption text-ink-400">{t("created", { date: new Date(key.createdAt).toLocaleString() })} · {key.lastUsedAt ? t("lastUse", { date: new Date(key.lastUsedAt).toLocaleString() }) : t("neverUsed")}</p>
                         </div>
-                        <Button variant="danger" size="sm" onClick={() => setPendingRevoke(key)}>{t("revoke")}</Button>
+                        <div className="flex shrink-0 items-center gap-2">
+                          <Select
+                            aria-label={t("keyLocaleAria", { name: key.name })}
+                            className="w-auto"
+                            value={key.locale ?? "es"}
+                            disabled={localeUpdatingId === key.id}
+                            onChange={(event) => void changeKeyLocale(key, event.target.value as "es" | "en")}
+                          >
+                            <option value="es">{t("account:spanish")}</option>
+                            <option value="en">{t("account:english")}</option>
+                          </Select>
+                          <Button variant="danger" size="sm" onClick={() => setPendingRevoke(key)}>{t("revoke")}</Button>
+                        </div>
                       </div>
                     ))}
                   </div>

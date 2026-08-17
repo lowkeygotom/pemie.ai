@@ -507,6 +507,9 @@ model ApiKey {
   scopeLevel   String    @default("project")
   /// Dueño de una user key (obligatorio si scopeLevel = user).
   ownerUserId  String?
+  /// Preferencia de idioma de la key. Nullable: si no se fija, cae al dueño
+  /// (scopeLevel = user) o a "es".
+  locale       String?
   name         String
   hashedKey    String    @unique
   prefix       String // primeros chars visibles para identificar la key

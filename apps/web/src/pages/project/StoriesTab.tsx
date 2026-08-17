@@ -144,7 +144,7 @@ export default function StoriesTab({ ws, proj, canManage }: { ws: string; proj: 
       invalidateAfterStoryChange();
     } catch (e) {
       track("story_created_failed", { reason: analyticsFailureReason(e) });
-      setActionError(e instanceof ApiError ? e.message : "No se pudo crear la HU");
+      setActionError(e instanceof ApiError ? e.message : t("storyCreateError"));
     }
   }
 
@@ -183,7 +183,7 @@ export default function StoriesTab({ ws, proj, canManage }: { ws: string; proj: 
       invalidateAfterStoryChange();
     } catch (e) {
       track("story_delete_failed", { reason: analyticsFailureReason(e) });
-      setDeleteError(e instanceof ApiError ? e.message : "No se pudo eliminar la HU");
+      setDeleteError(e instanceof ApiError ? e.message : t("storyDeleteError"));
     } finally {
       setDeleting(false);
     }
@@ -208,40 +208,40 @@ export default function StoriesTab({ ws, proj, canManage }: { ws: string; proj: 
       <Card>
         {assignmentNotice ? <Notice tone={assignmentNotice.notification.notified ? (assignmentNotice.notification.contentLite ? "warning" : "success") : assignmentNotice.notification.reason === "notification_error" ? "danger" : assignmentNotice.notification.reason === "recently_notified" ? "info" : "warning"} onDismiss={() => setAssignmentNotice(null)}>
           {assignmentNotice.notification.notified
-            ? <>{`${assignmentNotice.story.key} asignada a ${assignmentNotice.story.assignee?.name ?? "la persona seleccionada"}${assignmentNotice.notification.contentLite ? `. Se envió un aviso a ${assignmentNotice.notification.email} sin el detalle de la HU: no es miembro del workspace.` : ` — aviso enviado a ${assignmentNotice.notification.email}.`}`}{assignmentNotice.notification.contentLite && canManage && assignmentNotice.notification.email ? <Button size="sm" variant="secondary" onClick={() => setInviteEmail(assignmentNotice.notification.email!)}>Invitar al workspace</Button> : null}</>
+            ? <>{t("assignNotice", { key: assignmentNotice.story.key, name: assignmentNotice.story.assignee?.name ?? t("noAssignee") })}{assignmentNotice.notification.contentLite ? t("assignmentLite", { email: assignmentNotice.notification.email }) : t("assignmentSent", { email: assignmentNotice.notification.email })}{assignmentNotice.notification.contentLite && canManage && assignmentNotice.notification.email ? <Button size="sm" variant="secondary" onClick={() => setInviteEmail(assignmentNotice.notification.email!)}>{t("inviteToWorkspace")}</Button> : null}</>
             : assignmentNotice.notification.reason === "recently_notified"
-              ? `${assignmentNotice.story.key} asignada. No se reenvió el correo: ya se le avisó hace unos minutos.`
+              ? t("assignmentRecentlyNotified", { key: assignmentNotice.story.key })
               : assignmentNotice.notification.reason === "notification_error"
-                ? `${assignmentNotice.story.key} asignada, pero el correo falló. La asignación quedó guardada.`
-                : `${assignmentNotice.story.key} asignada, pero no se pudo avisar: no tiene correo.`}
+                ? t("assignmentEmailFailed", { key: assignmentNotice.story.key })
+                : t("assignmentNoEmail", { key: assignmentNotice.story.key })}
         </Notice> : null}
         <h3 className="text-h4 text-ink-900">{t("newStory")}</h3>
         <form onSubmit={createStory} className="mt-4 space-y-4">
-          <Field label="Título">
+          <Field label={t("title")}>
             <Input
               placeholder={t("storyExample")}
               value={title}
               onChange={(e) => setTitle(e.target.value)}
-              aria-label="Título de historia"
+              aria-label={t("storyTitleAria")}
             />
           </Field>
 
           <div className="grid gap-3 sm:grid-cols-3">
-            <Field label="Como… (rol)">
+            <Field label={`Como… (${t("role")})`}>
               <Input
                 value={role}
                 onChange={(e) => setRole(e.target.value)}
                 aria-label="Rol"
               />
             </Field>
-            <Field label="quiero…">
+            <Field label={`${t("want")}…`}>
               <Input
                 value={want}
                 onChange={(e) => setWant(e.target.value)}
                 aria-label="Quiero"
               />
             </Field>
-            <Field label="para…">
+            <Field label={`${t("benefit")}…`}>
               <Input
                 value={benefit}
                 onChange={(e) => setBenefit(e.target.value)}
@@ -252,7 +252,7 @@ export default function StoriesTab({ ws, proj, canManage }: { ws: string; proj: 
 
           <div className="flex items-end justify-between gap-3 border-t border-line-100 pt-4">
             <div className="w-40">
-              <Field label="Prioridad">
+              <Field label={t("priority")}>
                 <Select
                   value={priority}
                   onChange={(e) => setPriority(e.target.value)}
@@ -266,7 +266,7 @@ export default function StoriesTab({ ws, proj, canManage }: { ws: string; proj: 
                 </Select>
               </Field>
             </div>
-            <Button type="submit">Crear</Button>
+            <Button type="submit">{t("create")}</Button>
           </div>
         </form>
       </Card>
@@ -320,7 +320,7 @@ export default function StoriesTab({ ws, proj, canManage }: { ws: string; proj: 
                     <button
                       type="button"
                       className="grid h-8 w-8 shrink-0 place-items-center rounded-md text-ink-400 transition-colors hover:bg-surface-100 hover:text-ink-900"
-                      aria-label={`Editar ${s.key} — ${s.title}`}
+                      aria-label={t("editStory", { key: s.key, title: s.title })}
                       onClick={() => openStory(s)}
                     >
                       <PencilIcon />
@@ -328,7 +328,7 @@ export default function StoriesTab({ ws, proj, canManage }: { ws: string; proj: 
                     <button
                       type="button"
                       className="grid h-8 w-8 shrink-0 place-items-center rounded-md text-ink-400 transition-colors hover:bg-red-100 hover:text-red-600"
-                      aria-label={`Eliminar ${s.key} — ${s.title}`}
+                      aria-label={t("deleteStoryAria", { key: s.key, title: s.title })}
                       onClick={() => setPendingDelete(s)}
                     >
                       <TrashIcon />
@@ -343,7 +343,7 @@ export default function StoriesTab({ ws, proj, canManage }: { ws: string; proj: 
 
       {epics.length > 0 && (
         <Card>
-          <h3 className="text-h4 text-ink-900">Épicas</h3>
+          <h3 className="text-h4 text-ink-900">{t("epics")}</h3>
           <div className="mt-3 flex flex-wrap gap-2">
             {epics.map((e) => (
               <Badge key={e.id} tone="brand">
@@ -373,7 +373,7 @@ export default function StoriesTab({ ws, proj, canManage }: { ws: string; proj: 
 
       {pendingDelete && (
         <Modal
-          title="Eliminar historia de usuario"
+          title={t("deleteStoryTitle")}
           onClose={() => {
             if (!deleting) {
               setPendingDelete(null);
@@ -385,20 +385,14 @@ export default function StoriesTab({ ws, proj, canManage }: { ws: string; proj: 
           <div className="space-y-4">
             <ErrorText>{deleteError}</ErrorText>
             <p className="text-body text-ink-700">
-              ¿Eliminar{" "}
-              <Badge tone="brand" mono>
-                {pendingDelete.key}
-              </Badge>{" "}
-              — <span className="font-medium text-ink-900">{pendingDelete.title}</span>? Esta
-              acción no se puede deshacer.
+              {t("deleteStoryQuestion", { key: pendingDelete.key, title: pendingDelete.title })}
             </p>
             <Checkbox checked={deleteCard} onChange={setDeleteCard}>
-              Eliminar también su tarjeta del Kanban
+              {t("deleteCardToo")}
             </Checkbox>
             <p className="text-body-sm text-ink-500">
               {deleteCard
-                ? "La tarjeta y su actividad se eliminan con la historia."
-                : "La tarjeta se conserva en el tablero, pero queda sin HU vinculada."}
+                ? t("cardDeletedWithStory") : t("cardKeptWithoutStory")}
             </p>
             <div className="flex justify-end gap-2 border-t border-line-100 pt-4">
               <Button
@@ -410,10 +404,10 @@ export default function StoriesTab({ ws, proj, canManage }: { ws: string; proj: 
                   setDeleteCard(true);
                 }}
               >
-                Cancelar
+                {t("cancel")}
               </Button>
               <Button variant="danger" disabled={deleting} onClick={confirmDelete}>
-                {deleting ? "Eliminando…" : "Eliminar"}
+                {deleting ? t("deleting") : t("delete")}
               </Button>
             </div>
           </div>

@@ -1,9 +1,10 @@
 import type { AssigneeCandidate } from "../../lib/api.js";
+import { useTranslation } from "react-i18next";
 import { Field, Select } from "../../components/ui.js";
 
-function candidateLabel(c: AssigneeCandidate): string {
+function candidateLabel(c: AssigneeCandidate, noEmail: string): string {
   const base = c.name || c.githubLogin || c.email || "—";
-  return c.notify === "none" ? `${base} · sin correo` : base;
+  return c.notify === "none" ? `${base} · ${noEmail}` : base;
 }
 
 /** Select de "Asignado": contributors del proyecto + miembros del workspace sin contributor todavía. */
@@ -16,26 +17,27 @@ export function AssigneeSelect({
   onChange: (id: string) => void;
   candidates: AssigneeCandidate[];
 }) {
+  const { t } = useTranslation("project");
   const contributors = candidates.filter((c) => c.origin === "contributor");
   const members = candidates.filter((c) => c.origin === "member");
   return (
-    <Field label="Asignado">
-      <Select value={value} onChange={(e) => onChange(e.target.value)} aria-label="Asignado">
-        <option value="">Sin asignar</option>
+    <Field label={t("noAssignee")}>
+      <Select value={value} onChange={(e) => onChange(e.target.value)} aria-label={t("noAssignee")}>
+        <option value="">{t("noAssignee")}</option>
         {contributors.length ? (
-          <optgroup label="Colaboradores">
+          <optgroup label={t("contributors")}>
             {contributors.map((c) => (
               <option key={c.id} value={c.id}>
-                {candidateLabel(c)}
+                {candidateLabel(c, t("noEmail"))}
               </option>
             ))}
           </optgroup>
         ) : null}
         {members.length ? (
-          <optgroup label="Miembros del workspace">
+          <optgroup label={t("workspaceMembers")}>
             {members.map((c) => (
               <option key={c.id} value={c.id}>
-                {candidateLabel(c)}
+                {candidateLabel(c, t("noEmail"))}
               </option>
             ))}
           </optgroup>
@@ -53,6 +55,7 @@ export function AssigneeNotice({
   candidate: AssigneeCandidate | undefined;
   canManage: boolean;
 }) {
+  const { t } = useTranslation("project");
   if (!candidate || candidate.notify === "member") return null;
   return (
     <div
@@ -64,11 +67,10 @@ export function AssigneeNotice({
     >
       {candidate.notify === "none" ? (
         <>
-          Sin correo: se asignará, pero no recibirá aviso.{" "}
-          {canManage ? "Agrégalo desde Colaboradores antes de guardar." : "Un owner o admin puede agregarlo desde Colaboradores."}
+          {t("noEmailNotice")} {canManage ? t("addFromCollaborators") : t("adminCanAdd")}
         </>
       ) : (
-        "Recibirá un aviso sin el detalle de la HU: no tiene cuenta en el workspace."
+        t("externalNotice")
       )}
     </div>
   );

@@ -1,5 +1,6 @@
 import { Link } from "react-router-dom";
 import type { ReactNode } from "react";
+import { useTranslation } from "react-i18next";
 import { Eyebrow, LogoMark, Wordmark } from "../../components/ui.js";
 
 export function AuthShell({
@@ -13,13 +14,14 @@ export function AuthShell({
   subtitle: string;
   children: ReactNode;
 }) {
+  const { t } = useTranslation("auth");
   return (
     <div className="min-h-screen bg-surface-0 lg:grid lg:grid-cols-2">
       <section className="flex min-h-screen flex-col px-6 py-6 sm:px-10 sm:py-8 lg:px-12 lg:py-10">
         <header>
           <Link
             to="/"
-            aria-label="Ir al inicio de pemie.ai"
+            aria-label={t("goHome")}
             className="inline-flex items-center gap-2.5 rounded-sm focus-visible:outline-none focus-visible:shadow-focus"
           >
             <LogoMark size={28} />
@@ -55,6 +57,7 @@ export function AuthShell({
 }
 
 function AuthSignalPanel() {
+  const { t } = useTranslation("auth");
   return (
     <aside className="auth-signal-panel relative hidden min-h-screen overflow-hidden bg-surface-ink lg:flex lg:flex-col lg:justify-between lg:p-12">
       <div className="auth-signal-grid absolute inset-0" aria-hidden />
@@ -64,7 +67,7 @@ function AuthSignalPanel() {
         <span className="font-mono text-mono-label uppercase text-on-ink-muted">pemie / pulse</span>
         <span className="inline-flex items-center gap-2 rounded-pill border border-line-onink px-3 py-1.5 font-mono text-caption text-on-ink-soft">
           <span className="auth-status-dot h-2 w-2 rounded-pill bg-green-600" aria-hidden />
-          Sistema activo
+          {t("systemActive")}
         </span>
       </div>
 
@@ -89,15 +92,13 @@ function AuthSignalPanel() {
       </div>
 
       <div className="relative z-10 mt-auto max-w-lg">
-        <Eyebrow className="mb-4 block text-on-ink-muted">OPERACIONES EN VIVO</Eyebrow>
-        <h2 className="text-h2 text-on-ink">Tus proyectos, entendidos en tiempo real.</h2>
-        <p className="mt-4 text-body-lg text-on-ink-soft">
-          Historias, commits y señales del equipo conectadas en una sola vista para personas y agentes.
-        </p>
+        <Eyebrow className="mb-4 block text-on-ink-muted">{t("shellEyebrow")}</Eyebrow>
+        <h2 className="text-h2 text-on-ink">{t("shellTitle")}</h2>
+        <p className="mt-4 text-body-lg text-on-ink-soft">{t("shellSubtitle")}</p>
         <div className="mt-8 flex items-center gap-3 border-t border-line-onink pt-5 font-mono text-caption text-on-ink-muted">
           <span>WEB</span>
           <span aria-hidden>→</span>
-          <span>NÚCLEO DE NEGOCIO</span>
+          <span>{t("shellCore")}</span>
           <span aria-hidden>←</span>
           <span>MCP</span>
         </div>

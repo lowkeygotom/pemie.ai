@@ -6,6 +6,7 @@ import { forwardRef, useEffect, useLayoutEffect, useRef, useState } from "react"
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { safeHref } from "../lib/url.js";
+import { useTranslation } from "react-i18next";
 import type {
   ButtonHTMLAttributes,
   HTMLAttributes,
@@ -281,6 +282,7 @@ export function Notice({
   tone?: NoticeTone;
   onDismiss?: () => void;
 }) {
+  const { t } = useTranslation("common");
   if (!children) return null;
   return (
     <div
@@ -291,7 +293,7 @@ export function Notice({
       {onDismiss && (
         <button
           onClick={onDismiss}
-          aria-label="Descartar aviso"
+          aria-label={t("dismissNotice")}
           className="shrink-0 rounded-sm px-1 leading-none opacity-60 transition-opacity hover:opacity-100 focus:shadow-focus focus:outline-none"
         >
           ×
@@ -425,11 +427,13 @@ export interface BarListItem {
  */
 export function BarList({
   items,
-  emptyLabel = "Sin datos",
+  emptyLabel,
 }: {
   items: BarListItem[];
   emptyLabel?: string;
 }) {
+  const { t } = useTranslation("common");
+  emptyLabel ??= t("noData");
   if (items.length === 0) return <EmptyState compact title={emptyLabel} />;
   const max = Math.max(...items.map((i) => i.value), 1);
   const lastIndex = Math.max(items.length - 1, 1);
@@ -478,6 +482,7 @@ export function CodeBlock({
   onCopy?: () => void;
   className?: string;
 }) {
+  const { t } = useTranslation("common");
   const [copied, setCopied] = useState(false);
   const text = command ?? (typeof children === "string" ? children : "");
 
@@ -504,7 +509,7 @@ export function CodeBlock({
           <button
             type="button"
             onClick={copy}
-            aria-label={`Copiar ${title}`}
+            aria-label={`${t("copy")} ${title}`}
             className={`ml-auto text-mono-label transition-colors ${
               copied ? "text-accent-onink" : "text-on-ink-muted hover:text-on-ink"
             }`}
@@ -746,6 +751,7 @@ export function Modal({
   size?: "md" | "lg" | "xl";
   dismissible?: boolean;
 }) {
+  const { t } = useTranslation("common");
   const dialogRef = useRef<HTMLDivElement>(null);
   const previousFocus = useRef<HTMLElement | null>(null);
 
@@ -810,7 +816,7 @@ export function Modal({
               className="shrink-0 text-body text-ink-400 transition-colors hover:text-ink-900"
               onClick={onClose}
             >
-              Cerrar
+              {t("close")}
             </button>
           ) : null}
         </div>
@@ -992,8 +998,8 @@ export function SkeletonList({ rows = 4, className = "" }: { rows?: number; clas
 export function DropZone({
   onFiles,
   disabled = false,
-  label = "Arrastrá una carpeta de skill acá",
-  hint = "o hacé clic para elegirla",
+  label,
+  hint,
   className = "",
 }: {
   onFiles: (files: FileList) => void;
@@ -1002,6 +1008,9 @@ export function DropZone({
   hint?: string;
   className?: string;
 }) {
+  const { t } = useTranslation("common");
+  label ??= t("dropSkillFolder");
+  hint ??= t("chooseSkillFolder");
   const [over, setOver] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 

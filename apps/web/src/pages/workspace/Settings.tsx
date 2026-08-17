@@ -44,12 +44,6 @@ const TAB_ITEMS = [
 ] as const;
 type SettingsTab = (typeof TAB_ITEMS)[number]["id"];
 
-const SCOPE_LABELS: Record<ApiKeyScopeLevel, string> = {
-  project: "Proyecto",
-  workspace: "Workspace",
-  user: "Usuario",
-};
-
 function isSettingsTab(value: string | null): value is SettingsTab {
   return TAB_ITEMS.some((tab) => tab.id === value);
 }
@@ -196,7 +190,7 @@ export default function WorkspaceSettings() {
       <div>
         <Link to={`/w/${slug}`} className="mb-1 block text-body-sm text-ink-400 hover:text-ink-700">← {ws.name}</Link>
         <PageHeader title="Ajustes" />
-        <Card><ErrorText>Solo owner y admin pueden gestionar los ajustes de este workspace.</ErrorText></Card>
+        <Card><ErrorText>{t("adminOnly")}</ErrorText></Card>
       </div>
     );
   }
@@ -204,7 +198,7 @@ export default function WorkspaceSettings() {
   return (
     <div>
       <Link to={`/w/${slug}`} className="mb-1 block text-body-sm text-ink-400 hover:text-ink-700">← {ws.name}</Link>
-      <PageHeader title="Ajustes" description="Gestiona el workspace, sus credenciales, integración y actividad." actions={<Badge tone="neutral" mono>{ws.role}</Badge>} />
+        <PageHeader title={t("settings")} description={t("settingsDescription")} actions={<Badge tone="neutral" mono>{ws.role}</Badge>} />
       <Tabs items={[...TAB_ITEMS]} value={tab} onChange={(id) => selectTab(id as SettingsTab)} className="mb-6" />
       <section role="tabpanel" aria-label={TAB_ITEMS.find((item) => item.id === tab)?.label} className="space-y-6">
         <ErrorText>{error}</ErrorText>
@@ -220,7 +214,7 @@ export default function WorkspaceSettings() {
                 <div className="grid gap-3 sm:grid-cols-2">
                   <Field label={t("scope")}>
                     <Select value={scopeLevel} onChange={(event) => setScopeLevel(event.target.value as Extract<ApiKeyScopeLevel, "workspace" | "user">)}>
-                      <option value="workspace">Workspace</option>
+                      <option value="workspace">{t("workspace")}</option>
                       <option value="user">{t("user")}</option>
                     </Select>
                   </Field>
@@ -246,12 +240,12 @@ export default function WorkspaceSettings() {
                         <div className="min-w-0">
                           <p className="text-body font-medium text-ink-900">{key.name} <code className="font-mono text-caption text-ink-400">{key.prefix}…</code></p>
                           <div className="mt-1.5 flex flex-wrap gap-1.5">
-                            <Badge tone="brand" mono>{SCOPE_LABELS[key.scopeLevel as ApiKeyScopeLevel]}</Badge>
+                            <Badge tone="brand" mono>{key.scopeLevel === "project" ? t("projectScope") : key.scopeLevel === "workspace" ? t("workspace") : t("user")}</Badge>
                             {key.scopeLevel === "project" && key.projectId ? <Badge tone="neutral" mono>{projectById.get(key.projectId)?.slug ?? t("project")}</Badge> : null}
                             {key.scopeLevel === "project" && key.agentId === null ? <Badge tone="warning">{t("noAgent")}</Badge> : null}
                             {key.scopes.map((scope) => <Badge key={scope} tone="neutral" mono>{scope}</Badge>)}
                           </div>
-                          <p className="mt-1 font-mono text-caption text-ink-400">creada {new Date(key.createdAt).toLocaleString()} · {key.lastUsedAt ? `último uso ${new Date(key.lastUsedAt).toLocaleString()}` : "sin usar aún"}</p>
+                          <p className="mt-1 font-mono text-caption text-ink-400">{t("created", { date: new Date(key.createdAt).toLocaleString() })} · {key.lastUsedAt ? t("lastUse", { date: new Date(key.lastUsedAt).toLocaleString() }) : t("neverUsed")}</p>
                         </div>
                         <Button variant="danger" size="sm" onClick={() => setPendingRevoke(key)}>{t("revoke")}</Button>
                       </div>
@@ -267,10 +261,10 @@ export default function WorkspaceSettings() {
 
         {tab === "activity" ? (
           <Card>
-            <h2 className="text-h4 text-ink-900">Actividad del workspace</h2>
-            <p className="mt-2 text-body-sm text-ink-600">Audit de lo que hacen las API keys y agentes en este workspace.</p>
+            <h2 className="text-h4 text-ink-900">{t("activityTitle")}</h2>
+            <p className="mt-2 text-body-sm text-ink-600">{t("activityDescription")}</p>
             <div className="mt-4">
-              {logs.length === 0 ? <EmptyState title="Sin actividad" description="Las acciones de agentes y keys aparecerán aquí." /> : (
+              {logs.length === 0 ? <EmptyState title={t("noActivity")} description={t("noActivityDescription")} /> : (
                 <div className="divide-y divide-line-100">
                   {logs.slice(0, 50).map((log) => (
                     <div key={log.id} className="flex items-center justify-between -mx-6 px-6 py-2.5 hover:bg-surface-50">
@@ -280,7 +274,7 @@ export default function WorkspaceSettings() {
                   ))}
                 </div>
               )}
-              {logs.length > 50 ? <p className="mt-3 text-caption text-ink-400">Mostrando los 50 más recientes de {logs.length}.</p> : null}
+              {logs.length > 50 ? <p className="mt-3 text-caption text-ink-400">{t("showingRecent", { count: logs.length })}</p> : null}
             </div>
           </Card>
         ) : null}

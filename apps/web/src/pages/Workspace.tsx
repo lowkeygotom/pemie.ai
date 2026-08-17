@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import {
   API_SCOPES,
@@ -50,6 +51,7 @@ const ASSIGNABLE_ROLES: Role[] = ["viewer", "member", "admin"];
 const MCP_URL = `${window.location.origin}/mcp`;
 
 export default function Workspace() {
+  const { t } = useTranslation("workspace");
   const { slug = "" } = useParams();
   const [ws, setWs] = useState<Ws | null>(null);
   const [projects, setProjects] = useState<ProjectSummary[]>([]);
@@ -67,7 +69,7 @@ export default function Workspace() {
 
   useEffect(() => {
     loadCore().catch((e) =>
-      setError(e instanceof ApiError ? e.message : "No se pudo cargar el workspace")
+      setError(e instanceof ApiError ? e.message : t("loadWorkspaceError"))
     );
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [slug]);
@@ -85,7 +87,7 @@ export default function Workspace() {
   return (
     <div>
       <Link to="/app" className="mb-1 block text-body-sm text-ink-400 hover:text-ink-700">
-        ← workspaces
+        {t("back")}
       </Link>
       <PageHeader
         title={ws.name}
@@ -93,7 +95,7 @@ export default function Workspace() {
           <div className="flex items-center gap-3">
             {canManage ? (
               <Link to={`/w/${slug}/settings`} className="text-body-sm text-blue-700 hover:underline">
-                Ajustes
+                {t("settings")}
               </Link>
             ) : null}
             <Badge tone="neutral" mono>{ws.role}</Badge>
@@ -112,15 +114,14 @@ export default function Workspace() {
 
 /** Recursos compartidos por el equipo del workspace (hoy: Skills). */
 function TeamResourcesSection({ slug }: { slug: string }) {
+  const { t } = useTranslation("workspace");
   return (
     <section>
-      <h2 className="mb-4 text-h3 text-ink-900">Recursos de equipo</h2>
+      <h2 className="mb-4 text-h3 text-ink-900">{t("teamResources")}</h2>
       <Link to={`/w/${slug}/skills`}>
         <Card interactive>
-          <h3 className="text-body font-semibold text-ink-900">Skills</h3>
-          <p className="mt-1 text-body-sm text-ink-500">
-            Prompts y guías reutilizables por el equipo.
-          </p>
+          <h3 className="text-body font-semibold text-ink-900">{t("skills")}</h3>
+          <p className="mt-1 text-body-sm text-ink-500">{t("skillsDescription")}</p>
         </Card>
       </Link>
     </section>
@@ -167,6 +168,7 @@ function ProjectsSection({
   projects: ProjectSummary[];
   onChange: () => Promise<void>;
 }) {
+  const { t } = useTranslation("workspace");
   const [creating, setCreating] = useState(false);
   const [name, setName] = useState("");
   const [key, setKey] = useState("");
@@ -186,7 +188,7 @@ function ProjectsSection({
       await onChange();
     } catch (err) {
       track("project_created_failed", { reason: analyticsFailureReason(err) });
-      setError(err instanceof ApiError ? err.message : "No se pudo crear el proyecto");
+      setError(err instanceof ApiError ? err.message : t("createProjectError"));
     } finally {
       setBusy(false);
     }
@@ -195,9 +197,9 @@ function ProjectsSection({
   return (
     <section>
       <div className="mb-4 flex items-center justify-between">
-        <h2 className="text-h3 text-ink-900">Proyectos</h2>
+        <h2 className="text-h3 text-ink-900">{t("projects")}</h2>
         <Button variant="secondary" size="sm" onClick={() => setCreating((v) => !v)}>
-          Nuevo proyecto
+          {t("newProject")}
         </Button>
       </div>
 
@@ -205,12 +207,12 @@ function ProjectsSection({
         <Card className="mb-4">
           <form onSubmit={onCreate} className="flex flex-wrap items-end gap-3">
             <div className="min-w-[12rem] flex-1">
-              <Field label="Nombre">
+              <Field label={t("name")}>
                 <Input value={name} onChange={(e) => setName(e.target.value)} required autoFocus />
               </Field>
             </div>
             <div className="w-28">
-              <Field label="Key">
+              <Field label={t("key")}>
                 <Input
                   value={key}
                   onChange={(e) => setKey(e.target.value.toUpperCase())}
@@ -220,7 +222,7 @@ function ProjectsSection({
               </Field>
             </div>
             <Button type="submit" disabled={busy}>
-              {busy ? "Creando…" : "Crear"}
+              {busy ? t("creating") : t("create")}
             </Button>
           </form>
           <div className="mt-2">
@@ -231,11 +233,11 @@ function ProjectsSection({
 
       {projects.length === 0 ? (
         <EmptyState
-          title="Aún no hay proyectos"
-          description="Crea el primero para empezar a rastrear commits e historias de usuario."
+          title={t("noProjects")}
+          description={t("noProjectsDescription")}
           action={
             <Button variant="secondary" size="sm" onClick={() => setCreating(true)}>
-              Crear proyecto
+              {t("createProject")}
             </Button>
           }
         />
@@ -252,7 +254,7 @@ function ProjectsSection({
                   <p className="mt-2 line-clamp-2 text-body-sm text-ink-500">{p.description}</p>
                 )}
                 <p className="mt-2 font-mono text-body-sm text-ink-400">
-                  {p._count.repos} repos · {p._count.userStories} HUs
+                  {p._count.repos} {t("repos")} · {p._count.userStories} {t("userStories")}
                 </p>
               </Card>
             </Link>
@@ -269,6 +271,7 @@ function ProjectsSection({
  * y el borrado necesita espacio para una confirmación seria.
  */
 export function SettingsSection({ ws, onRenamed }: { ws: Ws; onRenamed: (workspace: Ws) => void }) {
+  const { t } = useTranslation("workspace");
   const navigate = useNavigate();
   const [name, setName] = useState(ws.name);
   const [saving, setSaving] = useState(false);
@@ -294,7 +297,7 @@ export function SettingsSection({ ws, onRenamed }: { ws: Ws; onRenamed: (workspa
       onRenamed(workspace); // el estado de la página se refresca sin recargar
       setSaved(true);
     } catch (err) {
-      setRenameError(err instanceof ApiError ? err.message : "No se pudo renombrar el workspace");
+      setRenameError(err instanceof ApiError ? err.message : t("renameError"));
     } finally {
       setSaving(false);
     }
@@ -311,21 +314,21 @@ export function SettingsSection({ ws, onRenamed }: { ws: Ws; onRenamed: (workspa
       // La ruta actual deja de existir: se vuelve a la lista sin dejarla en el historial.
       navigate("/app", { replace: true });
     } catch (err) {
-      setDeleteError(err instanceof ApiError ? err.message : "No se pudo eliminar el workspace");
+      setDeleteError(err instanceof ApiError ? err.message : t("deleteError"));
       setDeleting(false);
     }
   }
 
   return (
     <section>
-      <h2 className="mb-4 text-h3 text-ink-900">General</h2>
+      <h2 className="mb-4 text-h3 text-ink-900">{t("general")}</h2>
       <div className="space-y-4">
         <Card>
           <form onSubmit={onRename} className="flex flex-wrap items-end gap-3">
             <div className="min-w-[14rem] flex-1">
               <Field
-                label="Nombre del workspace"
-                hint={`La dirección no cambia: /w/${ws.slug} sigue funcionando.`}
+                label={t("workspaceName")}
+                hint={t("workspaceSlugHint", { slug: ws.slug })}
               >
                 <Input
                   value={name}
@@ -339,46 +342,43 @@ export function SettingsSection({ ws, onRenamed }: { ws: Ws; onRenamed: (workspa
               </Field>
             </div>
             <Button type="submit" disabled={!canRename}>
-              {saving ? "Guardando…" : "Guardar"}
+              {saving ? t("saving") : t("save")}
             </Button>
           </form>
           <div className="mt-2">
             <ErrorText>{renameError}</ErrorText>
             {saved && !renameError ? (
-              <p className="text-body-sm text-ink-500">Nombre actualizado.</p>
+              <p className="text-body-sm text-ink-500">{t("nameUpdated")}</p>
             ) : null}
           </div>
         </Card>
 
         {ws.role === "owner" && (
           <DangerZone
-            title="Eliminar workspace"
+            title={t("deleteWorkspace")}
             description={
               <>
                 <p>
-                  Se borrarán de forma permanente los proyectos de este workspace y todo su
-                  contenido: repositorios y commits, informes y notas, épicas e historias de
-                  usuario, tableros, las API keys y el registro de auditoría. El equipo perderá
-                  el acceso.
+                  {t("deleteDescription")}
                 </p>
-                <p className="mt-2 font-semibold text-ink-800">Esta acción no se puede deshacer.</p>
+                <p className="mt-2 font-semibold text-ink-800">{t("irreversible")}</p>
               </>
             }
           >
             <form onSubmit={onDelete} className="flex flex-wrap items-end gap-3">
               <div className="min-w-[14rem] flex-1">
-                <Field label={`Escribe «${ws.name}» para confirmar`}>
+                <Field label={t("typeToConfirm", { name: ws.name })}>
                   <Input
                     value={confirmation}
                     onChange={(e) => setConfirmation(e.target.value)}
                     placeholder={ws.name}
                     autoComplete="off"
-                    aria-label={`Escribe ${ws.name} para confirmar la eliminación`}
+                    aria-label={t("confirmDeletionAria", { name: ws.name })}
                   />
                 </Field>
               </div>
               <Button type="submit" variant="danger" disabled={!canDelete}>
-                {deleting ? "Eliminando…" : "Eliminar workspace"}
+                {deleting ? t("deleting") : t("deleteWorkspaceButton")}
               </Button>
             </form>
             <div className="mt-2">
@@ -426,15 +426,16 @@ function AgentOwnerLabel({
   owner: WorkspaceAgent["owner"];
   ownerIsMember: boolean;
 }) {
-  if (!owner) return <span className="text-caption text-ink-400">sin dueño registrado</span>;
+  const { t } = useTranslation("workspace");
+  if (!owner) return <span className="text-caption text-ink-400">{t("noOwner")}</span>;
   const label = owner.name ?? owner.email;
   return (
     <span
       className={`max-w-48 truncate text-caption ${ownerIsMember ? "text-ink-500" : "text-ink-400"}`}
       title={owner.email}
     >
-      de {label}
-      {ownerIsMember ? null : " · ya no está en el equipo"}
+      {t("ownedBy", { name: label })}
+      {ownerIsMember ? null : t("formerMember")}
     </span>
   );
 }
@@ -454,6 +455,7 @@ function TeamSection({
   projects: ProjectSummary[];
   canManage: boolean;
 }) {
+  const { t } = useTranslation("workspace");
   const { user } = useAuth();
   const [members, setMembers] = useState<Member[]>([]);
   const [invitations, setInvitations] = useState<Invitation[]>([]);
@@ -515,7 +517,7 @@ function TeamSection({
       }
       setTeamLoad({ status: "ready" });
     } catch (error) {
-      setTeamLoad({ status: "error", message: error instanceof ApiError ? error.message : "No se pudo cargar el equipo" });
+      setTeamLoad({ status: "error", message: error instanceof ApiError ? error.message : t("loadTeamError") });
       throw error;
     }
   }
@@ -557,7 +559,7 @@ function TeamSection({
     } catch (err) {
       setRoleErrors((prev) => ({
         ...prev,
-        [membershipId]: err instanceof ApiError ? err.message : "No se pudo cambiar el rol",
+        [membershipId]: err instanceof ApiError ? err.message : t("roleError"),
       }));
     } finally {
       setRoleBusyId(null);
@@ -574,7 +576,7 @@ function TeamSection({
     } catch (err) {
       setRemoveErrors((prev) => ({
         ...prev,
-        [membershipId]: err instanceof ApiError ? err.message : "No se pudo quitar al miembro",
+        [membershipId]: err instanceof ApiError ? err.message : t("removeMemberError"),
       }));
     } finally {
       setRemoveBusyId(null);
@@ -595,7 +597,7 @@ function TeamSection({
       track("agent_deleted_failed", { reason: analyticsFailureReason(err) });
       setAgentErrors((prev) => ({
         ...prev,
-        [agentId]: err instanceof ApiError ? err.message : "No se pudo eliminar el agente",
+        [agentId]: err instanceof ApiError ? err.message : t("deleteAgentError"),
       }));
     } finally {
       setAgentBusyId(null);
@@ -626,8 +628,8 @@ function TeamSection({
         [agent.id]: err instanceof ApiError
           ? err.message
           : blocked
-            ? "No se pudo desbloquear el agente"
-            : "No se pudo bloquear el agente",
+            ? t("unblockError")
+            : t("blockError"),
       }));
     } finally {
       setPresenceBusyId(null);
@@ -637,12 +639,12 @@ function TeamSection({
   return (
     <section>
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-        <h2 className="text-h3 text-ink-900">Equipo</h2>
+        <h2 className="text-h3 text-ink-900">{t("team")}</h2>
         {/* Una sola acción en la cabecera: el modal ya deja elegir persona o agente,
             y el hub sigue accesible desde cualquier proyecto. */}
         {canManage ? (
           <Button size="sm" onClick={() => openAdd("choose")}>
-            Añadir al equipo
+            {t("addToTeam")}
           </Button>
         ) : null}
       </div>
@@ -651,19 +653,19 @@ function TeamSection({
         {teamLoad.status === "loading" ? <SkeletonList rows={3} /> : null}
         {teamLoad.status === "error" ? (
           <Notice tone="danger">
-            <p>No pudimos cargar el equipo.</p>
+            <p>{t("loadTeamError")}</p>
             <p className="mt-1">{teamLoad.message}</p>
-            <Button className="mt-3" variant="secondary" size="sm" onClick={() => void load()}>Reintentar</Button>
+            <Button className="mt-3" variant="secondary" size="sm" onClick={() => void load()}>{t("retry")}</Button>
           </Notice>
         ) : null}
         {teamLoad.status === "ready" && members.length === 0 && agents.length === 0 ? (
           <EmptyState
-            title="Aún no hay nadie más en el equipo"
-            description="Añade una persona por correo o crea un agente ligado a un proyecto."
+            title={t("noTeamMembers")}
+            description={t("noTeamMembersDescription")}
             action={
               canManage ? (
                 <Button size="sm" onClick={() => openAdd("choose")}>
-                  Añadir al equipo
+                  {t("addToTeam")}
                 </Button>
               ) : undefined
             }
@@ -671,9 +673,9 @@ function TeamSection({
         ) : teamLoad.status === "ready" ? (
           <div className="space-y-6">
             <div>
-              <h3 className="mb-2 text-body-sm font-semibold text-ink-600">Personas</h3>
+              <h3 className="mb-2 text-body-sm font-semibold text-ink-600">{t("people")}</h3>
               {members.length === 0 ? (
-                <p className="text-body-sm text-ink-400">Todavía no hay personas invitadas.</p>
+                <p className="text-body-sm text-ink-400">{t("noInvitedPeople")}</p>
               ) : (
                 <ul className="divide-y divide-line-100">
                   {members.map((m) => {
@@ -697,7 +699,7 @@ function TeamSection({
                         {editable ? (
                           <div className="flex flex-none flex-col items-end gap-1">
                             <Select
-                              aria-label={`Rol de ${m.user.name ?? m.user.email}`}
+                              aria-label={t("roleOf", { name: m.user.name ?? m.user.email })}
                               value={m.role}
                               disabled={roleBusyId === m.membershipId}
                               onChange={(e) => onRoleChange(m.membershipId, e.target.value as Role)}
@@ -721,7 +723,7 @@ function TeamSection({
                                     disabled={removeBusy}
                                     onClick={() => onRemoveMember(m.membershipId)}
                                   >
-                                    {removeBusy ? "Quitando…" : "Confirmar"}
+                                    {removeBusy ? t("removing") : t("confirm")}
                                   </Button>
                                   <Button
                                     variant="ghost"
@@ -729,12 +731,12 @@ function TeamSection({
                                     disabled={removeBusy}
                                     onClick={() => setRemoveConfirmId(null)}
                                   >
-                                    Cancelar
+                                    {t("cancel")}
                                   </Button>
                                 </>
                               ) : (
                                 <IconTrashButton
-                                  label={`Quitar a ${m.user.name ?? m.user.email} del workspace`}
+                                  label={t("removeFromWorkspace", { name: m.user.name ?? m.user.email })}
                                   onClick={() => setRemoveConfirmId(m.membershipId)}
                                 />
                               )}
@@ -754,9 +756,9 @@ function TeamSection({
             </div>
 
             <div>
-              <h3 className="mb-2 text-body-sm font-semibold text-ink-600">Agentes</h3>
+              <h3 className="mb-2 text-body-sm font-semibold text-ink-600">{t("agents")}</h3>
               {agents.length === 0 ? (
-                <p className="text-body-sm text-ink-400">Todavía no hay agentes trabajando aquí.</p>
+                <p className="text-body-sm text-ink-400">{t("noAgents")}</p>
               ) : (
                 <ul className="divide-y divide-line-100">
                   {agents.map((agent) => {
@@ -785,17 +787,17 @@ function TeamSection({
                               {agent.name}
                             </p>
                             <div className="mt-1 flex flex-wrap items-center gap-1.5">
-                              <Badge tone="warning" mono>observado</Badge>
+                              <Badge tone="warning" mono>{t("observed")}</Badge>
                               <Badge tone="neutral" mono>{agent.scopeLevel}</Badge>
-                              {blocked ? <Badge tone="danger" dot>bloqueado</Badge> : null}
+                              {blocked ? <Badge tone="danger" dot>{t("blocked")}</Badge> : null}
                               <AgentOwnerLabel
                                 owner={observedOwner}
                                 ownerIsMember={observedOwnerIsMember}
                               />
                               <span className="text-caption text-ink-400">
                                 {agent.lastProject
-                                  ? `visto en ${agent.lastProject.name}`
-                                  : "sin proyecto registrado"}{" "}
+                                  ? t("seenIn", { project: agent.lastProject.name })
+                                  : t("noProject")}{" "}
                                 · {new Date(agent.lastSeenAt).toLocaleDateString()}
                               </span>
                             </div>
@@ -805,9 +807,7 @@ function TeamSection({
                               {presenceConfirmId === agent.id ? (
                                 <>
                                   <p className="text-caption text-ink-500">
-                                    {blocked
-                                      ? "Volverá a operar en este workspace."
-                                      : "Dejará de operar aquí. Su key sigue viva en su propio workspace."}
+                                    {blocked ? t("unblockDescription") : t("blockDescription")}
                                   </p>
                                   <div className="flex items-center gap-1">
                                     <Button
@@ -817,10 +817,8 @@ function TeamSection({
                                       onClick={() => onTogglePresenceBlock(agent)}
                                     >
                                       {presenceBusy
-                                        ? blocked
-                                          ? "Desbloqueando…"
-                                          : "Bloqueando…"
-                                        : "Confirmar"}
+                                        ? blocked ? t("unblocking") : t("blocking")
+                                        : t("confirm")}
                                     </Button>
                                     <Button
                                       variant="ghost"
@@ -828,7 +826,7 @@ function TeamSection({
                                       disabled={presenceBusy}
                                       onClick={() => setPresenceConfirmId(null)}
                                     >
-                                      Cancelar
+                                      {t("cancel")}
                                     </Button>
                                   </div>
                                 </>
@@ -838,7 +836,7 @@ function TeamSection({
                                   size="sm"
                                   onClick={() => setPresenceConfirmId(agent.id)}
                                 >
-                                  {blocked ? "Desbloquear" : "Bloquear"}
+                                  {blocked ? t("unblock") : t("block")}
                                 </Button>
                               )}
                               {presenceErrors[agent.id] ? (
@@ -867,20 +865,20 @@ function TeamSection({
                         <div className="min-w-0 flex-1">
                           <p className="truncate text-body-sm font-medium text-ink-900">{agent.name}</p>
                           <div className="mt-1 flex flex-wrap items-center gap-1.5">
-                            <Badge tone="success" mono>registrado</Badge>
+                            <Badge tone="success" mono>{t("registered")}</Badge>
                             <Badge tone="neutral" mono>{agent.project.slug}</Badge>
                             {canManage ? (
                               latestKey ? (
                                 <>
                                   <Badge tone="brand" mono>{latestKey.scopeLevel}</Badge>
-                                  {latestKey.lastUsedAt === null ? <Badge tone="warning" mono>nunca conectado</Badge> : null}
+                                  {latestKey.lastUsedAt === null ? <Badge tone="warning" mono>{t("neverConnected")}</Badge> : null}
                                 </>
                               ) : (
-                                <Badge tone="warning" mono>sin API key</Badge>
+                                <Badge tone="warning" mono>{t("noApiKey")}</Badge>
                               )
                             ) : null}
                             <span className="font-mono text-caption text-ink-400">
-                              {agent._count.apiKeys} {agent._count.apiKeys === 1 ? "key" : "keys"}
+                              {agent._count.apiKeys} {agent._count.apiKeys === 1 ? t("oneKey") : t("manyKeys")}
                             </span>
                             <AgentOwnerLabel owner={owner} ownerIsMember={ownerIsMember} />
                           </div>
@@ -891,10 +889,8 @@ function TeamSection({
                               <>
                                 <p className="text-caption text-ink-500">
                                   {agent._count.apiKeys > 0
-                                    ? `Se revocan sus ${agent._count.apiKeys} ${
-                                        agent._count.apiKeys === 1 ? "key" : "keys"
-                                      }.`
-                                    : "Dejará de conectarse por MCP."}
+                                    ? t("revokeKeys", { count: agent._count.apiKeys, keyLabel: agent._count.apiKeys === 1 ? t("oneKey") : t("manyKeys") })
+                                    : t("mcpDisconnect")}
                                 </p>
                                 <div className="flex items-center gap-1">
                                   <Button
@@ -903,7 +899,7 @@ function TeamSection({
                                     disabled={agentBusyId === agent.id}
                                     onClick={() => onDeleteAgent(agent.id)}
                                   >
-                                    {agentBusyId === agent.id ? "Eliminando…" : "Confirmar"}
+                                    {agentBusyId === agent.id ? t("deleting") : t("confirm")}
                                   </Button>
                                   <Button
                                     variant="ghost"
@@ -911,7 +907,7 @@ function TeamSection({
                                     disabled={agentBusyId === agent.id}
                                     onClick={() => setAgentConfirmId(null)}
                                   >
-                                    Cancelar
+                                    {t("cancel")}
                                   </Button>
                                 </div>
                               </>
@@ -929,10 +925,10 @@ function TeamSection({
                                     }
                                   }}
                                 >
-                                  {latestKey ? "Conexión" : "Generar key"}
+                                  {latestKey ? t("connection") : t("generateKey")}
                                 </Button>
                                 <IconTrashButton
-                                  label={`Eliminar el agente ${agent.name}`}
+                                  label={t("deleteAgent", { name: agent.name })}
                                   onClick={() => setAgentConfirmId(agent.id)}
                                 />
                               </div>
@@ -958,10 +954,10 @@ function TeamSection({
             <div className="rounded-md border border-blue-600 bg-blue-100 p-3">
               <p className="text-body-sm text-ink-700">
                 {lastInvite.emailDelivered
-                  ? `Invitación enviada por correo a ${lastInvite.email}.`
+                  ? t("inviteSent", { email: lastInvite.email })
                   : lastInvite.emailPreviewUrl
-                    ? `Invitación enviada al buzón de prueba (Ethereal). No llega al inbox real de ${lastInvite.email}, pero puedes ver el correo aquí:`
-                    : `Invitación creada — comparte este enlace con ${lastInvite.email}:`}
+                    ? t("invitePreview", { email: lastInvite.email })
+                    : t("inviteShare", { email: lastInvite.email })}
               </p>
               {lastInvite.emailPreviewUrl ? (
                 <a
@@ -970,7 +966,7 @@ function TeamSection({
                   rel="noreferrer"
                   className="mt-1 inline-block text-body-sm font-medium text-blue-600 underline"
                 >
-                  Ver correo enviado →
+                  {t("viewSentEmail")}
                 </a>
               ) : null}
               {/* Aun con entrega confirmada el enlace queda visible como acción
@@ -978,7 +974,7 @@ function TeamSection({
                   vía de invitación que le queda al owner. */}
               {lastInvite.emailDelivered ? (
                 <p className="mt-2 text-caption text-ink-600">
-                  Si no le llega (puede caer en spam), comparte este enlace:
+                  {t("shareLinkIfMissing")}
                 </p>
               ) : null}
               {/* Cuando la etiqueta de respaldo está presente, el enlace se le
@@ -988,7 +984,7 @@ function TeamSection({
                   {inviteLink(lastInvite.token)}
                 </code>
                 <Button variant="secondary" size="sm" onClick={() => copyLink(lastInvite.id, lastInvite.token)}>
-                  {copiedId === lastInvite.id ? "copiado" : "copiar link"}
+                  {copiedId === lastInvite.id ? t("copied") : t("copyLink")}
                 </Button>
               </div>
             </div>
@@ -1003,10 +999,10 @@ function TeamSection({
                   <Badge tone="neutral" mono>{inv.role}</Badge>
                   {inv.status === "pending" ? (
                     <Button variant="secondary" size="sm" onClick={() => copyLink(inv.id, inv.token)}>
-                      {copiedId === inv.id ? "copiado" : "copiar link"}
+                      {copiedId === inv.id ? t("copied") : t("copyLink")}
                     </Button>
                   ) : null}
-                  <Button variant="danger" size="sm" onClick={() => onRevoke(inv.id)}>revocar</Button>
+                  <Button variant="danger" size="sm" onClick={() => onRevoke(inv.id)}>{t("revoke")}</Button>
                 </li>
               ))}
             </ul>
@@ -1026,9 +1022,9 @@ function TeamSection({
         />
       ) : null}
       {canManage && connection ? (
-        <Modal title={`Conexión · ${connection.agent.name}`} onClose={() => setConnection(null)} size="xl">
+        <Modal title={t("connectionModalTitle", { name: connection.agent.name })} onClose={() => setConnection(null)} size="xl">
           <div className="space-y-4">
-            <Notice tone="info">La key no se puede recuperar: solo guardamos su hash. Este prompt usa su prefijo real.</Notice>
+            <Notice tone="info">{t("keyHashNotice")}</Notice>
             <ConnectPanel
               showKey={false}
               apiKey={`${connection.key.prefix}…`}
@@ -1043,13 +1039,13 @@ function TeamSection({
               })}
             />
             <div className="flex justify-end gap-2">
-              <Button variant="secondary" onClick={() => setConnection(null)}>Cerrar</Button>
+              <Button variant="secondary" onClick={() => setConnection(null)}>{t("close")}</Button>
               <Button onClick={() => {
                 setRegenerateAgent(connection.agent);
                 setConnection(null);
                 setAddMode("agent");
                 setAddOpen(true);
-              }}>Generar nueva key</Button>
+              }}>{t("generateNewKey")}</Button>
             </div>
           </div>
         </Modal>
@@ -1077,6 +1073,7 @@ function AddTeamModal({
   onChanged: () => Promise<void>;
   existingAgent?: RegisteredWorkspaceAgent;
 }) {
+  const { t } = useTranslation("workspace");
   const [mode, setMode] = useState<AddMode>(initialMode);
   const [email, setEmail] = useState("");
   const [agentProjectSlug, setAgentProjectSlug] = useState(existingAgent?.project.slug ?? projects[0]?.slug ?? "");
@@ -1128,7 +1125,7 @@ function AddTeamModal({
       await onInvite(email);
       onClose();
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : "No se pudo invitar");
+      setError(err instanceof ApiError ? err.message : t("inviteError"));
     } finally {
       setBusy(false);
     }
@@ -1179,11 +1176,11 @@ function AddTeamModal({
         } catch {
           // El mensaje mantiene el estado parcial aunque el refresco falle.
         }
-        setKeyError(err instanceof ApiError ? err.message : "No se pudo crear la API key");
+        setKeyError(err instanceof ApiError ? err.message : t("createKeyError"));
       }
     } catch (err) {
       track("agent_registered_failed", { reason: analyticsFailureReason(err) });
-      setError(err instanceof ApiError ? err.message : "No se pudo crear el agente");
+      setError(err instanceof ApiError ? err.message : t("createAgentError"));
     } finally {
       setBusy(false);
     }
@@ -1191,30 +1188,30 @@ function AddTeamModal({
 
   return (
     <Modal
-      title={isCredential ? "3 · Conectar" : existingAgent ? `Generar key · ${existingAgent.name}` : "Añadir al equipo"}
+      title={isCredential ? t("connectStep") : existingAgent ? t("generateKeyFor", { name: existingAgent.name }) : t("addTeamTitle")}
       onClose={onClose}
       size={mode === "credential" ? "xl" : mode === "agent" ? "lg" : undefined}
       dismissible={!isCredential}
     >
       {mode === "choose" ? (
         <div>
-          <p className="text-body-sm text-ink-600">Elige qué tipo de integrante quieres añadir.</p>
+          <p className="text-body-sm text-ink-600">{t("chooseMemberType")}</p>
           <div className="mt-4 grid gap-3 sm:grid-cols-2">
             <button
               type="button"
               onClick={() => setMode("person")}
               className="rounded-lg border border-line-200 bg-surface-0 p-4 text-left transition-colors hover:border-blue-600 hover:bg-blue-100 focus-visible:outline-none focus-visible:shadow-focus"
             >
-              <span className="text-body font-semibold text-ink-900">Persona</span>
-              <span className="mt-1 block text-body-sm text-ink-500">Invítala por correo; acepta cuando quiera.</span>
+              <span className="text-body font-semibold text-ink-900">{t("person")}</span>
+              <span className="mt-1 block text-body-sm text-ink-500">{t("invitePersonDescription")}</span>
             </button>
             <button
               type="button"
               onClick={() => setMode("agent")}
               className="rounded-lg border border-line-200 bg-surface-0 p-4 text-left transition-colors hover:border-blue-600 hover:bg-blue-100 focus-visible:outline-none focus-visible:shadow-focus"
             >
-              <span className="text-body font-semibold text-ink-900">Agente</span>
-              <span className="mt-1 block text-body-sm text-ink-500">Vive en un proyecto y recibe una API key.</span>
+              <span className="text-body font-semibold text-ink-900">{t("agent")}</span>
+              <span className="mt-1 block text-body-sm text-ink-500">{t("agentDescription")}</span>
             </button>
           </div>
         </div>
@@ -1222,20 +1219,20 @@ function AddTeamModal({
 
       {mode === "person" ? (
         <form onSubmit={submitPerson} className="space-y-4">
-          <Field label="Correo de la persona" hint="Le enviaremos una invitación para unirse al workspace.">
+          <Field label={t("personEmail")} hint={t("inviteHint")}>
             <Input
               type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              placeholder="persona@empresa.com"
+              placeholder={t("emailPlaceholder")}
               required
               autoFocus
             />
           </Field>
           <ErrorText>{error}</ErrorText>
           <div className="flex justify-between gap-2">
-            <Button type="button" variant="ghost" onClick={() => setMode("choose")}>Atrás</Button>
-            <Button type="submit" disabled={busy}>{busy ? "Invitando…" : "Enviar invitación"}</Button>
+            <Button type="button" variant="ghost" onClick={() => setMode("choose")}>{t("backAction")}</Button>
+            <Button type="submit" disabled={busy}>{busy ? t("inviting") : t("sendInvite")}</Button>
           </div>
         </form>
       ) : null}
@@ -1243,25 +1240,25 @@ function AddTeamModal({
       {mode === "agent" ? (
         projects.length === 0 ? (
           <EmptyState
-            title="Crea un proyecto primero"
-            description="Cada agente pertenece a un proyecto. Cierra este diálogo, crea uno y vuelve a intentarlo."
-            action={<Button variant="secondary" size="sm" onClick={onClose}>Cerrar</Button>}
+            title={t("createProjectFirst")}
+            description={t("createProjectFirstDescription")}
+            action={<Button variant="secondary" size="sm" onClick={onClose}>{t("close")}</Button>}
           />
         ) : (
           <form onSubmit={createOrRetryAgent} className="space-y-4">
             {createdAgentId && !isExistingAgent ? (
               <Notice tone="success">
-                <p className="font-semibold">Agente creado</p>
-                <p className="mt-1">La key se puede reintentar sin crear otro agente.</p>
+                <p className="font-semibold">{t("agentCreated")}</p>
+                <p className="mt-1">{t("retryKeyHint")}</p>
               </Notice>
             ) : null}
             {keyError ? (
               <Notice tone="danger">
-                <p>El agente quedó creado, pero la primera API key falló.</p>
-                <p className="mt-1">{keyError} Reintentar solo crea la key pendiente.</p>
+                <p>{t("keyFailed")}</p>
+                <p className="mt-1">{t("retryKeyNotice", { error: keyError })}</p>
               </Notice>
             ) : null}
-            <Field label="Proyecto" hint="El agente quedará asociado a este proyecto.">
+            <Field label={t("project")} hint={t("projectHint")}>
               <Select
                 value={agentProjectSlug}
                 onChange={(e) => setAgentProjectSlug(e.target.value)}
@@ -1274,34 +1271,34 @@ function AddTeamModal({
               </Select>
             </Field>
             <Field
-              label="Nombre del agente"
-              hint={createdAgentId ? "El nombre queda fijo para poder reintentar la misma key." : "También será el nombre de la primera API key."}
+              label={t("agentName")}
+              hint={createdAgentId ? t("fixedAgentNameHint") : t("apiKeyNameHint")}
             >
               <Input
                 value={agentName}
                 onChange={(e) => setAgentName(e.target.value)}
-                placeholder="Ej: hermes"
+                placeholder={t("agentPlaceholder")}
                 minLength={2}
                 required
                 disabled={Boolean(createdAgentId) || busy}
                 autoFocus
               />
             </Field>
-            <Field label="Alcance" hint="Los agentes recién creados empiezan ligados a su proyecto.">
+            <Field label={t("scope")} hint={t("scopeHint")}>
               <Badge tone="brand" mono>project</Badge>
             </Field>
-            <Field label="Permisos de la primera API key" hint="Elige un preset o personaliza por dominio. Escritura añade su lectura correspondiente.">
+            <Field label={t("firstKeyPermissions")} hint={t("permissionsHint")}>
               <ScopePicker value={scopes as ApiScope[]} onChange={(next) => setScopes(next)} />
             </Field>
             {capabilityPreview ? <CapabilityReceipt prompt={capabilityPreview} /> : null}
-            {!hasReadScope ? <ErrorText>Elige al menos un permiso de lectura: sin ninguno el agente no puede descubrir nada.</ErrorText> : null}
+            {!hasReadScope ? <ErrorText>{t("readPermissionRequired")}</ErrorText> : null}
             <ErrorText>{error}</ErrorText>
             <div className="flex justify-between gap-2">
               <Button type="button" variant="ghost" onClick={() => setMode("choose")} disabled={busy || Boolean(createdAgentId)}>
-                Atrás
+                {t("backAction")}
               </Button>
               <Button type="submit" disabled={!canCreateAgent}>
-                {busy ? "Guardando…" : isExistingAgent ? "Generar nueva API key" : createdAgentId ? "Reintentar API key" : "Crear agente y API key"}
+                {busy ? t("savingKey") : isExistingAgent ? t("generateNewApiKey") : createdAgentId ? t("retryApiKey") : t("createAgentAndKey")}
               </Button>
             </div>
           </form>
@@ -1323,10 +1320,10 @@ function AddTeamModal({
             onCopy={() => setConfirmedSaved(true)}
           />
           <Checkbox checked={confirmedSaved} onChange={setConfirmedSaved}>
-            Guardé la key — o el prompt, que la incluye.
+            {t("savedKey")}
           </Checkbox>
           <Button type="button" className="w-full" disabled={!confirmedSaved} onClick={onClose}>
-            Ya la guardé, cerrar
+            {t("savedKeyClose")}
           </Button>
         </div>
       ) : null}

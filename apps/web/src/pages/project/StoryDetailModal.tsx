@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useTranslation } from "react-i18next";
 import { useQuery } from "@tanstack/react-query";
 import { api, analyticsFailureReason, ApiError, type AssignmentNotification, type Epic, type UserStory } from "../../lib/api.js";
 import { queryKeys, STALE_TIME } from "../../lib/queryClient.js";
@@ -58,6 +59,7 @@ export default function StoryDetailModal({
   onSaved: (story: UserStory, notification?: AssignmentNotification) => void;
   canManage: boolean;
 }) {
+  const { t } = useTranslation("project");
   const [title, setTitle] = useState(story.title);
   const [status, setStatus] = useState(story.status);
   const [priority, setPriority] = useState(story.priority);
@@ -93,7 +95,7 @@ export default function StoryDetailModal({
 
   async function save() {
     if (title.trim().length < 2) {
-      setActionError("El título es muy corto");
+      setActionError(t("shortTitle"));
       return;
     }
     setSaving(true);
@@ -151,24 +153,24 @@ export default function StoryDetailModal({
       onSaved(updated, updated.assignmentNotification);
     } catch (e) {
       track("story_update_failed", { reason: analyticsFailureReason(e) });
-      setActionError(e instanceof ApiError ? e.message : "No se pudo guardar la HU");
+      setActionError(e instanceof ApiError ? e.message : t("saveStoryError"));
     } finally {
       setSaving(false);
     }
   }
 
   return (
-    <Modal title={`Editar ${story.key}`} onClose={onClose} dismissible={!saving} wide>
+    <Modal title={t("storyDetailTitle", { key: story.key })} onClose={onClose} dismissible={!saving} wide>
       <div className="min-w-0 space-y-4">
         <ErrorText>{actionError}</ErrorText>
 
-        <Field label="Título">
-          <Input value={title} onChange={(e) => setTitle(e.target.value)} aria-label="Título" />
+        <Field label={t("title")}>
+          <Input value={title} onChange={(e) => setTitle(e.target.value)} aria-label={t("title")} />
         </Field>
 
         <div className="grid min-w-0 gap-3 sm:grid-cols-2">
-          <Field label="Estado">
-            <Select value={status} onChange={(e) => setStatus(e.target.value)} aria-label="Estado">
+          <Field label={t("status")}>
+            <Select value={status} onChange={(e) => setStatus(e.target.value)} aria-label={t("status")}>
               {STATUSES.map((s) => (
                 <option key={s} value={s}>
                   {s}
@@ -176,8 +178,8 @@ export default function StoryDetailModal({
               ))}
             </Select>
           </Field>
-          <Field label="Prioridad">
-            <Select value={priority} onChange={(e) => setPriority(e.target.value)} aria-label="Prioridad">
+          <Field label={t("priority")}>
+            <Select value={priority} onChange={(e) => setPriority(e.target.value)} aria-label={t("priority")}>
               {PRIORITIES.map((p) => (
                 <option key={p} value={p}>
                   {p}
@@ -188,13 +190,13 @@ export default function StoryDetailModal({
         </div>
 
         <div className="grid min-w-0 gap-3 sm:grid-cols-3">
-          <Field label="Como… (rol)">
+          <Field label={`Como… (${t("role")})`}>
             <Input value={role} onChange={(e) => setRole(e.target.value)} aria-label="Rol" />
           </Field>
-          <Field label="quiero…">
+          <Field label={`${t("want")}…`}>
             <Input value={want} onChange={(e) => setWant(e.target.value)} aria-label="Quiero" />
           </Field>
-          <Field label="para…">
+          <Field label={`${t("benefit")}…`}>
             <Input value={benefit} onChange={(e) => setBenefit(e.target.value)} aria-label="Beneficio" />
           </Field>
         </div>
@@ -212,9 +214,9 @@ export default function StoryDetailModal({
           </div>
         ) : (
           <div className="grid min-w-0 gap-3 sm:grid-cols-2">
-            <Field label="Épica">
-              <Select value={epicId} onChange={(e) => setEpicId(e.target.value)} aria-label="Épica">
-                <option value="">Sin épica</option>
+            <Field label={t("epics")}>
+              <Select value={epicId} onChange={(e) => setEpicId(e.target.value)} aria-label={t("epics")}>
+                <option value="">{t("noEpic")}</option>
                 {epics.map((ep) => (
                   <option key={ep.id} value={ep.id}>
                     {ep.title}
@@ -235,13 +237,13 @@ export default function StoryDetailModal({
 
         <div className="min-w-0 border-t border-line-100 pt-4">
           <div className="mb-2 flex items-center justify-between">
-            <h4 className="text-body-sm font-semibold text-ink-800">Criterios de aceptación</h4>
+            <h4 className="text-body-sm font-semibold text-ink-800">{t("acceptanceCriteria")}</h4>
             <Button type="button" variant="secondary" size="sm" onClick={addCriterion}>
-              Agregar criterio
+              {t("addCriterion")}
             </Button>
           </div>
           {criteria.length === 0 ? (
-            <p className="text-body-sm text-ink-400">Sin criterios todavía.</p>
+            <p className="text-body-sm text-ink-400">{t("noCriteria")}</p>
           ) : (
             <div className="space-y-2">
               {criteria.map((c, i) => (
@@ -251,25 +253,25 @@ export default function StoryDetailModal({
                       placeholder="Given…"
                       value={c.given}
                       onChange={(e) => updateCriterion(i, { given: e.target.value })}
-                      aria-label={`Given criterio ${i + 1}`}
+                      aria-label={t("criterionAria", { kind: "Given", number: i + 1 })}
                     />
                     <Input
                       placeholder="When…"
                       value={c.when}
                       onChange={(e) => updateCriterion(i, { when: e.target.value })}
-                      aria-label={`When criterio ${i + 1}`}
+                      aria-label={t("criterionAria", { kind: "When", number: i + 1 })}
                     />
                     <Input
                       placeholder="Then…"
                       value={c.then}
                       onChange={(e) => updateCriterion(i, { then: e.target.value })}
-                      aria-label={`Then criterio ${i + 1}`}
+                      aria-label={t("criterionAria", { kind: "Then", number: i + 1 })}
                     />
                   </div>
                   <button
                     type="button"
                     className="mt-1 grid h-8 w-8 shrink-0 place-items-center rounded-md text-ink-400 transition-colors hover:bg-red-100 hover:text-red-600"
-                    aria-label={`Eliminar criterio ${i + 1}`}
+                    aria-label={t("removeCriterion", { number: i + 1 })}
                     onClick={() => removeCriterion(i)}
                   >
                     <TrashIcon />
@@ -282,10 +284,10 @@ export default function StoryDetailModal({
 
         <div className="flex justify-end gap-2 border-t border-line-100 pt-4">
           <Button variant="secondary" onClick={onClose} disabled={saving}>
-            Cancelar
+            {t("cancel")}
           </Button>
           <Button onClick={save} disabled={saving}>
-            {saving ? "Guardando…" : "Guardar"}
+            {saving ? t("saving") : t("save")}
           </Button>
         </div>
       </div>

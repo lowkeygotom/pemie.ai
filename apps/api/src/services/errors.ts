@@ -44,3 +44,7 @@ export function notFound(code: ErrorCode, params?: ErrorParams): ServiceError {
 export function conflict(code: ErrorCode, params?: ErrorParams): ServiceError {
   return new ServiceError(409, code, params);
 }
+
+export function serviceUnavailable(code: ErrorCode, params?: ErrorParams): ServiceError {
+  return new ServiceError(503, code, params);
+}

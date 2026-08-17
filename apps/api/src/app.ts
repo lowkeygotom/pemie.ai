@@ -14,6 +14,7 @@ import type { AppEnv } from "./rest/http.js";
 import { ServiceError, renderServiceError } from "./services/errors.js";
 
 const GENERIC_ERROR = { es: "Error interno", en: "Internal server error" } as const;
+const NOT_FOUND_ERROR = { es: "No encontrado", en: "Not found" } as const;
 
 export function createApp(): Hono<AppEnv> {
   const app = new Hono<AppEnv>();
@@ -33,7 +34,12 @@ export function createApp(): Hono<AppEnv> {
   app.route("/mcp", mcp);
   app.route("/api/mcp", mcp);
 
-  app.notFound((c) => c.json({ error: "Not found" }, 404));
+  // Mismo criterio de locale que onError: c.get("locale") si sessionMiddleware
+  // corrió para esta ruta (p. ej. /api/* con typo), "es" si no.
+  app.notFound((c) => {
+    const locale = c.get("locale") ?? "es";
+    return c.json({ error: locale === "en" ? NOT_FOUND_ERROR.en : NOT_FOUND_ERROR.es }, 404);
+  });
 
   // Traduce errores de la capa de servicios a respuestas HTTP, en el locale
   // que resolvió sessionMiddleware (o "es" si la ruta no pasó por ahí).

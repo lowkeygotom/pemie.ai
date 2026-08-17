@@ -1106,6 +1106,10 @@ export function mcpRoutes(): Hono<AppEnv> {
       resolvedWorkspaceId: null,
       locale: agents.resolveApiKeyLocale(key),
     };
+    // Las rutas MCP no pasan por sessionMiddleware (solo se monta en /api/*):
+    // sin esto, un throw no-ServiceError llegaría a onError con c.get("locale")
+    // === undefined y caería al "es" default aunque la key sea inglesa.
+    c.set("locale", ctx.locale);
 
     if (Array.isArray(body)) {
       const results = await Promise.all(body.map((r) => safeHandle(ctx, r)));

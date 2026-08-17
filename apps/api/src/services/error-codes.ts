@@ -167,6 +167,11 @@ export const ERROR_CODES = [
   "card_not_in_project",
   "no_read_scope_for_search",
   "api_key_missing_permission",
+  // B6 — webhooks entrantes (rest/webhooks.ts): eran texto en español suelto,
+  // fuera de sessionMiddleware. Se renderizan en el locale default ("es").
+  "invalid_webhook_signature",
+  "invalid_webhook_payload",
+  "invalid_telegram_secret",
 ] as const;
 
 export type ErrorCode = (typeof ERROR_CODES)[number];

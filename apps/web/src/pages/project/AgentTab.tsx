@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { api, ApiError } from "../../lib/api.js";
 import { queryKeys, STALE_TIME } from "../../lib/queryClient.js";
+import { useTranslation } from "react-i18next";
 import {
   Badge,
   Card,
@@ -14,6 +15,7 @@ import {
 
 /** Actividad de alcance proyecto; la conexión y los agentes viven ahora en Equipo. */
 export default function AgentTab({ ws, proj }: { ws: string; proj: string }) {
+  const { t } = useTranslation("agents");
   const reliabilityQuery = useQuery({
     queryKey: queryKeys.agentReliability(ws, proj),
     queryFn: () => api.projects.agentReliability(ws, proj),
@@ -31,22 +33,21 @@ export default function AgentTab({ ws, proj }: { ws: string; proj: string }) {
     reliabilityQuery.error instanceof ApiError
       ? reliabilityQuery.error.message
       : reliabilityQuery.error
-        ? "No se pudo cargar la confiabilidad de agentes"
+        ? t("reliabilityLoadFailed")
         : null;
   const auditError =
     auditQuery.error instanceof ApiError
       ? auditQuery.error.message
       : auditQuery.error
-        ? "No se pudo cargar la actividad"
+        ? t("activityLoadFailed")
         : null;
 
   return (
     <div className="space-y-6">
       <section>
-        <h3 className="text-h4 text-ink-900">Acciones de agente que quedan en pie</h3>
+        <h3 className="text-h4 text-ink-900">{t("standingActions")}</h3>
         <p className="mt-1 text-body-sm text-ink-500">
-          Qué proporción de movimientos y asignaciones de agente una persona no deshizo. Un humano
-          que sigue el flujo no cuenta como corrección.
+          {t("standingDescription")}
         </p>
         <div className="mt-4">
           <ErrorText>{reliabilityError}</ErrorText>
@@ -54,28 +55,28 @@ export default function AgentTab({ ws, proj }: { ws: string; proj: string }) {
             <SkeletonStats count={3} />
           ) : reliability && reliability.survivalRate === null ? (
             <EmptyState
-              title="Todavía no hay acciones de agente para medir"
-              description="Cuando un agente mueva o asigne tarjetas y pase el período de asentamiento, acá vas a ver qué proporción queda en pie. La actividad solo humana no infla este número."
+              title={t("noActions")}
+              description={t("noActionsDescription")}
             />
           ) : reliability && reliability.survivalRate != null ? (
             <div className="grid gap-4 sm:grid-cols-3">
               <Card>
                 <Stat
                   value={`${Math.round(reliability.survivalRate * 100)}%`}
-                  label="Tasa de supervivencia"
+                  label={t("survivalRate")}
                   delta={
                     reliability.revertedActions > 0
-                      ? `${reliability.revertedActions} revertida${reliability.revertedActions === 1 ? "" : "s"}`
+                      ? t("reverted", { count: reliability.revertedActions })
                       : undefined
                   }
                   deltaTone="danger"
                 />
               </Card>
               <Card>
-                <Stat value={reliability.agentActions} label="Acciones analizadas" />
+                <Stat value={reliability.agentActions} label={t("analyzedActions")} />
               </Card>
               <Card>
-                <Stat value={`${reliability.windowDays}d`} label="Ventana usada" />
+                <Stat value={`${reliability.windowDays}d`} label={t("window")} />
               </Card>
             </div>
           ) : null}
@@ -90,15 +91,15 @@ export default function AgentTab({ ws, proj }: { ws: string; proj: string }) {
         </Card>
       ) : (
         <Card>
-          <h3 className="text-h4 text-ink-900">Actividad del proyecto</h3>
+          <h3 className="text-h4 text-ink-900">{t("activity")}</h3>
           <p className="mt-2 text-body-sm text-ink-600">
-            Audit de las acciones hechas por personas, agentes y API keys en este proyecto.
+            {t("activityDescription")}
           </p>
           <div className="mt-4">
             {logs.length === 0 ? (
               <EmptyState
-                title="Sin actividad"
-                description="Las acciones del proyecto aparecerán aquí."
+                title={t("noActivity")}
+                description={t("noActivityDescription")}
               />
             ) : (
               <>
@@ -125,7 +126,7 @@ export default function AgentTab({ ws, proj }: { ws: string; proj: string }) {
                 </div>
                 {logs.length > 50 ? (
                   <p className="mt-3 text-caption text-ink-400">
-                    Mostrando los 50 más recientes de {logs.length}.
+                    {t("showing", { count: logs.length })}
                   </p>
                 ) : null}
               </>

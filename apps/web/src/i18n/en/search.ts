@@ -1,0 +1,1 @@
+export default { search: "Search", title: "Search this project", placeholder: "Search User Stories, commits, notes, and cards…", minChars: "Enter at least 2 characters to search", failed: "Could not search", noResults: "No results for \"{{query}}\"", tryOther: "Try another keyword.", story: "User Stories", commit: "Commits", note: "Notes", card: "Cards" };

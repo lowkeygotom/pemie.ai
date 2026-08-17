@@ -5,8 +5,10 @@ import { useAuth } from "../lib/auth.js";
 import { track } from "../lib/analytics/index.js";
 import { Button, ErrorText, Spinner } from "../components/ui.js";
 import { AuthShell } from "./auth/AuthShell.js";
+import { useTranslation } from "react-i18next";
 
 export default function AcceptInvite() {
+  const { t } = useTranslation("collaboration");
   const { token = "" } = useParams();
   const { user } = useAuth();
   const navigate = useNavigate();
@@ -20,7 +22,7 @@ export default function AcceptInvite() {
     api.invitations
       .detail(token)
       .then((r) => setDetail(r.invitation))
-      .catch((e) => setError(e instanceof ApiError ? e.message : "Invitación inválida"));
+      .catch((e) => setError(e instanceof ApiError ? e.message : t("invalidInvite")));
   }, [token]);
 
   async function onAccept() {
@@ -32,7 +34,7 @@ export default function AcceptInvite() {
       navigate(`/w/${workspace.slug}`);
     } catch (err) {
       track("invite_accepted_failed", { reason: analyticsFailureReason(err) });
-      setError(err instanceof ApiError ? err.message : "No se pudo aceptar");
+      setError(err instanceof ApiError ? err.message : t("acceptFailed"));
     } finally {
       setBusy(false);
     }
@@ -40,7 +42,7 @@ export default function AcceptInvite() {
 
   if (error && !detail) {
     return (
-      <AuthShell eyebrow="INVITACIÓN" title="Invitación" subtitle="No pudimos cargar esta invitación.">
+      <AuthShell eyebrow={t("invitation").toUpperCase()} title={t("invitation")} subtitle={t("inviteLoadFailed")}>
         <ErrorText>{error}</ErrorText>
       </AuthShell>
     );
@@ -49,34 +51,32 @@ export default function AcceptInvite() {
 
   return (
     <AuthShell
-      eyebrow="INVITACIÓN"
-      title={`Únete a ${detail.workspace.name}`}
-      subtitle={`Invitación para ${detail.email} · rol ${detail.role}`}
+      eyebrow={t("invitation").toUpperCase()}
+      title={t("join", { workspace: detail.workspace.name })}
+      subtitle={t("inviteFor", { email: detail.email, role: detail.role })}
     >
       {detail.expired ? (
-        <p className="text-center text-body-sm text-ink-500">Esta invitación expiró.</p>
+        <p className="text-center text-body-sm text-ink-500">{t("inviteExpired")}</p>
       ) : !user ? (
         <div className="space-y-4">
           <p className="text-center text-body-sm text-ink-500">
-            Inicia sesión o regístrate con{" "}
-            <span className="font-medium text-ink-900">{detail.email}</span> para aceptar la
-            invitación.
+            {t("signInToAccept", { email: detail.email })}
           </p>
           <Button className="w-full" onClick={() => navigate(`/login?next=${backHere}`)}>
-            Iniciar sesión
+            {t("signIn")}
           </Button>
           <Button
             variant="secondary"
             className="w-full"
             onClick={() => navigate(`/register?next=${backHere}`)}
           >
-            Crear cuenta
+            {t("createAccount")}
           </Button>
         </div>
       ) : (
         <div className="space-y-3">
           <Button className="w-full" onClick={onAccept} disabled={busy}>
-            {busy ? "Aceptando…" : "Aceptar invitación"}
+            {busy ? t("accepting") : t("acceptInvite")}
           </Button>
           <ErrorText>{error}</ErrorText>
         </div>

@@ -5,9 +5,11 @@ import { api, analyticsFailureReason, ApiError } from "../lib/api.js";
 import { track } from "../lib/analytics/index.js";
 import { Button, ErrorText, Field, GithubIcon, Input } from "../components/ui.js";
 import { AuthShell } from "./auth/AuthShell.js";
+import { useTranslation } from "react-i18next";
 
 export default function Login() {
   const { login } = useAuth();
+  const { t } = useTranslation("auth");
   const navigate = useNavigate();
   const [params] = useSearchParams();
   // Destino tras autenticarse: lo fija quien nos mandó aquí (ruta protegida o
@@ -15,7 +17,7 @@ export default function Login() {
   const next = safeNextPath(params.get("next"));
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [error, setError] = useState<string | null>(oauthError(params.get("error")));
+  const [error, setError] = useState<string | null>(oauthError(params.get("error"), t));
   const [busy, setBusy] = useState(false);
 
   async function onSubmit(e: React.FormEvent) {
@@ -28,7 +30,7 @@ export default function Login() {
       navigate(next, { replace: true });
     } catch (err) {
       track("user_logged_in_failed", { reason: analyticsFailureReason(err) });
-      setError(err instanceof ApiError ? err.message : "No se pudo iniciar sesión");
+      setError(err instanceof ApiError ? err.message : t("loginError"));
     } finally {
       setBusy(false);
     }
@@ -36,9 +38,9 @@ export default function Login() {
 
   return (
     <AuthShell
-      eyebrow="ACCESO"
-      title="Entra a pemie.ai"
-      subtitle="Continúa donde lo dejaste y vuelve a tener la operación completa a la vista."
+      eyebrow={t("access")}
+      title={t("loginTitle")}
+      subtitle={t("loginSubtitle")}
     >
       <Button
         type="button"
@@ -47,20 +49,20 @@ export default function Login() {
         onClick={() => window.location.assign(api.auth.githubUrl(next))}
       >
         <GithubIcon />
-        Continuar con GitHub
+        {t("continueWithGithub")}
       </Button>
 
       <div className="my-6 flex items-center gap-3 text-caption text-ink-400">
         <div className="h-px flex-1 bg-line-100" />
-        <span className="font-mono">o con email</span>
+        <span className="font-mono">{t("orWithEmail")}</span>
         <div className="h-px flex-1 bg-line-100" />
       </div>
 
       <form onSubmit={onSubmit} className="space-y-4">
-        <Field label="Email">
+        <Field label={t("email")}>
           <Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} required />
         </Field>
-        <Field label="Contraseña">
+        <Field label={t("password")}>
           <Input
             type="password"
             value={password}
@@ -70,27 +72,26 @@ export default function Login() {
         </Field>
         <ErrorText>{error}</ErrorText>
         <Button type="submit" disabled={busy} className="w-full">
-          {busy ? "Entrando…" : "Entrar"}
+          {busy ? t("loggingIn") : t("login")}
         </Button>
       </form>
 
       <p className="mt-6 text-center text-body-sm text-ink-500">
-        ¿No tienes cuenta?{" "}
+        {t("noAccount")} {" "}
         <Link
           to={next === "/app" ? "/register" : `/register?next=${encodeURIComponent(next)}`}
           className="font-medium text-blue-600 hover:underline"
         >
-          Regístrate
+          {t("register")}
         </Link>
       </p>
     </AuthShell>
   );
 }
 
-function oauthError(code: string | null): string | null {
+function oauthError(code: string | null, t: (key: string) => string): string | null {
   if (!code) return null;
-  if (code === "oauth_state") return "La sesión de GitHub expiró. Intenta de nuevo.";
-  if (code === "oauth_unconfigured")
-    return "El acceso con GitHub aún no está habilitado en este servidor. Entra con tu correo y contraseña.";
-  return "No se pudo iniciar sesión con GitHub.";
+  if (code === "oauth_state") return t("oauthState");
+  if (code === "oauth_unconfigured") return t("oauthUnconfigured");
+  return t("oauthUnknown");
 }

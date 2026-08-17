@@ -12,6 +12,8 @@ import {
   type Workspace as Ws,
 } from "../../lib/api.js";
 import { track } from "../../lib/analytics/index.js";
+import { useAuth } from "../../lib/auth.js";
+import { useTranslation } from "react-i18next";
 import { ConnectPanel } from "../../components/ConnectPanel.js";
 import { ScopePicker } from "../../components/ScopePicker.js";
 import { TelegramChannelCard } from "../../components/TelegramChannelCard.js";
@@ -54,6 +56,8 @@ function isSettingsTab(value: string | null): value is SettingsTab {
 
 /** Ajustes del workspace, separados del flujo diario de Equipo. */
 export default function WorkspaceSettings() {
+  const { t } = useTranslation("configuration");
+  const { user } = useAuth();
   const { slug = "" } = useParams();
   const [params, setParams] = useSearchParams();
   const [ws, setWs] = useState<Ws | null>(null);
@@ -95,7 +99,7 @@ export default function WorkspaceSettings() {
       setKeys(keysRes.apiKeys);
       setLogs(auditRes.auditLogs);
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : "No se pudo cargar Ajustes");
+      setError(err instanceof ApiError ? err.message : t("settingsLoad"));
     } finally {
       setLoading(false);
     }
@@ -138,7 +142,7 @@ export default function WorkspaceSettings() {
       await load();
     } catch (err) {
       track("api_key_created_failed", { reason: analyticsFailureReason(err) });
-      setError(err instanceof ApiError ? err.message : "No se pudo crear la API key");
+      setError(err instanceof ApiError ? err.message : t("keyCreate"));
     } finally {
       setCreating(false);
     }
@@ -154,7 +158,7 @@ export default function WorkspaceSettings() {
       setPendingRevoke(null);
       await load();
     } catch (err) {
-      setRevokeError(err instanceof ApiError ? err.message : "No se pudo revocar la API key");
+      setRevokeError(err instanceof ApiError ? err.message : t("keyRevoke"));
     } finally {
       setRevoking(false);
     }
@@ -168,9 +172,10 @@ export default function WorkspaceSettings() {
           scopes,
           keyRef: { kind: "plaintext", key: newKey },
           mcpUrl: MCP_URL,
+          locale: user?.locale,
         })
       : null,
-    [newKey, scopeLevel, scopes, slug]
+    [newKey, scopeLevel, scopes, slug, user?.locale]
   );
 
   if (loading) {
@@ -183,7 +188,7 @@ export default function WorkspaceSettings() {
     );
   }
 
-  if (!ws) return <Card><ErrorText>{error ?? "Workspace no encontrado"}</ErrorText></Card>;
+  if (!ws) return <Card><ErrorText>{error ?? t("workspaceMissing")}</ErrorText></Card>;
 
   const canManage = ws.role === "owner" || ws.role === "admin";
   if (!canManage) {
@@ -209,32 +214,32 @@ export default function WorkspaceSettings() {
         {tab === "credentials" ? (
           <>
             <Card>
-              <h2 className="text-h4 text-ink-900">Credenciales de alcance amplio</h2>
-              <p className="mt-2 text-body-sm text-ink-600">Aquí generas keys de alcance workspace o usuario. Las keys de proyecto sin agente también se conservan aquí para que siempre puedas verlas y revocarlas; las asociadas a un agente viven en Equipo.</p>
+              <h2 className="text-h4 text-ink-900">{t("credentialsTitle")}</h2>
+              <p className="mt-2 text-body-sm text-ink-600">{t("credentialsDescription")}</p>
               <form onSubmit={createKey} className="mt-5 space-y-4">
                 <div className="grid gap-3 sm:grid-cols-2">
-                  <Field label="Alcance">
+                  <Field label={t("scope")}>
                     <Select value={scopeLevel} onChange={(event) => setScopeLevel(event.target.value as Extract<ApiKeyScopeLevel, "workspace" | "user">)}>
                       <option value="workspace">Workspace</option>
-                      <option value="user">Usuario</option>
+                      <option value="user">{t("user")}</option>
                     </Select>
                   </Field>
-                  <Field label="Nombre de la key" hint={keyName.trim().length < 2 ? "Mínimo 2 caracteres." : undefined}>
+                  <Field label={t("keyName")} hint={keyName.trim().length < 2 ? t("minChars") : undefined}>
                     <Input value={keyName} onChange={(event) => setKeyName(event.target.value)} placeholder="Ej: reportes-global" required />
                   </Field>
                 </div>
-                <Field label="Permisos" hint="Elige un preset o personaliza por dominio. Escritura añade su lectura correspondiente.">
+                <Field label={t("permissions")} hint={t("permissionsHint")}>
                   <ScopePicker value={scopes} onChange={setScopes} />
                 </Field>
-                {!hasReadScope ? <ErrorText>Elige al menos un permiso de lectura: sin ninguno el agente no puede descubrir nada.</ErrorText> : null}
-                <Button type="submit" disabled={creating || keyName.trim().length < 2 || !hasReadScope}>{creating ? "Generando…" : "Generar API key"}</Button>
+                {!hasReadScope ? <ErrorText>{t("needRead")}</ErrorText> : null}
+                <Button type="submit" disabled={creating || keyName.trim().length < 2 || !hasReadScope}>{creating ? t("generating") : t("generateKey")}</Button>
               </form>
             </Card>
 
             <Card>
-              <h2 className="text-h4 text-ink-900">API keys ({credentialKeys.length})</h2>
+              <h2 className="text-h4 text-ink-900">{t("keys", { count: credentialKeys.length })}</h2>
               <div className="mt-4">
-                {credentialKeys.length === 0 ? <EmptyState title="Sin credenciales" description="Genera una API key para conectar un agente al workspace o a tu cuenta." /> : (
+                {credentialKeys.length === 0 ? <EmptyState title={t("noCredentials")} description={t("noCredentialsDescription")} /> : (
                   <div className="divide-y divide-line-100">
                     {credentialKeys.map((key) => (
                       <div key={key.id} className="flex items-start justify-between gap-3 -mx-6 px-6 py-3 hover:bg-surface-50">
@@ -242,13 +247,13 @@ export default function WorkspaceSettings() {
                           <p className="text-body font-medium text-ink-900">{key.name} <code className="font-mono text-caption text-ink-400">{key.prefix}…</code></p>
                           <div className="mt-1.5 flex flex-wrap gap-1.5">
                             <Badge tone="brand" mono>{SCOPE_LABELS[key.scopeLevel as ApiKeyScopeLevel]}</Badge>
-                            {key.scopeLevel === "project" && key.projectId ? <Badge tone="neutral" mono>{projectById.get(key.projectId)?.slug ?? "proyecto"}</Badge> : null}
-                            {key.scopeLevel === "project" && key.agentId === null ? <Badge tone="warning">sin agente</Badge> : null}
+                            {key.scopeLevel === "project" && key.projectId ? <Badge tone="neutral" mono>{projectById.get(key.projectId)?.slug ?? t("project")}</Badge> : null}
+                            {key.scopeLevel === "project" && key.agentId === null ? <Badge tone="warning">{t("noAgent")}</Badge> : null}
                             {key.scopes.map((scope) => <Badge key={scope} tone="neutral" mono>{scope}</Badge>)}
                           </div>
                           <p className="mt-1 font-mono text-caption text-ink-400">creada {new Date(key.createdAt).toLocaleString()} · {key.lastUsedAt ? `último uso ${new Date(key.lastUsedAt).toLocaleString()}` : "sin usar aún"}</p>
                         </div>
-                        <Button variant="danger" size="sm" onClick={() => setPendingRevoke(key)}>Revocar</Button>
+                        <Button variant="danger" size="sm" onClick={() => setPendingRevoke(key)}>{t("revoke")}</Button>
                       </div>
                     ))}
                   </div>
@@ -282,20 +287,20 @@ export default function WorkspaceSettings() {
       </section>
 
       {pendingRevoke ? (
-        <Modal title="Revocar API key" onClose={() => !revoking && setPendingRevoke(null)}>
+        <Modal title={t("revokeTitle")} onClose={() => !revoking && setPendingRevoke(null)}>
           <div className="space-y-4">
             <ErrorText>{revokeError}</ErrorText>
-            <p className="text-body text-ink-700">¿Revocar <span className="font-medium text-ink-900">{pendingRevoke.name}</span> <code className="font-mono text-caption text-ink-400">{pendingRevoke.prefix}…</code>? Esta acción no se puede deshacer: cualquier agente que use esta key perderá el acceso de inmediato.</p>
-            <div className="flex justify-end gap-2 border-t border-line-100 pt-4"><Button variant="secondary" disabled={revoking} onClick={() => setPendingRevoke(null)}>Cancelar</Button><Button variant="danger" disabled={revoking} onClick={confirmRevoke}>{revoking ? "Revocando…" : "Revocar"}</Button></div>
+            <p className="text-body text-ink-700">{t("revokeWarning", { name: `${pendingRevoke.name} ${pendingRevoke.prefix}…` })}</p>
+            <div className="flex justify-end gap-2 border-t border-line-100 pt-4"><Button variant="secondary" disabled={revoking} onClick={() => setPendingRevoke(null)}>{t("cancel")}</Button><Button variant="danger" disabled={revoking} onClick={confirmRevoke}>{revoking ? t("revoking") : t("revoke")}</Button></div>
           </div>
         </Modal>
       ) : null}
       {newKey && prompt ? (
-        <Modal title="Conectar" size="xl" dismissible={confirmedSaved} onClose={() => confirmedSaved && setNewKey(null)}>
+        <Modal title={t("connect")} size="xl" dismissible={confirmedSaved} onClose={() => confirmedSaved && setNewKey(null)}>
           <div className="space-y-4">
             <ConnectPanel apiKey={newKey} mcpUrl={MCP_URL} prompt={prompt} onCopy={() => setConfirmedSaved(true)} />
-            <Checkbox checked={confirmedSaved} onChange={setConfirmedSaved}>Guardé la key — o el prompt, que la incluye.</Checkbox>
-            <Button type="button" className="w-full" disabled={!confirmedSaved} onClick={() => setNewKey(null)}>Ya la guardé, cerrar</Button>
+            <Checkbox checked={confirmedSaved} onChange={setConfirmedSaved}>{t("confirmSaved")}</Checkbox>
+            <Button type="button" className="w-full" disabled={!confirmedSaved} onClick={() => setNewKey(null)}>{t("savedClose")}</Button>
           </div>
         </Modal>
       ) : null}

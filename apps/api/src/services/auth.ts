@@ -8,13 +8,16 @@ import type { User } from "@prisma/client";
 import { prisma } from "../db.js";
 import { badRequest, conflict, unauthorized } from "./errors.js";
 
+export const USER_LOCALES = ["es", "en"] as const;
+export type UserLocale = (typeof USER_LOCALES)[number];
+
 const SESSION_TTL_MS = 1000 * 60 * 60 * 24 * 30; // 30 días
 const BCRYPT_ROUNDS = 12;
 
 /** Usuario expuesto al cliente (sin passwordHash). */
 export type PublicUser = Pick<
   User,
-  "id" | "email" | "name" | "avatarUrl" | "githubLogin" | "createdAt" | "analyticsEnabled"
+  "id" | "email" | "name" | "avatarUrl" | "githubLogin" | "createdAt" | "analyticsEnabled" | "locale"
 >;
 
 export function toPublicUser(u: User): PublicUser {
@@ -26,7 +29,16 @@ export function toPublicUser(u: User): PublicUser {
     githubLogin: u.githubLogin,
     createdAt: u.createdAt,
     analyticsEnabled: u.analyticsEnabled,
+    locale: u.locale as UserLocale,
   };
+}
+
+/** Preferencia de idioma de la cuenta. El valor se valida en el núcleo, no en REST. */
+export async function updateLocale(userId: string, locale: string): Promise<PublicUser> {
+  if (!(USER_LOCALES as readonly string[]).includes(locale))
+    throw badRequest("Idioma inválido", "invalid_locale");
+  const user = await prisma.user.update({ where: { id: userId }, data: { locale } });
+  return toPublicUser(user);
 }
 
 function newToken(): string {

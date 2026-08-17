@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { api, analyticsFailureReason, ApiError, type WorkspaceSummary } from "../lib/api.js";
 import { track } from "../lib/analytics/index.js";
 import { useAuth } from "../lib/auth.js";
+import { useTranslation } from "react-i18next";
 import { Button, Card, EmptyState, ErrorText, Field, Input, Skeleton, SkeletonList } from "../components/ui.js";
 import { LaunchpadList } from "./workspaces/LaunchpadList.js";
 import { DirectoryList } from "./workspaces/DirectoryList.js";
@@ -11,6 +12,7 @@ import { DirectoryList } from "./workspaces/DirectoryList.js";
 const DIRECTORY_THRESHOLD = 6;
 
 export default function Workspaces() {
+  const { t } = useTranslation("common");
   const { user } = useAuth();
   const [workspaces, setWorkspaces] = useState<WorkspaceSummary[] | null>(null);
   const [creating, setCreating] = useState(false);
@@ -24,7 +26,7 @@ export default function Workspaces() {
   }
 
   useEffect(() => {
-    load().catch((e) => setError(e instanceof ApiError ? e.message : "No se pudieron cargar los workspaces"));
+    load().catch((e) => setError(e instanceof ApiError ? e.message : t("loadWorkspacesFailed")));
   }, []);
 
   async function onCreate(e: React.FormEvent) {
@@ -39,7 +41,7 @@ export default function Workspaces() {
       await load();
     } catch (err) {
       track("workspace_created_failed", { reason: analyticsFailureReason(err) });
-      setError(err instanceof ApiError ? err.message : "No se pudo crear");
+      setError(err instanceof ApiError ? err.message : t("createFailed"));
     } finally {
       setBusy(false);
     }
@@ -68,20 +70,20 @@ export default function Workspaces() {
     return (
       <div className="mx-auto max-w-focus">
         <EmptyState
-          title="Aún no tienes workspaces"
-          description="Crea el primero para empezar a organizar tus proyectos y equipo."
-          action={<Button onClick={() => setCreating(true)}>Crear workspace</Button>}
+          title={t("noWorkspaces")}
+          description={t("noWorkspacesDescription")}
+          action={<Button onClick={() => setCreating(true)}>{t("createWorkspace")}</Button>}
         />
         {creating && (
           <Card className="mt-6">
             <form onSubmit={onCreate} className="flex items-end gap-3">
               <div className="flex-1">
-                <Field label="Nombre del workspace">
+                <Field label={t("workspaceName")}>
                   <Input value={name} onChange={(e) => setName(e.target.value)} required autoFocus />
                 </Field>
               </div>
               <Button type="submit" disabled={busy}>
-                {busy ? "Creando…" : "Crear"}
+                {busy ? t("creating") : t("create")}
               </Button>
             </form>
             <div className="mt-2">

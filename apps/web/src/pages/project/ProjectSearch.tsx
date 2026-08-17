@@ -4,18 +4,12 @@ import { api, analyticsFailureReason, ApiError, type SearchHit } from "../../lib
 import { queryKeys } from "../../lib/queryClient.js";
 import { track } from "../../lib/analytics/index.js";
 import { Badge, Button, EmptyState, ErrorText, Input, Modal, SkeletonList } from "../../components/ui.js";
+import { useTranslation } from "react-i18next";
 
 /** Subconjunto de TabId (Project.tsx) que puede recibir un resultado de búsqueda. */
 type ProjectTabId = "commits" | "reports" | "stories" | "board" | "leaderboard" | "activity";
 
 const TYPE_ORDER: SearchHit["type"][] = ["story", "commit", "note", "card"];
-
-const TYPE_LABEL: Record<SearchHit["type"], string> = {
-  story: "Historias de usuario",
-  commit: "Commits",
-  note: "Notas",
-  card: "Tarjetas",
-};
 
 const TAB_BY_TYPE: Record<SearchHit["type"], ProjectTabId> = {
   story: "stories",
@@ -33,6 +27,7 @@ export default function ProjectSearch({
   proj: string;
   onNavigateToTab: (tab: ProjectTabId) => void;
 }) {
+  const { t } = useTranslation("search");
   const [open, setOpen] = useState(false);
   const [rawQuery, setRawQuery] = useState("");
   const [debouncedQuery, setDebouncedQuery] = useState("");
@@ -88,32 +83,32 @@ export default function ProjectSearch({
   return (
     <>
       <Button variant="secondary" size="sm" onClick={() => setOpen(true)}>
-        Buscar
+        {t("search")}
       </Button>
 
       {open && (
-        <Modal title="Buscar en el proyecto" onClose={closeAndReset} size="lg">
+        <Modal title={t("title")} onClose={closeAndReset} size="lg">
           <div className="space-y-4">
             <Input
               autoFocus
-              placeholder="Buscar en HUs, commits, notas y tarjetas…"
+              placeholder={t("placeholder")}
               value={rawQuery}
               onChange={(e) => setRawQuery(e.target.value)}
-              aria-label="Buscar"
+              aria-label={t("search")}
             />
 
             {pending || ((searchQuery.isLoading || searchQuery.isFetching) && trimmedQuery.length >= 2) ? (
               <SkeletonList rows={4} />
             ) : trimmedQuery.length < 2 ? (
-              <EmptyState compact title="Escribí al menos 2 caracteres para buscar" />
+              <EmptyState compact title={t("minChars")} />
             ) : searchQuery.isError ? (
               <ErrorText>
-                {searchQuery.error instanceof ApiError ? searchQuery.error.message : "No se pudo buscar"}
+                {searchQuery.error instanceof ApiError ? searchQuery.error.message : t("failed")}
               </ErrorText>
             ) : (searchQuery.data ?? []).length === 0 ? (
               <EmptyState
-                title={`Sin resultados para "${trimmedQuery}"`}
-                description="Probá con otra palabra clave."
+                title={t("noResults", { query: trimmedQuery })}
+                description={t("tryOther")}
               />
             ) : (
               <div className="space-y-4">
@@ -122,7 +117,7 @@ export default function ProjectSearch({
                   if (hits.length === 0) return null;
                   return (
                     <div key={type}>
-                      <h4 className="mb-1.5 text-body-sm font-semibold text-ink-800">{TYPE_LABEL[type]}</h4>
+                      <h4 className="mb-1.5 text-body-sm font-semibold text-ink-800">{t(type)}</h4>
                       <div className="divide-y divide-line-100">
                         {hits.map((hit) => (
                           <button

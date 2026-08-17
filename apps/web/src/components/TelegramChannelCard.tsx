@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
 import {
   CHANNEL_LLM_PROVIDERS,
   CHANNEL_LLM_DEFAULT_MODELS,
@@ -36,6 +37,7 @@ export type TelegramProjectOption = { id: string; slug: string; name: string };
  * Si hay varios, el usuario elige; si hay uno, se usa ese.
  */
 export function TelegramChannelCard({ projects }: { projects: TelegramProjectOption[] }) {
+  const { t } = useTranslation("configuration");
   const [status, setStatus] = useState<TelegramChannelStatus | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -61,7 +63,7 @@ export function TelegramChannelCard({ projects }: { projects: TelegramProjectOpt
         setHomeProjectId(projects[0].id);
       }
     } catch (e) {
-      setError(e instanceof ApiError ? e.message : "Error cargando Telegram");
+      setError(e instanceof ApiError ? e.message : t("telegramLoad"));
     } finally {
       setLoading(false);
     }
@@ -74,7 +76,7 @@ export function TelegramChannelCard({ projects }: { projects: TelegramProjectOpt
 
   async function createLink() {
     if (!homeProjectId) {
-      setError("Crea un proyecto en el workspace antes de vincular Telegram");
+      setError(t("telegramProject"));
       return;
     }
     setBusy(true);
@@ -84,7 +86,7 @@ export function TelegramChannelCard({ projects }: { projects: TelegramProjectOpt
       setDeepLink(r.deepLink);
       setStartPayload(r.startPayload);
     } catch (e) {
-      setError(e instanceof ApiError ? e.message : "No se pudo crear el enlace");
+      setError(e instanceof ApiError ? e.message : t("telegramLink"));
     } finally {
       setBusy(false);
     }
@@ -107,7 +109,7 @@ export function TelegramChannelCard({ projects }: { projects: TelegramProjectOpt
       setStatus(refreshed.channel);
       if (refreshed.channel.model) setLlmModel(refreshed.channel.model);
     } catch (e) {
-      setError(e instanceof ApiError ? e.message : "No se pudo guardar la key");
+      setError(e instanceof ApiError ? e.message : t("telegramSaveKey"));
     } finally {
       setBusy(false);
     }
@@ -120,7 +122,7 @@ export function TelegramChannelCard({ projects }: { projects: TelegramProjectOpt
       const r = await api.channels.deleteLlmKey(provider);
       setStatus(r.channel);
     } catch (e) {
-      setError(e instanceof ApiError ? e.message : "No se pudo borrar la key");
+      setError(e instanceof ApiError ? e.message : t("telegramDeleteKey"));
     } finally {
       setBusy(false);
     }
@@ -134,7 +136,7 @@ export function TelegramChannelCard({ projects }: { projects: TelegramProjectOpt
       const r = await api.channels.setDefaultProject(homeProjectId);
       setStatus(r.channel);
     } catch (e) {
-      setError(e instanceof ApiError ? e.message : "No se pudo fijar el proyecto");
+      setError(e instanceof ApiError ? e.message : t("telegramDefault"));
     } finally {
       setBusy(false);
     }
@@ -149,7 +151,7 @@ export function TelegramChannelCard({ projects }: { projects: TelegramProjectOpt
       setStartPayload(null);
       await load();
     } catch (e) {
-      setError(e instanceof ApiError ? e.message : "No se pudo desvincular");
+      setError(e instanceof ApiError ? e.message : t("telegramDisconnect"));
     } finally {
       setBusy(false);
     }
@@ -162,23 +164,22 @@ export function TelegramChannelCard({ projects }: { projects: TelegramProjectOpt
     : [];
 
   const stateLabel = !status?.botConfigured
-    ? "Bot no configurado en el servidor"
+    ? t("botMissing")
     : !status.linked
-      ? "No vinculado"
+      ? t("unlinked")
       : !status.hasLlmKey
-        ? "Falta API key LLM"
+        ? t("keyMissing")
         : status.ready
-          ? "Listo"
-          : "Incompleto";
+          ? t("ready")
+          : t("incomplete");
 
   return (
     <Card>
       <div className="flex items-start justify-between gap-3">
         <div>
-          <h3 className="text-h4 text-ink-900">Canal Telegram</h3>
+          <h3 className="text-h4 text-ink-900">{t("telegram")}</h3>
           <p className="mt-2 text-body-sm text-ink-600">
-            Habla con Pemie desde Telegram (BYOK: Anthropic, OpenAI o DeepSeek). Al vincular se
-            crea una API key de usuario MCP para tus proyectos.
+            {t("telegramDescription")}
           </p>
         </div>
         <Badge tone={status?.ready ? "brand" : "neutral"}>{stateLabel}</Badge>
@@ -225,7 +226,7 @@ export function TelegramChannelCard({ projects }: { projects: TelegramProjectOpt
             <div className="flex flex-wrap items-end gap-2">
               <div className="min-w-[12rem]">
                 <p className="mb-1 text-caption font-mono uppercase text-ink-500">
-                  Proyecto por defecto
+                  {t("defaultProject")}
                 </p>
                 <Select
                   value={homeProjectId}
@@ -247,7 +248,7 @@ export function TelegramChannelCard({ projects }: { projects: TelegramProjectOpt
                   onClick={saveDefaultProject}
                   disabled={busy || !homeProjectId}
                 >
-                  Guardar default
+                  {t("saveDefault")}
                 </Button>
               )}
             </div>
@@ -256,11 +257,11 @@ export function TelegramChannelCard({ projects }: { projects: TelegramProjectOpt
           {!status.linked && (
             <div className="space-y-2">
               <Button type="button" onClick={createLink} disabled={busy || !homeProjectId}>
-                {busy ? "Generando…" : "Generar enlace de vínculo"}
+                {busy ? t("generate") : t("generateLink")}
               </Button>
               {projects.length === 0 && (
                 <p className="text-caption text-ink-400">
-                  Necesitas al menos un proyecto en el workspace para vincular.
+                  {t("needProject")}
                 </p>
               )}
               {deepLink && (
@@ -271,7 +272,7 @@ export function TelegramChannelCard({ projects }: { projects: TelegramProjectOpt
                     rel="noreferrer"
                     className="text-blue-700 underline"
                   >
-                    Abrir en Telegram
+                    {t("openTelegram")}
                   </a>
                 </p>
               )}
@@ -287,11 +288,11 @@ export function TelegramChannelCard({ projects }: { projects: TelegramProjectOpt
           {status.linked && status.providers && (
             <div className="space-y-2">
               <p className="text-caption text-ink-500">
-                Keys guardadas. En Telegram: /proveedor, /modelo, /reset.
+                {t("savedKeys")}
               </p>
               {savedProviders.length === 0 ? (
                 <p className="text-caption text-ink-400">
-                  Ninguna todavía: pega una key abajo para activar el bot.
+                  {t("noKeys")}
                 </p>
               ) : (
                 <ul className="flex flex-wrap items-center gap-x-4 gap-y-2">
@@ -309,7 +310,7 @@ export function TelegramChannelCard({ projects }: { projects: TelegramProjectOpt
                         disabled={busy}
                         aria-label={`Borrar la API key de ${LLM_PROVIDER_LABELS[p]}`}
                       >
-                        Borrar
+                        {t("delete")}
                       </Button>
                     </li>
                   ))}
@@ -362,14 +363,14 @@ export function TelegramChannelCard({ projects }: { projects: TelegramProjectOpt
                 aria-label="API key LLM"
               />
               <Button type="submit" disabled={busy || llmKey.trim().length < 20} variant="secondary">
-                Guardar key
+                {t("saveKey")}
               </Button>
             </form>
           )}
 
           {status.linked && (
             <Button type="button" variant="danger" size="sm" onClick={disconnect} disabled={busy}>
-              Desvincular
+              {t("disconnect")}
             </Button>
           )}
         </div>

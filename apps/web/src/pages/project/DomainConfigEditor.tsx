@@ -7,6 +7,7 @@ import {
 } from "@pemie/shared";
 import { api, ApiError } from "../../lib/api.js";
 import { Badge, Button, Collapsible, ErrorText, Field, Input } from "../../components/ui.js";
+import { useTranslation } from "react-i18next";
 
 function cloneConfig(config: DomainConfig): DomainConfig {
   return {
@@ -33,6 +34,7 @@ export default function DomainConfigEditor({
   initial: DomainConfig | null;
   onSaved: (config: DomainConfig, reclassified: number) => void;
 }) {
+  const { t } = useTranslation("configuration");
   const [draft, setDraft] = useState<DomainConfig>(() =>
     cloneConfig(initial ?? DEFAULT_DOMAIN_CONFIG)
   );
@@ -106,14 +108,14 @@ export default function DomainConfigEditor({
         })),
       };
       if (cleaned.categories.some((c) => !c.key || !c.label)) {
-        throw new Error("Cada categoría necesita key y label");
+        throw new Error(t("categoryRequired"));
       }
       const result = await api.projects.updateDomainConfig(ws, proj, cleaned);
       setDraft(cloneConfig(result.config));
       setNotice(
         result.reclassified > 0
-          ? `Guardado. ${result.reclassified} commits reclasificados.`
-          : "Guardado. Ningún commit cambió de dominio."
+          ? t("saved", { count: result.reclassified })
+          : t("savedUnchanged")
       );
       onSaved(result.config, result.reclassified);
     } catch (e) {
@@ -122,7 +124,7 @@ export default function DomainConfigEditor({
           ? e.message
           : e instanceof Error
             ? e.message
-            : "No se pudo guardar la configuración"
+            : t("saveFailed")
       );
     } finally {
       setSaving(false);
@@ -131,7 +133,7 @@ export default function DomainConfigEditor({
 
   return (
     <Collapsible
-      title="Dominios"
+      title={t("domains")}
       defaultOpen={false}
       badge={
         <Badge tone="neutral" mono>
@@ -140,16 +142,15 @@ export default function DomainConfigEditor({
       }
     >
       <p className="mb-4 text-body-sm text-ink-500">
-        Patrones (regex) sobre el mensaje del commit. Al guardar se reclasifican los commits
-        existentes.
+        {t("domainsDescription")}
       </p>
 
       <div className="flex flex-wrap justify-end gap-2">
         <Button variant="secondary" size="sm" onClick={restoreDefault} disabled={saving}>
-          Restaurar default
+          {t("restore")}
         </Button>
         <Button size="sm" onClick={save} disabled={saving}>
-          {saving ? "Guardando…" : "Guardar"}
+          {saving ? t("saving") : t("save")}
         </Button>
       </div>
 
@@ -162,7 +163,7 @@ export default function DomainConfigEditor({
             key={index}
             className="grid gap-2 rounded-md border border-line-100 bg-surface-50 p-3 sm:grid-cols-12"
           >
-            <Field label="Key">
+            <Field label={t("key")}>
               <Input
                 className="!py-1.5 font-mono text-caption"
                 value={cat.key}
@@ -171,7 +172,7 @@ export default function DomainConfigEditor({
               />
             </Field>
             <div className="sm:col-span-2">
-              <Field label="Label">
+              <Field label={t("label")}>
                 <Input
                   className="!py-1.5"
                   value={cat.label}
@@ -180,7 +181,7 @@ export default function DomainConfigEditor({
                 />
               </Field>
             </div>
-            <Field label="Emoji">
+            <Field label={t("emoji")}>
               <Input
                 className="!py-1.5"
                 value={cat.emoji ?? ""}
@@ -189,7 +190,7 @@ export default function DomainConfigEditor({
               />
             </Field>
             <div className="sm:col-span-5">
-              <Field label="Matchers" hint="Separados por coma">
+              <Field label={t("matchers")} hint={t("commaSeparated")}>
                 <Input
                   className="!py-1.5 font-mono text-caption"
                   value={(cat.matchers ?? []).join(", ")}
@@ -206,7 +207,7 @@ export default function DomainConfigEditor({
                   checked={Boolean(cat.primary)}
                   onChange={() => setPrimary(index)}
                 />
-                Primary
+                {t("primary")}
               </label>
               <Button
                 variant="danger"
@@ -215,7 +216,7 @@ export default function DomainConfigEditor({
                 onClick={() => removeCategory(index)}
                 disabled={draft.categories.length <= 1}
               >
-                Quitar
+                {t("remove")}
               </Button>
             </div>
           </div>
@@ -224,10 +225,10 @@ export default function DomainConfigEditor({
 
       <div className="mt-3 flex flex-wrap items-end gap-3">
         <Button variant="secondary" size="sm" onClick={addCategory}>
-          + Categoría
+          {t("addCategory")}
         </Button>
         <div className="w-40">
-          <Field label="Fallback">
+          <Field label={t("fallback")}>
             <Input
               className="!py-1.5 font-mono text-caption"
               value={draft.fallback}
@@ -238,13 +239,13 @@ export default function DomainConfigEditor({
       </div>
 
       <div className="mt-5 border-t border-line-100 pt-4">
-        <Field label="Preview" hint="Clasifica un mensaje de ejemplo con la config actual (sin guardar).">
+        <Field label={t("preview")} hint={t("previewHint")}>
           <div className="flex flex-wrap items-center gap-2">
             <Input
               className="max-w-md !py-1.5"
               value={previewMsg}
               onChange={(e) => setPreviewMsg(e.target.value)}
-              aria-label="Mensaje de commit de ejemplo"
+              aria-label={t("previewAria")}
             />
             <Badge tone={previewCat?.primary ? "brand" : "neutral"} mono>
               {previewCat?.emoji ? `${previewCat.emoji} ` : ""}

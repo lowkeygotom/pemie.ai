@@ -1,0 +1,18 @@
+export default {
+  storiesLoadError: "Could not load User Stories",
+  newStory: "New User Story",
+  storyExample: "e.g. Sign in with GitHub",
+  stories: "User Stories ({{count}})",
+  noStories: "No User Stories yet",
+  noStoriesDescription: "Create the first User Story to start organizing the work.",
+  noCards: "No cards",
+  boardLoadError: "Could not load the board.",
+  newCard: "New card",
+  newCardDescription: "For standalone tasks or bugs that do not need a complete User Story.",
+  title: "Title",
+  type: "Type",
+  cardExample: "e.g. Fix flaky test",
+  newCardAria: "New card",
+  cardTypeAria: "Card type",
+  addTo: "Add to {{column}}",
+};

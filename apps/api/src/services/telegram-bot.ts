@@ -136,18 +136,23 @@ function resolveModel(session: BotSession): string {
 }
 
 function systemPrompt(session: BotSession, summary: string | null): string {
+  const english = session.link.user.locale === "en";
   const defaultProjectId = session.config.defaultProjectId;
   const parts = [
-    "Eres el asistente Pemie en Telegram. Ayudas a monitorear proyectos (commits, HUs, kanban, informes).",
-    "Usa las tools MCP. Con keys de usuario, pasa projectId en cada tool de proyecto.",
+    english
+      ? "You are the Pemie assistant on Telegram. You help monitor projects (commits, User Stories, kanban, reports)."
+      : "Eres el asistente Pemie en Telegram. Ayudas a monitorear proyectos (commits, HUs, kanban, informes).",
+    english
+      ? "Use MCP tools. With user keys, pass projectId in every project tool."
+      : "Usa las tools MCP. Con keys de usuario, pasa projectId en cada tool de proyecto.",
     defaultProjectId
-      ? `Proyecto por defecto sugerido: ${defaultProjectId} (slug: ${session.config.defaultProject?.slug ?? "?"}). Úsalo si el usuario no especifica otro.`
-      : "No hay proyecto por defecto; llama a list_projects si hace falta.",
-    "Tienes historial reciente del chat; úsalo para referencias (“eso”, “lo de antes”). Datos de proyecto: re-lee con tools, no inventes.",
-    "Responde en español, breve y útil para chat móvil.",
+      ? english ? `Suggested default project: ${defaultProjectId} (slug: ${session.config.defaultProject?.slug ?? "?"}). Use it if the user does not specify another.` : `Proyecto por defecto sugerido: ${defaultProjectId} (slug: ${session.config.defaultProject?.slug ?? "?"}). Úsalo si el usuario no especifica otro.`
+      : english ? "There is no default project; call list_projects when needed." : "No hay proyecto por defecto; llama a list_projects si hace falta.",
+    english ? "You have recent chat history; use it for references. Project data: re-read it with tools, do not invent facts." : "Tienes historial reciente del chat; úsalo para referencias (“eso”, “lo de antes”). Datos de proyecto: re-lee con tools, no inventes.",
+    english ? "Respond in English, concise and useful for mobile chat." : "Responde en español, breve y útil para chat móvil.",
   ];
   if (summary?.trim()) {
-    parts.push(`Resumen de conversación anterior (fuera de la ventana reciente):\n${summary.trim()}`);
+    parts.push(english ? `Previous conversation summary (outside the recent window):\n${summary.trim()}` : `Resumen de conversación anterior (fuera de la ventana reciente):\n${summary.trim()}`);
   }
   return parts.join("\n");
 }
@@ -421,11 +426,10 @@ async function refreshRollingSummary(session: BotSession, pruned: ChatTurn[]): P
   if (!session.config.llmKeyCiphertext || pruned.length === 0) return;
   const prev = (await channels.getConversationSummary(session.link.userId)) ?? "";
   const blob = pruned.map((m) => `${m.role}: ${m.content}`).join("\n").slice(0, 3_000);
-  const prompt =
-    "Resume en español (máx 120 palabras) el hilo de chat para un asistente de proyectos. " +
-    "Conserva hechos útiles (proyecto, decisiones, pendientes). Sin relleno.\n\n" +
-    (prev ? `Resumen previo:\n${prev}\n\n` : "") +
-    `Mensajes que salen de la ventana:\n${blob}`;
+  const english = session.link.user.locale === "en";
+  const prompt = english
+    ? "Summarize in English (max 120 words) this chat thread for a project assistant. Keep useful facts (project, decisions, next steps). No filler.\n\n" + (prev ? `Previous summary:\n${prev}\n\n` : "") + `Messages leaving the window:\n${blob}`
+    : "Resume en español (máx 120 palabras) el hilo de chat para un asistente de proyectos. Conserva hechos útiles (proyecto, decisiones, pendientes). Sin relleno.\n\n" + (prev ? `Resumen previo:\n${prev}\n\n` : "") + `Mensajes que salen de la ventana:\n${blob}`;
 
   const provider = resolveProvider(session.config.llmProvider);
   const apiKey = decryptSecret(session.config.llmKeyCiphertext);

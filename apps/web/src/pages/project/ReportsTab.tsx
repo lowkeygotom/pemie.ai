@@ -4,6 +4,7 @@ import type { DayMetrics } from "@pemie/shared";
 import { api, analyticsFailureReason, ApiError } from "../../lib/api.js";
 import { queryKeys, STALE_TIME } from "../../lib/queryClient.js";
 import { track } from "../../lib/analytics/index.js";
+import { useTranslation } from "react-i18next";
 import {
   Badge,
   Button,
@@ -31,6 +32,7 @@ function dayMetricsForDisplay(metrics: DayMetrics | null): DayMetrics | null {
 }
 
 export default function ReportsTab({ ws, proj }: { ws: string; proj: string }) {
+  const { t } = useTranslation("reports");
   const queryClient = useQueryClient();
   const objectiveQuery = useQuery({
     queryKey: queryKeys.objective(ws, proj),
@@ -54,7 +56,7 @@ export default function ReportsTab({ ws, proj }: { ws: string; proj: string }) {
   const loadError = objectiveQuery.error ?? reportsQuery.error ?? notesQuery.error;
   const [actionError, setActionError] = useState<string | null>(null);
   const error =
-    actionError ?? (loadError ? (loadError instanceof ApiError ? loadError.message : "Error cargando informes") : null);
+    actionError ?? (loadError ? (loadError instanceof ApiError ? loadError.message : t("loadError")) : null);
 
   const [objText, setObjText] = useState("");
   const [noteText, setNoteText] = useState("");
@@ -82,7 +84,7 @@ export default function ReportsTab({ ws, proj }: { ws: string; proj: string }) {
       queryClient.invalidateQueries({ queryKey: queryKeys.objective(ws, proj) });
     } catch (e) {
       track("report_objective_set_failed", { reason: analyticsFailureReason(e) });
-      setActionError(e instanceof ApiError ? e.message : "No se pudo guardar el objetivo");
+      setActionError(e instanceof ApiError ? e.message : t("saveObjectiveFailed"));
     }
   }
 
@@ -97,7 +99,7 @@ export default function ReportsTab({ ws, proj }: { ws: string; proj: string }) {
       queryClient.invalidateQueries({ queryKey: queryKeys.notes(ws, proj) });
     } catch (e) {
       track("report_note_created_failed", { reason: analyticsFailureReason(e) });
-      setActionError(e instanceof ApiError ? e.message : "No se pudo crear la nota");
+      setActionError(e instanceof ApiError ? e.message : t("createNoteFailed"));
     }
   }
 
@@ -129,10 +131,10 @@ export default function ReportsTab({ ws, proj }: { ws: string; proj: string }) {
       {/* Objetivo */}
       <Card>
         <div className="flex items-center justify-between">
-          <h3 className="text-h4 text-ink-900">Objetivo del proyecto</h3>
+          <h3 className="text-h4 text-ink-900">{t("objective")}</h3>
           {objective && (
             <span className="font-mono text-caption text-ink-400">
-              actualizado {new Date(objective.updatedAt).toLocaleDateString()}
+              {t("updated")} {new Date(objective.updatedAt).toLocaleDateString()}
             </span>
           )}
         </div>
@@ -142,26 +144,26 @@ export default function ReportsTab({ ws, proj }: { ws: string; proj: string }) {
           autoResize
           value={objText}
           onChange={(e) => setObjText(e.target.value)}
-          placeholder="¿Qué persigue este proyecto?"
+          placeholder={t("objectivePlaceholder")}
         />
         <div className="mt-3">
           <Button
             onClick={saveObjective}
             disabled={objText.trim() === (objective?.description ?? "")}
           >
-            Guardar objetivo
+            {t("saveObjective")}
           </Button>
         </div>
       </Card>
 
       {/* Informes */}
       <Card>
-        <h3 className="text-h4 text-ink-900">Informes de avance</h3>
+        <h3 className="text-h4 text-ink-900">{t("progressReports")}</h3>
         <div className="mt-4">
           {reports.length === 0 ? (
             <EmptyState
-              title="Sin informes"
-              description="Los publica un agente vía MCP (o manualmente por API)."
+              title={t("noReports")}
+              description={t("noReportsDescription")}
             />
           ) : (
             <div className="divide-y divide-line-100">

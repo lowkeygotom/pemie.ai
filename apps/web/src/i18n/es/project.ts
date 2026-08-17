@@ -1,0 +1,18 @@
+export default {
+  storiesLoadError: "Error cargando historias",
+  newStory: "Nueva historia de usuario",
+  storyExample: "ej: Login con GitHub",
+  stories: "Historias ({{count}})",
+  noStories: "Aún no hay historias",
+  noStoriesDescription: "Crea la primera historia de usuario para comenzar a organizar el trabajo.",
+  noCards: "Sin tarjetas",
+  boardLoadError: "No se pudo cargar el tablero.",
+  newCard: "Nueva tarjeta",
+  newCardDescription: "Para tareas o bugs sueltos que no necesitan una historia de usuario completa.",
+  title: "Título",
+  type: "Tipo",
+  cardExample: "ej: Corregir test flaky",
+  newCardAria: "Nueva tarjeta",
+  cardTypeAria: "Tipo de tarjeta",
+  addTo: "Añadir a {{column}}",
+};

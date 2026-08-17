@@ -44,6 +44,7 @@ const loginSchema = z.object({
 const analyticsPreferenceSchema = z.object({
   analyticsEnabled: z.boolean(),
 });
+const localeSchema = z.object({ locale: z.enum(["es", "en"]) });
 
 export function authRoutes() {
   const app = new Hono<AppEnv>();
@@ -82,6 +83,13 @@ export function authRoutes() {
     if (!body.success) throw badRequest("Preferencia inválida", "invalid_body");
     const updated = await auth.updateAnalyticsPreference(user.id, body.data.analyticsEnabled);
     return c.json({ user: updated });
+  });
+
+  app.patch("/me/locale", async (c) => {
+    const user = requireUser(c);
+    const body = localeSchema.safeParse(await c.req.json().catch(() => null));
+    if (!body.success) throw badRequest("Preferencia inválida", "invalid_body");
+    return c.json({ user: await auth.updateLocale(user.id, body.data.locale) });
   });
 
   // ─── GitHub OAuth ──────────────────────────────────────────────────

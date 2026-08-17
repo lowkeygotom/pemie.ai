@@ -195,9 +195,10 @@ export async function createInvitation(
   const acceptUrl = `${env.WEB_ORIGIN}/invite/${token}`;
 
   // Envío best-effort: un fallo de correo no debe tumbar la invitación.
-  const [workspace, inviter] = await Promise.all([
+  const [workspace, inviter, recipient] = await Promise.all([
     prisma.workspace.findUnique({ where: { id: workspaceId }, select: { name: true } }),
-    prisma.user.findUnique({ where: { id: userId }, select: { name: true, email: true } }),
+    prisma.user.findUnique({ where: { id: userId }, select: { name: true, email: true, locale: true } }),
+    prisma.user.findUnique({ where: { email: normalized }, select: { locale: true } }),
   ]);
   const { delivered, previewUrl } = await sendInvitationEmail({
     to: normalized,
@@ -205,6 +206,9 @@ export async function createInvitation(
     workspaceName: workspace?.name ?? "un workspace",
     inviterName: inviter?.name ?? inviter?.email ?? "Alguien",
     role,
+    // Si la persona ya existe, gana su preferencia. Para un email nuevo se
+    // usa la del invitador; ambos casos conservan español como default.
+    locale: (recipient?.locale ?? inviter?.locale ?? "es") as "es" | "en",
   });
 
   return { ...invitation, acceptUrl, emailDelivered: delivered, emailPreviewUrl: previewUrl };

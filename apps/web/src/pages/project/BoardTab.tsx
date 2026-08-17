@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useTranslation } from "react-i18next";
 import {
   DndContext,
   DragOverlay,
@@ -217,6 +218,7 @@ function BoardColumn({
   onMoveViaSelect: (cardId: string, columnId: string) => void;
   onOpenCard: (card: CardData) => void;
 }) {
+  const { t } = useTranslation("project");
   const { setNodeRef, isOver } = useDroppable({ id: column.id });
 
   return (
@@ -241,7 +243,7 @@ function BoardColumn({
               onOpen={onOpenCard}
             />
           ))}
-          {column.cards.length === 0 && <EmptyState compact title="Sin tarjetas" />}
+          {column.cards.length === 0 && <EmptyState compact title={t("noCards")} />}
         </div>
       </SortableContext>
     </div>
@@ -249,6 +251,7 @@ function BoardColumn({
 }
 
 export default function BoardTab({ ws, proj, canManage }: { ws: string; proj: string; canManage: boolean }) {
+  const { t } = useTranslation("project");
   const queryClient = useQueryClient();
   const boardQueryKey = queryKeys.board(ws, proj);
   const boardQuery = useQuery({
@@ -473,7 +476,7 @@ export default function BoardTab({ ws, proj, canManage }: { ws: string; proj: st
   }
 
   if (loading) return <SkeletonBoard />;
-  if (!board) return <ErrorText>No se pudo cargar el tablero.</ErrorText>;
+  if (!board) return <ErrorText>{t("boardLoadError")}</ErrorText>;
 
   return (
     <div className="space-y-4">
@@ -490,24 +493,24 @@ export default function BoardTab({ ws, proj, canManage }: { ws: string; proj: st
                 ? `${assignmentNotice.card.userStory?.key ?? assignmentNotice.card.title} asignada, pero el correo falló. La asignación quedó guardada.`
                 : `${assignmentNotice.card.userStory?.key ?? assignmentNotice.card.title} asignada, pero no se pudo avisar: no tiene correo.`}
         </Notice> : null}
-        <h3 className="text-h4 text-ink-900">Nueva tarjeta</h3>
+        <h3 className="text-h4 text-ink-900">{t("newCard")}</h3>
         <p className="mt-1 text-body-sm text-ink-500">
-          Para tareas o bugs sueltos que no necesitan una historia de usuario completa.
+          {t("newCardDescription")}
         </p>
         <form onSubmit={addCard} className="mt-4 flex flex-wrap items-end gap-3">
           <div className="min-w-0 flex-1 sm:max-w-sm">
-            <Field label="Título">
+            <Field label={t("title")}>
               <Input
-                placeholder="ej: Corregir test flaky"
+                placeholder={t("cardExample")}
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
-                aria-label="Nueva tarjeta"
+                aria-label={t("newCardAria")}
               />
             </Field>
           </div>
           <div className="w-32 shrink-0">
-            <Field label="Tipo">
-              <Select value={type} onChange={(e) => setType(e.target.value)} aria-label="Tipo de tarjeta">
+            <Field label={t("type")}>
+              <Select value={type} onChange={(e) => setType(e.target.value)} aria-label={t("cardTypeAria")}>
                 <option value="task">task</option>
                 <option value="story">story</option>
                 <option value="bug">bug</option>
@@ -515,7 +518,7 @@ export default function BoardTab({ ws, proj, canManage }: { ws: string; proj: st
             </Field>
           </div>
           <Button type="submit" className="shrink-0">
-            Añadir a {board.columns[0]?.name}
+            {t("addTo", { column: board.columns[0]?.name })}
           </Button>
         </form>
       </Card>

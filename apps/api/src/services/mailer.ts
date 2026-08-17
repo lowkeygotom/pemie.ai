@@ -169,8 +169,17 @@ export async function sendInvitationEmail(opts: {
   workspaceName: string;
   inviterName: string;
   role: string;
+  locale?: "es" | "en";
 }): Promise<SendResult> {
-  const { to, acceptUrl, workspaceName, inviterName, role } = opts;
+  const { to, acceptUrl, workspaceName, inviterName, role, locale = "es" } = opts;
+  if (locale === "en") {
+    return sendEmail({
+      to,
+      subject: `${inviterName} invited you to ${workspaceName} on pemie.ai`,
+      text: `${inviterName} invited you to join the "${workspaceName}" workspace on pemie.ai as ${role}.\n\nAccept the invitation by opening this link:\n${acceptUrl}\n\nIf you were not expecting this invitation, you can ignore this email.`,
+      html: `<div style="font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;max-width:480px;margin:0 auto;color:#1a1f2e"><h2 style="font-size:20px;margin:0 0 12px">You've been invited to <span style="color:#2563eb">${escapeHtml(workspaceName)}</span></h2><p style="font-size:14px;line-height:1.6;color:#4b5563"><strong>${escapeHtml(inviterName)}</strong> invited you to join the <strong>${escapeHtml(workspaceName)}</strong> workspace on pemie.ai as <strong>${escapeHtml(role)}</strong>.</p><p style="margin:24px 0"><a href="${acceptUrl}" style="display:inline-block;background:#2563eb;color:#fff;text-decoration:none;padding:10px 20px;border-radius:8px;font-size:14px;font-weight:600">Accept invitation</a></p><p style="font-size:12px;color:#9ca3af;line-height:1.6">Or copy this link:<br><span style="word-break:break-all">${acceptUrl}</span></p></div>`,
+    });
+  }
   const subject = `${inviterName} te invitó a ${workspaceName} en pemie.ai`;
   const text =
     `${inviterName} te invitó a unirte al workspace "${workspaceName}" en pemie.ai como ${role}.\n\n` +

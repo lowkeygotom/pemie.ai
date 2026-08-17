@@ -110,6 +110,7 @@ export interface User {
   githubLogin: string | null;
   createdAt: string;
   analyticsEnabled: boolean;
+  locale: "es" | "en";
 }
 
 export interface WorkspaceSummary {
@@ -472,6 +473,8 @@ export const api = {
     logout: () => post<{ ok: true }>("/api/auth/logout"),
     updateAnalyticsPreference: (analyticsEnabled: boolean) =>
       patch<{ user: User }>("/api/auth/me/analytics-preference", { analyticsEnabled }),
+    updateLocale: (locale: User["locale"]) =>
+      patch<{ user: User }>("/api/auth/me/locale", { locale }),
     /** URL para iniciar el OAuth de GitHub; `next` es la ruta a la que volver. */
     githubUrl: (next?: string) =>
       `${API_URL}/api/auth/github${next ? `?next=${encodeURIComponent(next)}` : ""}`,

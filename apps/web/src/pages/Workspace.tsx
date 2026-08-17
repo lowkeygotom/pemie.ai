@@ -20,6 +20,7 @@ import {
   type ApiKeyPublic,
 } from "../lib/api.js";
 import { track } from "../lib/analytics/index.js";
+import { useAuth } from "../lib/auth.js";
 import { touchWorkspace } from "./workspaces/recents.js";
 import { CapabilityReceipt, ConnectPanel } from "../components/ConnectPanel.js";
 import { ScopePicker } from "../components/ScopePicker.js";
@@ -453,6 +454,7 @@ function TeamSection({
   projects: ProjectSummary[];
   canManage: boolean;
 }) {
+  const { user } = useAuth();
   const [members, setMembers] = useState<Member[]>([]);
   const [invitations, setInvitations] = useState<Invitation[]>([]);
   const [agents, setAgents] = useState<WorkspaceAgent[]>([]);
@@ -1037,6 +1039,7 @@ function TeamSection({
                 scopes: connection.key.scopes as ApiScope[],
                 keyRef: { kind: "prefix", prefix: connection.key.prefix },
                 mcpUrl: MCP_URL,
+                locale: user?.locale,
               })}
             />
             <div className="flex justify-end gap-2">

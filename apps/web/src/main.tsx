@@ -6,6 +6,7 @@ import App from "./App.js";
 import { AuthProvider } from "./lib/auth.js";
 import { initAnalytics } from "./lib/analytics/index.js";
 import { queryClient } from "./lib/queryClient.js";
+import "./i18n/index.js";
 import "./index.css";
 
 // Singleton a nivel de módulo: se ejecuta una sola vez, antes del primer render.

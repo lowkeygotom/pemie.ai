@@ -17,16 +17,26 @@ apuntando a los valores viejos.
 `apps/web/src/lib/api.ts` → `analyticsFailureReason(err)` devuelve `err.code` y se manda como
 la propiedad **`reason`** de los eventos `*_failed`.
 
-**33 call sites** en el frontend, repartidos en estos 18 eventos:
+**21 invocaciones** en el frontend, repartidas en estos **20 eventos**:
 
 ```
-agent_deleted_failed          project_created_failed        story_delete_failed
-agent_registered_failed       project_search_failed         story_update_failed
-api_key_created_failed        report_note_answered_failed   user_logged_in_failed
-board_card_created_failed     report_note_created_failed    user_signed_up_failed
-board_card_deleted_failed     report_objective_set_failed   workspace_created_failed
-invite_accepted_failed        story_created_failed          workspace_member_invited_failed
+agent_deleted_failed              project_created_failed        story_delete_failed
+agent_presence_blocked_failed     project_search_failed         story_update_failed
+agent_presence_unblocked_failed   report_note_answered_failed   user_logged_in_failed
+agent_registered_failed           report_note_created_failed    user_signed_up_failed
+api_key_created_failed            report_objective_set_failed   workspace_created_failed
+board_card_created_failed         story_created_failed          workspace_member_invited_failed
+board_card_deleted_failed         invite_accepted_failed
 ```
+
+> Los dos `agent_presence_*` se emiten desde un ternario
+> (`track(blocked ? … : …, { reason })`, `Workspace.tsx:642`), así que no aparecen en una
+> búsqueda por `track("nombre"`. Son justamente los que pueden llevar
+> `agent_presence_blocked` y `agent_not_found` después del split.
+
+Además hay **2 eventos server-side** con la misma propiedad `reason`
+(`telegram_link_started_failed` y `telegram_llm_key_set_failed`, en `services/channels.ts`),
+que no pasan por `analyticsFailureReason` pero conviene mirar si hay insights sobre ellos.
 
 ## Mapeo viejo → nuevo
 
@@ -45,7 +55,7 @@ invite_accepted_failed        story_created_failed          workspace_member_inv
 `project_not_found` · `repo_not_found` · `report_not_found` · `skill_not_found` ·
 `story_not_found` · `upload_ticket_not_found` · `user_not_found` · `workspace_not_found`
 
-### `forbidden` → 24 codes
+### `forbidden` → 26 codes
 
 `agent_presence_blocked` · `api_key_missing_permission` · `api_key_missing_scope` ·
 `api_key_no_owner` · `api_key_no_project` · `api_key_no_workspace` · `api_key_project_pinned` ·
@@ -54,7 +64,12 @@ invite_accepted_failed        story_created_failed          workspace_member_inv
 `installation_not_linked` · `insufficient_workspace_role` · `invitation_email_mismatch` ·
 `key_owner_not_member` · `key_owner_not_workspace_member` · `no_read_scope_for_search` ·
 `not_workspace_member` · `note_not_in_project` · `project_not_in_key_workspace` ·
-`story_not_in_project` · `workspace_not_accessible`
+`read_scope_requires_viewer` · `story_not_in_project` · `workspace_not_accessible` ·
+`write_scope_requires_member`
+
+> `read_scope_requires_viewer` y `write_scope_requires_member` salen de un ternario
+> (`agents.ts:579`), así que tampoco aparecen buscando `forbidden("`. Son el chequeo de rol
+> del dueño de una API key.
 
 ## Qué hacer
 
@@ -71,3 +86,7 @@ invite_accepted_failed        story_created_failed          workspace_member_inv
 
 Los ~119 call sites que ya pasaban un code explícito (`already_member`, `invalid_email`,
 `weak_password`, `email_taken`, …) conservan su valor. Solo se rompen los tres colapsados.
+
+Los codes nuevos de webhooks (`invalid_webhook_signature`, `invalid_telegram_secret`) tampoco
+entran acá: no pasan por `analyticsFailureReason`, así que no llegan a PostHog. Están listados
+solo para que nadie tome estas tablas como el inventario completo de 401 de la API.

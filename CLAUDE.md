@@ -39,6 +39,8 @@ apps/api/src/
   `fetch`, etc. antes que traer un paquete). Si agregas una, documenta por qué.
 - Errores de dominio tipados (`badRequest`/`notFound`/`forbidden`/`conflict` en `services/errors.ts`),
   nunca strings sueltos ni `throw new Error`.
+- `services/` solo emite un `code` de `ErrorCode` (+ `params` opcionales), nunca texto de usuario.
+  La traducción vive en los bordes (`rest/`, `mcp/`) vía `renderServiceError` e `i18n/errors/`.
 - Idempotencia donde el dominio la pide (upserts por unique, reintentos en colisión de key).
 - Comenta el *por qué*, no el *qué*. Sigue el estilo y densidad de comentarios del archivo vecino.
 

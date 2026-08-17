@@ -18,7 +18,7 @@ export async function projectStats(userId: string, projectId: string) {
 /** Operación (ya autorizada): calcula las stats del proyecto. */
 export async function opProjectStats(projectId: string) {
   const project = await prisma.project.findUnique({ where: { id: projectId } });
-  if (!project) throw notFound("Proyecto no encontrado");
+  if (!project) throw notFound("project_not_found");
   const config = (project.domainConfig as DomainConfig | null) ?? DEFAULT_DOMAIN_CONFIG;
   const labels = new Map(config.categories.map((cat) => [cat.key, cat]));
 

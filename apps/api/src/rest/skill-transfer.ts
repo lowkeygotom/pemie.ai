@@ -40,13 +40,10 @@ export function skillTransferRoutes() {
       contentType === ""
     ) {
       const body = c.req.raw.body;
-      if (!body) throw badRequest("Cuerpo vacío", "empty_body");
+      if (!body) throw badRequest("empty_body");
       source = parseSkillTarGz(Readable.fromWeb(body as import("node:stream/web").ReadableStream));
     } else {
-      throw badRequest(
-        "Content-Type no soportado (usa application/gzip o multipart/form-data)",
-        "unsupported_content_type"
-      );
+      throw badRequest("unsupported_content_type");
     }
 
     const skill = await skills.opCompleteSkillUpload(token, source);

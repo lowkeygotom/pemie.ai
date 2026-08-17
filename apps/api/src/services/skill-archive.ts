@@ -48,8 +48,7 @@ export async function* parseSkillTarGz(
   const normalized = stripCommonRootPrefix(collected);
 
   for (const file of normalized) {
-    if (!isSafeSkillFilePath(file.path))
-      throw badRequest(`Path de archivo inválido: ${file.path}`, "invalid_path");
+    if (!isSafeSkillFilePath(file.path)) throw badRequest("invalid_path", { path: file.path });
     yield file;
   }
 }
@@ -90,7 +89,7 @@ async function extractTarGzEntries(
       return;
     }
     if (UNSAFE_TAR_TYPES.has(type) || type !== "file") {
-      fail(badRequest(`Entrada de tar no permitida (tipo ${type})`, "unsafe_tar_entry"));
+      fail(badRequest("unsafe_tar_entry", { type }));
       stream.resume();
       next();
       return;
@@ -111,23 +110,13 @@ async function extractTarGzEntries(
       entryBytes += chunk.length;
       totalBytes += chunk.length;
       if (entryBytes > limits.maxFileBytes) {
-        fail(
-          badRequest(
-            `Archivo supera el límite de ${limits.maxFileBytes} bytes: ${name}`,
-            "file_too_large"
-          )
-        );
+        fail(badRequest("file_too_large", { max: limits.maxFileBytes, path: name }));
         return;
       }
       if (totalBytes > limits.maxTotalBytes) {
         // Abortar el stream al cruzar el límite: defensa contra bomba de
         // descompresión (un .tar.gz chico puede expandirse a GB).
-        fail(
-          badRequest(
-            `La skill supera el límite de ${limits.maxTotalBytes} bytes`,
-            "skill_too_large"
-          )
-        );
+        fail(badRequest("skill_too_large", { max: limits.maxTotalBytes }));
         return;
       }
       chunks.push(chunk);
@@ -140,7 +129,7 @@ async function extractTarGzEntries(
         return;
       }
       if (entries.length >= limits.maxFiles) {
-        fail(badRequest(`Demasiados archivos (máx ${limits.maxFiles})`, "too_many_files"));
+        fail(badRequest("too_many_files", { max: limits.maxFiles }));
         next();
         return;
       }
@@ -159,7 +148,7 @@ async function extractTarGzEntries(
   } catch (err) {
     if (aborted) throw aborted;
     if (err instanceof Error && (err as { code?: string }).code === "Z_DATA_ERROR")
-      throw badRequest("El archivo no es un tar.gz válido", "invalid_archive");
+      throw badRequest("invalid_archive");
     throw err;
   }
   if (aborted) throw aborted;

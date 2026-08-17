@@ -90,6 +90,7 @@ function announcements(board: Board, t: (key: string, options?: Record<string, u
 }
 
 function CardBody({ card }: { card: CardData }) {
+  const { t } = useTranslation("project");
   // Prioriza card.description: es lo que la persona ve y edita en el modal de
   // detalle (precargado con la narrativa si estaba vacío), así que ya refleja
   // cualquier ajuste manual. La narrativa es solo el fallback antes de guardar.
@@ -113,7 +114,7 @@ function CardBody({ card }: { card: CardData }) {
         card.type === "story" && (
           <p className="mt-1.5 basis-full">
             <Badge tone="neutral" mono>
-              Historia eliminada
+              {t("storyDeleted")}
             </Badge>
           </p>
         )
@@ -158,6 +159,7 @@ function SortableCard({
   onMoveViaSelect: (cardId: string, columnId: string) => void;
   onOpen: (card: CardData) => void;
 }) {
+  const { t } = useTranslation("project");
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: card.id,
   });
@@ -173,7 +175,7 @@ function SortableCard({
         <button
           type="button"
           className="-m-1 grid h-8 w-8 shrink-0 touch-none place-items-center rounded-sm text-ink-300 transition-colors hover:text-ink-600 active:cursor-grabbing cursor-grab"
-          aria-label={`Reordenar "${card.title}"`}
+          aria-label={t("reorderCardAria", { card: card.title })}
           {...attributes}
           {...listeners}
         >
@@ -188,7 +190,7 @@ function SortableCard({
             <CardBody card={card} />
           </button>
           <label className="mt-2 block">
-            <span className="sr-only">Mover "{card.title}" a otra columna</span>
+            <span className="sr-only">{t("moveCardToColumn", { card: card.title })}</span>
             <Select
               className="w-full !rounded-sm !py-1.5 !text-caption text-ink-500"
               value={card.columnId}
@@ -264,7 +266,7 @@ export default function BoardTab({ ws, proj, canManage }: { ws: string; proj: st
   const [actionError, setActionError] = useState<string | null>(null);
   const error =
     actionError ??
-    (boardQuery.error ? (boardQuery.error instanceof ApiError ? boardQuery.error.message : "Error cargando el tablero") : null);
+    (boardQuery.error ? (boardQuery.error instanceof ApiError ? boardQuery.error.message : t("boardLoadError")) : null);
   const [activeCard, setActiveCard] = useState<CardData | null>(null);
 
   const [title, setTitle] = useState("");
@@ -342,7 +344,7 @@ export default function BoardTab({ ws, proj, canManage }: { ws: string; proj: st
       await resyncBoard();
     } catch (e) {
       track("board_card_created_failed", { reason: analyticsFailureReason(e) });
-      setActionError(e instanceof ApiError ? e.message : "No se pudo crear la tarjeta");
+      setActionError(e instanceof ApiError ? e.message : t("cardCreateError"));
     }
   }
 
@@ -360,7 +362,7 @@ export default function BoardTab({ ws, proj, canManage }: { ws: string; proj: st
       // mostraría el estado anterior hasta que expire su staleTime.
       queryClient.invalidateQueries({ queryKey: queryKeys.stories(ws, proj) });
     } catch (e) {
-      setActionError(e instanceof ApiError ? e.message : "No se pudo mover la tarjeta");
+      setActionError(e instanceof ApiError ? e.message : t("cardMoveError"));
       await resyncBoard();
     }
   }
@@ -486,12 +488,12 @@ export default function BoardTab({ ws, proj, canManage }: { ws: string; proj: st
       <Card>
         {assignmentNotice ? <Notice tone={assignmentNotice.notification.notified ? (assignmentNotice.notification.contentLite ? "warning" : "success") : assignmentNotice.notification.reason === "notification_error" ? "danger" : assignmentNotice.notification.reason === "recently_notified" ? "info" : "warning"} onDismiss={() => setAssignmentNotice(null)}>
           {assignmentNotice.notification.notified
-            ? <>{`${assignmentNotice.card.userStory?.key ?? assignmentNotice.card.title} asignada a ${assignmentNotice.card.assignee?.name ?? "la persona seleccionada"}${assignmentNotice.notification.contentLite ? `. Se envió un aviso a ${assignmentNotice.notification.email} sin el detalle de la HU: no es miembro del workspace.` : ` — aviso enviado a ${assignmentNotice.notification.email}.`}`}{assignmentNotice.notification.contentLite && canManage && assignmentNotice.notification.email ? <Button size="sm" variant="secondary" onClick={() => setInviteEmail(assignmentNotice.notification.email!)}>Invitar al workspace</Button> : null}</>
+            ? <>{`${t("assignNotice", { key: assignmentNotice.card.userStory?.key ?? assignmentNotice.card.title, name: assignmentNotice.card.assignee?.name ?? t("assignNoticeFallbackName") })}${assignmentNotice.notification.contentLite ? t("assignmentLite", { email: assignmentNotice.notification.email }) : t("assignmentSent", { email: assignmentNotice.notification.email })}`}{assignmentNotice.notification.contentLite && canManage && assignmentNotice.notification.email ? <Button size="sm" variant="secondary" onClick={() => setInviteEmail(assignmentNotice.notification.email!)}>{t("inviteToWorkspace")}</Button> : null}</>
             : assignmentNotice.notification.reason === "recently_notified"
-              ? `${assignmentNotice.card.userStory?.key ?? assignmentNotice.card.title} asignada. No se reenvió el correo: ya se le avisó hace unos minutos.`
+              ? t("assignmentRecentlyNotified", { key: assignmentNotice.card.userStory?.key ?? assignmentNotice.card.title })
               : assignmentNotice.notification.reason === "notification_error"
-                ? `${assignmentNotice.card.userStory?.key ?? assignmentNotice.card.title} asignada, pero el correo falló. La asignación quedó guardada.`
-                : `${assignmentNotice.card.userStory?.key ?? assignmentNotice.card.title} asignada, pero no se pudo avisar: no tiene correo.`}
+                ? t("assignmentEmailFailed", { key: assignmentNotice.card.userStory?.key ?? assignmentNotice.card.title })
+                : t("assignmentNoEmail", { key: assignmentNotice.card.userStory?.key ?? assignmentNotice.card.title })}
         </Notice> : null}
         <h3 className="text-h4 text-ink-900">{t("newCard")}</h3>
         <p className="mt-1 text-body-sm text-ink-500">

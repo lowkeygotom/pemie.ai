@@ -25,6 +25,7 @@ import {
   Textarea,
 } from "../../components/ui.js";
 import { AssigneeNotice, AssigneeSelect } from "./AssigneeField.js";
+import { formatDateTime } from "../../lib/dates.js";
 
 function activityLabel(a: CardActivity, t: (key: string, options?: Record<string, unknown>) => string): string {
   switch (a.action) {
@@ -281,7 +282,7 @@ export default function CardDetailModal({
                         {activityLabel(a, t)}
                       </span>
                       <time className="shrink-0 font-mono text-caption text-ink-400">
-                        {new Date(a.createdAt).toLocaleString()}
+                        {formatDateTime(a.createdAt)}
                       </time>
                     </li>
                   ))}

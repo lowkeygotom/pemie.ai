@@ -27,6 +27,7 @@ import {
 } from "../../components/ui.js";
 import DomainConfigEditor from "./DomainConfigEditor.js";
 import { useTranslation } from "react-i18next";
+import { formatDate } from "../../lib/dates.js";
 
 
 /**
@@ -590,7 +591,7 @@ export default function CommitsTab({ ws, proj, project }: { ws: string; proj: st
                     <p className="truncate text-body text-ink-900">{c.message.split("\n")[0]}</p>
                     <p className="mt-0.5 font-mono text-caption text-ink-400">
                       {c.contributor.githubLogin} · {c.repo.owner}/{c.repo.name} ·{" "}
-                      {new Date(c.committedAt).toLocaleDateString()}
+                      {formatDate(c.committedAt)}
                     </p>
                   </div>
                   <code className="font-mono text-caption text-ink-400">{c.sha.slice(0, 7)}</code>

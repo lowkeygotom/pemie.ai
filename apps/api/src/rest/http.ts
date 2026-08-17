@@ -6,11 +6,12 @@ import type { User } from "@prisma/client";
 import { env, isProd, webOriginConfigured } from "../env.js";
 import { unauthorized } from "../services/errors.js";
 import * as auth from "../services/auth.js";
+import { parseAcceptLanguage } from "../lib/accept-language.js";
 
 export const SESSION_COOKIE = "pemie_session";
 
 /** Variables que los middlewares dejan en el contexto Hono. */
-export type AppEnv = { Variables: { user: User | null } };
+export type AppEnv = { Variables: { user: User | null; locale: string } };
 export type AppContext = Context<AppEnv>;
 
 /**
@@ -72,17 +73,22 @@ export function clearSessionCookie(c: AppContext) {
   deleteCookie(c, SESSION_COOKIE, { path: "/" });
 }
 
-/** Resuelve el usuario de la cookie y lo deja en el contexto (o null). */
+/**
+ * Resuelve el usuario de la cookie y el locale de la petición, y los deja en
+ * el contexto (usuario o null; locale del usuario si hay sesión, si no
+ * `Accept-Language`, si no "es").
+ */
 export const sessionMiddleware: MiddlewareHandler<AppEnv> = async (c, next) => {
   const token = getCookie(c, SESSION_COOKIE);
   const user = await auth.userFromSession(token);
   c.set("user", user);
+  c.set("locale", user?.locale ?? parseAcceptLanguage(c.req.header("accept-language")) ?? "es");
   await next();
 };
 
 /** Exige usuario autenticado; devuelve el user no-nulo. */
 export function requireUser(c: AppContext): User {
   const user = c.get("user");
-  if (!user) throw unauthorized();
+  if (!user) throw unauthorized("not_authenticated");
   return user;
 }

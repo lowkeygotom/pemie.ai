@@ -198,7 +198,7 @@ test("un asignado de otro proyecto rechaza todo el patch antes de escribir", asy
         { title: "Título que no debe guardarse", assigneeId: "contributor-foreign" },
         USER
       ),
-    /asignado no pertenece al proyecto/
+    { code: "assignee_mismatch" }
   );
 
   assert.equal(story.title, "Buscador global");

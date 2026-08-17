@@ -17,10 +17,9 @@ import {
   SkeletonList,
 } from "../../components/ui.js";
 import SkillDetailModal from "./SkillDetailModal.js";
+import { formatDateShort } from "../../lib/dates.js";
 
-function formatDate(iso: string): string {
-  return new Date(iso).toLocaleDateString("es-AR", { day: "2-digit", month: "short", year: "numeric" });
-}
+const formatDate = formatDateShort;
 
 /**
  * Extrae path relativos desde un FileList de webkitdirectory.

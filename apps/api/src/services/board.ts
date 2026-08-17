@@ -128,7 +128,7 @@ async function cardWithProject(cardId: string) {
     where: { id: cardId },
     include: { board: { select: { projectId: true } } },
   });
-  if (!card) throw notFound("Tarjeta no encontrada");
+  if (!card) throw notFound("card_not_found");
   return card;
 }
 
@@ -142,10 +142,10 @@ export async function createCard(userId: string, projectId: string, input: Creat
 export async function opCreateCard(projectId: string, input: CreateCardInput, actor: CardActor) {
   const board = await ensureBoard(projectId);
   const title = input.title.trim();
-  if (title.length < 1) throw badRequest("El título de la tarjeta está vacío", "empty_title");
+  if (title.length < 1) throw badRequest("empty_title");
 
   const type = input.type ?? "task";
-  if (!CARD_TYPES.includes(type as CardType)) throw badRequest(`Tipo inválido: ${type}`, "invalid_type");
+  if (!CARD_TYPES.includes(type as CardType)) throw badRequest("invalid_type", { type });
 
   const columns = await prisma.column.findMany({ where: { boardId: board.id }, orderBy: { order: "asc" } });
   // Sin `columnId` explícito manda el estado de la HU (una HU creada en "review"
@@ -155,14 +155,13 @@ export async function opCreateCard(projectId: string, input: CreateCardInput, ac
   const column = input.columnId
     ? columns.find((col) => col.id === input.columnId)
     : columnForStatus(columns, input.storyStatus) ?? columns[0];
-  if (!column) throw badRequest("Columna inválida para este tablero", "invalid_column");
+  if (!column) throw badRequest("invalid_column");
 
   if (input.userStoryId) {
     const story = await prisma.userStory.findUnique({ where: { id: input.userStoryId } });
-    if (!story || story.projectId !== projectId)
-      throw badRequest("La HU no pertenece al proyecto", "story_mismatch");
+    if (!story || story.projectId !== projectId) throw badRequest("story_mismatch");
     const existing = await prisma.card.findUnique({ where: { userStoryId: input.userStoryId } });
-    if (existing) throw badRequest("Esa HU ya tiene una tarjeta", "story_has_card");
+    if (existing) throw badRequest("story_has_card");
   }
 
   const last = await prisma.card.findFirst({
@@ -215,8 +214,7 @@ export async function opMoveCard(
     prisma.column.findUnique({ where: { id: card.columnId } }),
     prisma.column.findUnique({ where: { id: target.columnId } }),
   ]);
-  if (!toColumn || toColumn.boardId !== card.boardId)
-    throw badRequest("La columna destino no pertenece al tablero", "invalid_column");
+  if (!toColumn || toColumn.boardId !== card.boardId) throw badRequest("invalid_target_column");
 
   let order = target.order;
   if (order === undefined) {
@@ -334,8 +332,7 @@ export async function opLinkStoryToCard(
   actor: CardActor
 ) {
   const existing = await prisma.card.findUnique({ where: { userStoryId: story.id } });
-  if (existing && existing.id !== card.id)
-    throw badRequest("Esa HU ya tiene una tarjeta", "story_has_card");
+  if (existing && existing.id !== card.id) throw badRequest("story_has_card");
 
   const updated = await prisma.card.update({ where: { id: card.id }, data: { userStoryId: story.id } });
   await recordActivity(card.id, actor, "linked_story", null, story.id);
@@ -388,7 +385,7 @@ export async function opUpdateCard(
 
   if (patch.title !== undefined) {
     const t = patch.title.trim();
-    if (t.length < 1) throw badRequest("El título está vacío", "empty_title");
+    if (t.length < 1) throw badRequest("card_update_title_empty");
     if (t !== card.title) {
       data.title = t;
       activities.push({ action: "updated", from: card.title, to: t });
@@ -400,7 +397,7 @@ export async function opUpdateCard(
   }
   if (patch.type !== undefined) {
     if (!CARD_TYPES.includes(patch.type as CardType))
-      throw badRequest(`Tipo inválido: ${patch.type}`, "invalid_type");
+      throw badRequest("invalid_type", { type: patch.type });
     if (patch.type !== card.type) {
       data.type = patch.type;
       activities.push({ action: "updated", from: card.type, to: patch.type });
@@ -426,11 +423,9 @@ export async function opUpdateCard(
   if (patch.userStoryId !== undefined && patch.userStoryId !== card.userStoryId) {
     if (patch.userStoryId) {
       const story = await prisma.userStory.findUnique({ where: { id: patch.userStoryId } });
-      if (!story || story.projectId !== projectId)
-        throw badRequest("La HU no pertenece al proyecto", "story_mismatch");
+      if (!story || story.projectId !== projectId) throw badRequest("story_mismatch");
       const existing = await prisma.card.findUnique({ where: { userStoryId: patch.userStoryId } });
-      if (existing && existing.id !== card.id)
-        throw badRequest("Esa HU ya tiene una tarjeta", "story_has_card");
+      if (existing && existing.id !== card.id) throw badRequest("story_has_card");
       data.userStory = { connect: { id: patch.userStoryId } };
       activities.push({ action: "linked_story", from: card.userStoryId, to: patch.userStoryId });
     } else {
@@ -499,7 +494,7 @@ export async function opDeleteCard(cardId: string) {
   } catch (err) {
     // Carrera con otro borrado entre la carga y el delete: 404, no 500.
     if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2025")
-      throw notFound("Tarjeta no encontrada");
+      throw notFound("card_not_found");
     throw err;
   }
   return { ok: true };

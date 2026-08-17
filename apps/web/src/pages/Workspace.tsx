@@ -45,6 +45,7 @@ import {
   TrashIcon,
   type BadgeTone,
 } from "../components/ui.js";
+import { formatDate } from "../lib/dates.js";
 
 /** Roles asignables desde el selector de la fila (no hay flujo de transferencia de owner). */
 const ASSIGNABLE_ROLES: Role[] = ["viewer", "member", "admin"];
@@ -455,12 +456,14 @@ function TeamSection({
   projects: ProjectSummary[];
   canManage: boolean;
 }) {
-  const { t } = useTranslation("workspace");
+  const { t } = useTranslation(["workspace", "account", "configuration"]);
   const { user } = useAuth();
   const [members, setMembers] = useState<Member[]>([]);
   const [invitations, setInvitations] = useState<Invitation[]>([]);
   const [agents, setAgents] = useState<WorkspaceAgent[]>([]);
   const [keys, setKeys] = useState<ApiKeyPublic[]>([]);
+  const [keyLocaleBusyId, setKeyLocaleBusyId] = useState<string | null>(null);
+  const [keyLocaleErrors, setKeyLocaleErrors] = useState<Record<string, string>>({});
   const [lastInvite, setLastInvite] = useState<Invitation | null>(null);
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [roleBusyId, setRoleBusyId] = useState<string | null>(null);
@@ -563,6 +566,22 @@ function TeamSection({
       }));
     } finally {
       setRoleBusyId(null);
+    }
+  }
+
+  async function onKeyLocaleChange(keyId: string, locale: "es" | "en") {
+    setKeyLocaleBusyId(keyId);
+    setKeyLocaleErrors((prev) => ({ ...prev, [keyId]: "" }));
+    try {
+      const { apiKey } = await api.apiKeys.updateLocale(slug, keyId, locale);
+      setKeys((prev) => prev.map((k) => (k.id === keyId ? apiKey : k)));
+    } catch (err) {
+      setKeyLocaleErrors((prev) => ({
+        ...prev,
+        [keyId]: err instanceof ApiError ? err.message : t("configuration:keyLocaleUpdate"),
+      }));
+    } finally {
+      setKeyLocaleBusyId(null);
     }
   }
 
@@ -798,7 +817,7 @@ function TeamSection({
                                 {agent.lastProject
                                   ? t("seenIn", { project: agent.lastProject.name })
                                   : t("noProject")}{" "}
-                                · {new Date(agent.lastSeenAt).toLocaleDateString()}
+                                · {formatDate(agent.lastSeenAt)}
                               </span>
                             </div>
                           </div>
@@ -882,6 +901,21 @@ function TeamSection({
                             </span>
                             <AgentOwnerLabel owner={owner} ownerIsMember={ownerIsMember} />
                           </div>
+                          {canManage && latestKey ? (
+                            <div className="mt-1.5 flex items-center gap-1.5">
+                              <Select
+                                aria-label={t("configuration:keyLocaleAria", { name: latestKey.name })}
+                                value={latestKey.locale ?? "es"}
+                                disabled={keyLocaleBusyId === latestKey.id}
+                                onChange={(e) => onKeyLocaleChange(latestKey.id, e.target.value as "es" | "en")}
+                                className="w-auto py-1.5 font-mono text-caption"
+                              >
+                                <option value="es">{t("account:spanish")}</option>
+                                <option value="en">{t("account:english")}</option>
+                              </Select>
+                              {keyLocaleErrors[latestKey.id] ? <ErrorText>{keyLocaleErrors[latestKey.id]}</ErrorText> : null}
+                            </div>
+                          ) : null}
                         </div>
                         {canManage ? (
                           <div className="flex flex-none flex-col items-end gap-1">
@@ -1073,13 +1107,14 @@ function AddTeamModal({
   onChanged: () => Promise<void>;
   existingAgent?: RegisteredWorkspaceAgent;
 }) {
-  const { t } = useTranslation("workspace");
+  const { t } = useTranslation(["workspace", "account", "configuration"]);
   const { user } = useAuth();
   const [mode, setMode] = useState<AddMode>(initialMode);
   const [email, setEmail] = useState("");
   const [agentProjectSlug, setAgentProjectSlug] = useState(existingAgent?.project.slug ?? projects[0]?.slug ?? "");
   const [agentName, setAgentName] = useState(existingAgent?.name ?? "");
   const [scopes, setScopes] = useState<string[]>([...API_SCOPES]);
+  const [keyLocale, setKeyLocale] = useState<"es" | "en">(user?.locale ?? "es");
   const [createdAgentId, setCreatedAgentId] = useState<string | null>(existingAgent?.id ?? null);
   const [newKey, setNewKey] = useState<string | null>(null);
   const [confirmedSaved, setConfirmedSaved] = useState(false);
@@ -1161,6 +1196,7 @@ function AddTeamModal({
           projectId: selectedProject?.id,
           agentId,
           scopes,
+          locale: keyLocale,
         });
         track("api_key_created", { scope_level: "project" });
         setNewKey(result.key);
@@ -1288,6 +1324,17 @@ function AddTeamModal({
             </Field>
             <Field label={t("scope")} hint={t("scopeHint")}>
               <Badge tone="brand" mono>project</Badge>
+            </Field>
+            <Field label={t("configuration:keyLocale")} hint={t("configuration:keyLocaleHint")}>
+              <Select
+                aria-label={t("configuration:keyLocale")}
+                value={keyLocale}
+                disabled={Boolean(createdAgentId) || busy}
+                onChange={(e) => setKeyLocale(e.target.value as "es" | "en")}
+              >
+                <option value="es">{t("account:spanish")}</option>
+                <option value="en">{t("account:english")}</option>
+              </Select>
             </Field>
             <Field label={t("firstKeyPermissions")} hint={t("permissionsHint")}>
               <ScopePicker value={scopes as ApiScope[]} onChange={(next) => setScopes(next)} />

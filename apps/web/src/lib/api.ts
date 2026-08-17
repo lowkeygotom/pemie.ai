@@ -358,6 +358,7 @@ export interface ApiKeyPublic {
   ownerUserId: string | null;
   projectId: string | null;
   agentId: string | null;
+  locale: "es" | "en" | null;
   lastUsedAt: string | null;
   expiresAt: string | null;
   createdAt: string;
@@ -642,8 +643,11 @@ export const api = {
         projectId?: string;
         agentId?: string;
         scopes: string[];
+        locale?: "es" | "en";
       }
     ) => post<{ apiKey: ApiKeyPublic; key: string }>(`/api/workspaces/${w}/api-keys`, input),
+    updateLocale: (w: string, id: string, locale: "es" | "en") =>
+      patch<{ apiKey: ApiKeyPublic }>(`/api/workspaces/${w}/api-keys/${id}/locale`, { locale }),
     revoke: (w: string, id: string) => del<{ ok: true }>(`/api/workspaces/${w}/api-keys/${id}`),
   },
   audit: {

@@ -11,8 +11,18 @@ import { timingSafeEqual } from "node:crypto";
 import { env } from "../env.js";
 import { decryptSecret } from "../lib/secrets.js";
 import { invokeMcpTool, listMcpToolDefs } from "../mcp/index.js";
-import { ServiceError } from "./errors.js";
+import { ServiceError, renderServiceError } from "./errors.js";
 import * as channels from "./channels.js";
+import { translate } from "../i18n/index.js";
+import { es as telegramEs, type TelegramCopyParams } from "../i18n/telegram/es.js";
+import { en as telegramEn } from "../i18n/telegram/en.js";
+
+const telegramCatalogs = { es: telegramEs, en: telegramEn };
+
+/** Traduce un literal propio del bot al locale del dueño del canal (fallback "es"). */
+function t(locale: string, key: keyof typeof telegramEs, params?: TelegramCopyParams): string {
+  return translate(telegramCatalogs, locale, key, params);
+}
 
 const MAX_TOOL_ROUNDS = 8;
 /**
@@ -26,13 +36,6 @@ const PROVIDER_TIMEOUT_MS = 15_000;
 const SEND_TIMEOUT_MS = 10_000;
 /** Techo del resumen de emergencia (sin LLM) que se guarda si el proveedor falla. */
 const SUMMARY_FALLBACK_MAX = 1_200;
-
-const BUDGET_REACHED =
-  "La consulta tardó demasiado y corté el turno. Prueba con algo más específico.";
-const TOOL_LIMIT_REACHED =
-  "Se alcanzó el límite de herramientas en este turno. Reformula la pregunta.";
-const TRUNCATED =
-  "La respuesta se cortó por longitud. Pide algo más acotado.";
 
 const OPENAI_COMPAT_BASE: Record<"openai" | "deepseek", string> = {
   openai: "https://api.openai.com/v1",
@@ -100,21 +103,6 @@ function chunkTelegram(text: string, max: number): string[] {
   return out;
 }
 
-const HELP = `Comandos Pemie:
-/start <token> — vincular tu cuenta (desde la web)
-/ayuda — esta ayuda
-/estado — vínculo, LLM, modelo y proyecto
-/proyecto <slug> — fija el proyecto por defecto
-/modelo — ver modelos del proveedor activo
-/modelo <id> — cambiar modelo
-/proveedor — ver proveedores con key guardada
-/proveedor <nombre> — activar anthropic|openai|deepseek
-/reset — limpia el historial del chat (también /nueva)
-/desvincular — corta el vínculo con Telegram
-
-Escribe en lenguaje natural para consultar o actuar en tus proyectos (vía MCP).
-Recuerdo los últimos ${channels.HISTORY_KEEP} mensajes y un resumen corto de lo anterior.`;
-
 function resolveProvider(raw: string | null | undefined): ChannelLlmProvider {
   if (raw && (CHANNEL_LLM_PROVIDERS as readonly string[]).includes(raw))
     return raw as ChannelLlmProvider;
@@ -176,7 +164,12 @@ async function runMcpToolCall(
     const result = await invokeMcpTool(session.config.apiKey, name, args);
     return JSON.stringify(result).slice(0, 80_000);
   } catch (err) {
-    const msg = err instanceof ServiceError ? err.message : err instanceof Error ? err.message : "error";
+    const msg =
+      err instanceof ServiceError
+        ? renderServiceError(err, session.link.user.locale)
+        : err instanceof Error
+          ? err.message
+          : "error";
     return JSON.stringify({ error: msg });
   }
 }
@@ -197,10 +190,14 @@ export async function handleTelegramUpdate(update: TgUpdate): Promise<{ ok: true
   const text = msg.text.trim();
 
   // Solo chat privado: las respuestas traen datos de los proyectos del usuario
-  // y en un grupo quedarían a la vista de todos sus miembros.
+  // y en un grupo quedarían a la vista de todos sus miembros. Poco frecuente
+  // (requiere un slash command en un grupo), así que resolver el locale con
+  // un lookup liviano acá es aceptable.
   if (msg.chat.type !== "private") {
-    if (text.startsWith("/"))
-      await tgSend(chatId, "El bot de Pemie solo responde en chat privado.");
+    if (text.startsWith("/")) {
+      const locale = (await channels.getLinkedLocale(telegramUserId)) ?? "es";
+      await tgSend(chatId, t(locale, "private_chat_only"));
+    }
     return { ok: true };
   }
 
@@ -208,7 +205,12 @@ export async function handleTelegramUpdate(update: TgUpdate): Promise<{ ok: true
   const claim = await channels.claimChannelUpdate(updateId, telegramUserId);
   if (claim === "duplicate") return { ok: true };
   if (claim === "rate_limited") {
-    await tgSend(chatId, "Demasiados mensajes. Espera un minuto.");
+    // A propósito sin lookup de locale: este es el camino que existe para NO
+    // hacer trabajo caro cuando un usuario ya está mandando de más. Sumarle
+    // una query a la DB acá iría en contra de para qué está el rate-limit.
+    // El mensaje es de una línea; el costo de dejarlo en español no justifica
+    // gastar una consulta extra justo en el camino de abuso.
+    await tgSend(chatId, t("es", "rate_limited"));
     return { ok: true };
   }
 
@@ -224,6 +226,20 @@ interface IncomingMessage {
   username: string | null;
 }
 
+/** Token de comando en minúsculas ("modelo" para "/modelo@bot arg"), o "" si no es un comando. */
+function commandToken(text: string): string {
+  const match = text.match(/^\/(\w+)/);
+  return match ? match[1].toLowerCase() : "";
+}
+
+/**
+ * Compara por token exacto, no por prefijo: así un alias corto ("/model") no
+ * matchea por accidente un comando más largo que empieza igual ("/modelo").
+ */
+function isCommand(text: string, ...names: string[]): boolean {
+  return names.includes(commandToken(text));
+}
+
 /** Comandos y turno LLM, ya deduplicado y acotado a chat privado. */
 async function dispatchMessage({
   telegramUserId,
@@ -231,46 +247,51 @@ async function dispatchMessage({
   text,
   username,
 }: IncomingMessage): Promise<void> {
+  // Sin sesión (aún no vinculado) no hay a quién preguntarle el idioma: se
+  // resuelve al del link en cuanto `loadBotSession` lo trae más abajo.
+  let locale = "es";
+
   if (text.startsWith("/start")) {
     const payload = text.replace(/^\/start(@\w+)?\s*/, "").trim();
     if (!payload) {
-      await tgSend(
-        chatId,
-        "Para vincular Pemie, abre el enlace desde la pestaña Agente en la web, o pega /start <token>."
-      );
+      await tgSend(chatId, t(locale, "start_missing_token"));
       return;
     }
     try {
-      await channels.completeLinkFromToken(payload, telegramUserId, username);
-      await tgSend(
-        chatId,
-        "Cuenta vinculada. Configura tu API key LLM en Pemie (Agente → Telegram) y usa /estado para comprobar."
-      );
+      const linked = await channels.completeLinkFromToken(payload, telegramUserId, username);
+      // Locale del user recién vinculado (ya viene en la misma query de
+      // completeLinkFromToken): sin esto, start_linked salía siempre en "es".
+      locale = linked.locale;
+      await tgSend(chatId, t(locale, "start_linked"));
     } catch (err) {
-      const m = err instanceof ServiceError ? err.message : "No se pudo vincular";
+      const m = err instanceof ServiceError ? renderServiceError(err, locale) : t(locale, "start_link_failed");
       await tgSend(chatId, m);
     }
     return;
   }
 
-  if (text.startsWith("/ayuda") || text.startsWith("/help")) {
-    await tgSend(chatId, HELP);
-    return;
-  }
-
+  // Cargar la sesión antes de /ayuda y /help (no después): son el primer
+  // contacto del bot y tienen que respetar el locale del user ya vinculado.
   const session = await channels.loadBotSession(telegramUserId);
+  if (session) locale = session.link.user.locale;
+
+  if (isCommand(text, "ayuda", "help")) {
+    await tgSend(chatId, t(locale, "help", { historyKeep: channels.HISTORY_KEEP }));
+    return;
+  }
+
   if (!session) {
-    await tgSend(chatId, "No estás vinculado. Genera un enlace en Pemie → Agente → Telegram.");
+    await tgSend(chatId, t(locale, "not_linked"));
     return;
   }
 
-  if (text.startsWith("/desvincular")) {
+  if (isCommand(text, "desvincular", "unlink")) {
     await channels.disconnectChannel(session.link.userId, session.link.user.analyticsEnabled);
-    await tgSend(chatId, "Desvinculado. Ya no responderé hasta que vuelvas a conectar.");
+    await tgSend(chatId, t(locale, "disconnected"));
     return;
   }
 
-  if (text.startsWith("/estado")) {
+  if (isCommand(text, "estado", "status")) {
     const st = await channels.getChannelStatus(session.link.userId);
     const keyed = CHANNEL_LLM_PROVIDERS.filter((p) => st.providers[p].hasKey)
       .map((p) => `${p}(…${st.providers[p].last4})`)
@@ -278,81 +299,88 @@ async function dispatchMessage({
     await tgSend(
       chatId,
       [
-        `Vinculado: sí (@${st.telegramUsername ?? "—"})`,
-        `Proveedor activo: ${st.llmProvider}`,
-        `Keys guardadas: ${keyed || "ninguna"}`,
-        `Modelo: ${st.model}`,
-        `Proyecto por defecto: ${st.defaultProject ? `${st.defaultProject.slug} (${st.defaultProject.id})` : "ninguno"}`,
-        `Listo: ${st.ready ? "sí" : "no"}`,
+        t(locale, "status_linked", { telegramUsername: st.telegramUsername ?? undefined }),
+        t(locale, "status_provider_active", { provider: st.llmProvider }),
+        t(locale, "status_keys_saved", { keys: keyed || t(locale, "status_keys_none") }),
+        t(locale, "status_model", { model: st.model }),
+        t(locale, "status_default_project", {
+          project: st.defaultProject
+            ? `${st.defaultProject.slug} (${st.defaultProject.id})`
+            : t(locale, "status_project_none"),
+        }),
+        t(locale, "status_ready", {
+          ready: st.ready ? t(locale, "status_ready_yes") : t(locale, "status_ready_no"),
+        }),
       ].join("\n")
     );
     return;
   }
 
-  if (text.startsWith("/reset") || text.startsWith("/nueva")) {
+  if (isCommand(text, "reset", "nueva", "new")) {
     await channels.clearChannelMessages(session.link.userId);
-    await tgSend(chatId, "Historial y resumen borrados. Empezamos de cero.");
+    await tgSend(chatId, t(locale, "reset_done"));
     return;
   }
 
-  if (text.startsWith("/modelo")) {
-    const arg = text.replace(/^\/modelo(@\w+)?\s*/, "").trim();
+  if (isCommand(text, "modelo", "model")) {
+    const arg = text.replace(/^\/\w+(@\w+)?\s*/, "").trim();
     const st = await channels.getChannelStatus(session.link.userId);
     if (!arg) {
       await tgSend(
         chatId,
         [
-          `Proveedor: ${st.llmProvider}`,
-          `Actual: ${st.model}`,
-          `Disponibles:\n${st.models.map((m) => `· ${m}`).join("\n")}`,
-          `Cambia con: /modelo <id>`,
+          t(locale, "model_list_provider", { provider: st.llmProvider }),
+          t(locale, "model_list_current", { model: st.model }),
+          t(locale, "model_list_available", { models: st.models.map((m) => `· ${m}`).join("\n") }),
+          t(locale, "model_list_hint"),
         ].join("\n")
       );
       return;
     }
     try {
       await channels.setChannelModel(session.link.userId, arg);
-      await tgSend(chatId, `Modelo activo: ${arg}`);
+      await tgSend(chatId, t(locale, "model_set", { model: arg }));
     } catch (err) {
-      const m = err instanceof ServiceError ? err.message : "No se pudo cambiar el modelo";
+      const m = err instanceof ServiceError ? renderServiceError(err, locale) : t(locale, "model_set_failed");
       await tgSend(chatId, m);
     }
     return;
   }
 
-  if (text.startsWith("/proveedor")) {
-    const arg = text.replace(/^\/proveedor(@\w+)?\s*/, "").trim().toLowerCase();
+  if (isCommand(text, "proveedor", "provider")) {
+    const arg = text.replace(/^\/\w+(@\w+)?\s*/, "").trim().toLowerCase();
     const st = await channels.getChannelStatus(session.link.userId);
     if (!arg) {
       const lines = CHANNEL_LLM_PROVIDERS.map((p) => {
         const info = st.providers[p];
-        const mark = p === st.llmProvider ? " (activo)" : "";
+        const mark = p === st.llmProvider ? t(locale, "provider_active_mark") : "";
         return info.hasKey
-          ? `· ${p}${mark} — key …${info.last4}`
-          : `· ${p}${mark} — sin key (pégala en la web)`;
+          ? t(locale, "provider_line_with_key", { provider: p, mark, last4: info.last4 ?? "" })
+          : t(locale, "provider_line_without_key", { provider: p, mark });
       });
       await tgSend(
         chatId,
-        [`Proveedores:\n${lines.join("\n")}`, `Cambia con: /proveedor anthropic|openai|deepseek`].join(
-          "\n"
-        )
+        [
+          t(locale, "provider_list_header", { lines: lines.join("\n") }),
+          t(locale, "provider_list_hint"),
+        ].join("\n")
       );
       return;
     }
     try {
       const updated = await channels.setChannelProvider(session.link.userId, arg);
-      await tgSend(chatId, `Proveedor activo: ${arg}\nModelo: ${updated.model}`);
+      await tgSend(chatId, t(locale, "provider_set", { provider: arg, model: updated.model }));
     } catch (err) {
-      const m = err instanceof ServiceError ? err.message : "No se pudo cambiar el proveedor";
+      const m = err instanceof ServiceError ? renderServiceError(err, locale) : t(locale, "provider_set_failed");
       await tgSend(chatId, m);
     }
     return;
   }
 
-  if (text.startsWith("/proyecto")) {
-    const slug = text.replace(/^\/proyecto(@\w+)?\s*/, "").trim();
+  if (isCommand(text, "proyecto", "project")) {
+    const slug = text.replace(/^\/\w+(@\w+)?\s*/, "").trim();
     if (!slug) {
-      await tgSend(chatId, "Uso: /proyecto <slug>");
+      await tgSend(chatId, t(locale, "project_usage"));
       return;
     }
     const projects = await agentsListProjects(session);
@@ -360,30 +388,38 @@ async function dispatchMessage({
     if (!match) {
       await tgSend(
         chatId,
-        `No encontré "${slug}". Proyectos: ${projects.map((p) => p.slug).join(", ") || "(ninguno)"}`
+        t(locale, "project_not_found", {
+          slug,
+          projects: projects.map((p) => p.slug).join(", ") || t(locale, "project_none"),
+        })
       );
       return;
     }
     await channels.setDefaultProject(session.link.userId, session.link.user.analyticsEnabled, match.id);
-    await tgSend(chatId, `Proyecto por defecto: ${match.slug} (${match.id})`);
+    await tgSend(chatId, t(locale, "project_set", { slug: match.slug, id: match.id }));
     return;
   }
 
   if (!session.config.llmKeyCiphertext) {
-    await tgSend(chatId, "Falta tu API key LLM. Pégala en Pemie → Agente → Canal Telegram.");
+    await tgSend(chatId, t(locale, "llm_key_missing"));
     return;
   }
 
   try {
     const reply = await runLlmTurn(session, text);
-    await tgSend(chatId, reply || "(sin respuesta)");
+    await tgSend(chatId, reply || t(locale, "empty_reply"));
     const pruned = await channels.recordTurnMessages(session.link.userId, text, reply || "");
     if (pruned.length > 0) {
       await refreshRollingSummary(session, pruned).catch(() => {});
     }
   } catch (err) {
-    const m = err instanceof Error ? err.message : "Error en el turno";
-    await tgSend(chatId, `Error: ${m}`);
+    const m =
+      err instanceof ServiceError
+        ? renderServiceError(err, locale)
+        : err instanceof Error
+          ? err.message
+          : t(locale, "turn_error_fallback");
+    await tgSend(chatId, t(locale, "turn_error", { message: m }));
   }
 }
 
@@ -498,10 +534,11 @@ async function providerFetch(
   url: string,
   init: RequestInit,
   deadline: number,
-  provider: string
+  provider: string,
+  locale: string
 ): Promise<Response> {
   const remaining = deadline - Date.now();
-  if (remaining <= 0) throw new Error(`${provider}: se agotó el tiempo del turno`);
+  if (remaining <= 0) throw new Error(t(locale, "provider_timeout_turn", { provider }));
   try {
     return await fetch(url, {
       ...init,
@@ -509,7 +546,7 @@ async function providerFetch(
     });
   } catch (err) {
     if (err instanceof Error && (err.name === "TimeoutError" || err.name === "AbortError"))
-      throw new Error(`${provider} no respondió a tiempo`);
+      throw new Error(t(locale, "provider_no_response", { provider }));
     throw err;
   }
 }
@@ -532,13 +569,14 @@ async function runAnthropicTurn(
 ): Promise<string> {
   const apiKey = decryptSecret(session.config.llmKeyCiphertext!);
   const model = resolveModel(session);
+  const locale = session.link.user.locale;
 
   // Filtrado por la key de la sesión: el bloque de tools viaja en CADA ronda,
   // así que mandar tools que esta key no puede usar se paga otra vez cada vez.
-  const toolDefs = listMcpToolDefs(session.config.apiKey).map((t) => ({
-    name: t.name,
-    description: t.description,
-    input_schema: t.inputSchema,
+  const toolDefs = listMcpToolDefs(session.config.apiKey).map((tool) => ({
+    name: tool.name,
+    description: tool.description,
+    input_schema: tool.inputSchema,
   }));
 
   const messages: AnthropicMessage[] = [
@@ -549,7 +587,7 @@ async function runAnthropicTurn(
   ];
 
   for (let round = 0; round < MAX_TOOL_ROUNDS; round++) {
-    if (Date.now() >= deadline) return BUDGET_REACHED;
+    if (Date.now() >= deadline) return t(locale, "budget_reached");
 
     const res = await providerFetch(
       "https://api.anthropic.com/v1/messages",
@@ -580,7 +618,8 @@ async function runAnthropicTurn(
         }),
       },
       deadline,
-      "Anthropic"
+      "Anthropic",
+      locale
     );
 
     if (!res.ok) {
@@ -606,13 +645,13 @@ async function runAnthropicTurn(
       (c): c is Extract<AnthropicContent, { type: "tool_use" }> => c.type === "tool_use"
     );
     const texts = data.content.filter((c): c is Extract<AnthropicContent, { type: "text" }> => c.type === "text");
-    const answer = () => texts.map((t) => t.text).join("\n").trim();
+    const answer = () => texts.map((c) => c.text).join("\n").trim();
 
     // Con `max_tokens` el bloque tool_use puede venir cortado a mitad: ejecutar
     // ese input incompleto es peor que cerrar el turno.
-    if (data.stop_reason === "max_tokens") return answer() || TRUNCATED;
+    if (data.stop_reason === "max_tokens") return answer() || t(locale, "truncated");
 
-    if (toolUses.length === 0) return answer() || "Listo.";
+    if (toolUses.length === 0) return answer() || t(locale, "turn_done");
 
     messages.push({ role: "assistant", content: data.content });
 
@@ -627,7 +666,7 @@ async function runAnthropicTurn(
     messages.push({ role: "user", content: toolResults });
   }
 
-  return TOOL_LIMIT_REACHED;
+  return t(locale, "tool_limit_reached");
 }
 
 type OpenAiMessage =
@@ -651,13 +690,14 @@ async function runOpenAiCompatTurn(
   const apiKey = decryptSecret(session.config.llmKeyCiphertext!);
   const model = resolveModel(session);
   const base = OPENAI_COMPAT_BASE[provider];
+  const locale = session.link.user.locale;
 
-  const tools = listMcpToolDefs(session.config.apiKey).map((t) => ({
+  const tools = listMcpToolDefs(session.config.apiKey).map((tool) => ({
     type: "function" as const,
     function: {
-      name: t.name,
-      description: t.description,
-      parameters: t.inputSchema,
+      name: tool.name,
+      description: tool.description,
+      parameters: tool.inputSchema,
     },
   }));
 
@@ -673,7 +713,7 @@ async function runOpenAiCompatTurn(
   ];
 
   for (let round = 0; round < MAX_TOOL_ROUNDS; round++) {
-    if (Date.now() >= deadline) return BUDGET_REACHED;
+    if (Date.now() >= deadline) return t(locale, "budget_reached");
 
     const res = await providerFetch(
       `${base}/chat/completions`,
@@ -691,7 +731,8 @@ async function runOpenAiCompatTurn(
         }),
       },
       deadline,
-      provider
+      provider,
+      locale
     );
 
     if (!res.ok) {
@@ -710,17 +751,17 @@ async function runOpenAiCompatTurn(
     };
 
     const choice = data.choices?.[0];
-    if (!choice) throw new Error(`${provider}: respuesta vacía`);
+    if (!choice) throw new Error(t(locale, "provider_empty_response", { provider }));
 
     const msg = choice.message;
     const toolCalls = msg.tool_calls ?? [];
 
     // `length` = respuesta truncada; los `arguments` de una tool pueden venir
     // cortados y dejar de ser JSON válido.
-    if (choice.finish_reason === "length") return (msg.content ?? "").trim() || TRUNCATED;
+    if (choice.finish_reason === "length") return (msg.content ?? "").trim() || t(locale, "truncated");
 
     if (toolCalls.length === 0) {
-      return (msg.content ?? "").trim() || "Listo.";
+      return (msg.content ?? "").trim() || t(locale, "turn_done");
     }
 
     messages.push({
@@ -741,7 +782,7 @@ async function runOpenAiCompatTurn(
     }
   }
 
-  return TOOL_LIMIT_REACHED;
+  return t(locale, "tool_limit_reached");
 }
 
 /**

@@ -36,7 +36,7 @@ export function toPublicUser(u: User): PublicUser {
 /** Preferencia de idioma de la cuenta. El valor se valida en el núcleo, no en REST. */
 export async function updateLocale(userId: string, locale: string): Promise<PublicUser> {
   if (!(USER_LOCALES as readonly string[]).includes(locale))
-    throw badRequest("Idioma inválido", "invalid_locale");
+    throw badRequest("invalid_locale");
   const user = await prisma.user.update({ where: { id: userId }, data: { locale } });
   return toPublicUser(user);
 }
@@ -63,12 +63,11 @@ export async function register(input: {
   name?: string;
 }): Promise<{ user: PublicUser; token: string; expiresAt: Date }> {
   const email = normalizeEmail(input.email);
-  if (!email.includes("@")) throw badRequest("Email inválido", "invalid_email");
-  if (input.password.length < 8)
-    throw badRequest("La contraseña debe tener al menos 8 caracteres", "weak_password");
+  if (!email.includes("@")) throw badRequest("invalid_email");
+  if (input.password.length < 8) throw badRequest("weak_password");
 
   const existing = await prisma.user.findUnique({ where: { email } });
-  if (existing) throw conflict("Ya existe una cuenta con ese email", "email_taken");
+  if (existing) throw conflict("email_taken");
 
   const passwordHash = await bcrypt.hash(input.password, BCRYPT_ROUNDS);
   const user = await prisma.user.create({
@@ -85,10 +84,9 @@ export async function login(input: {
 }): Promise<{ user: PublicUser; token: string; expiresAt: Date }> {
   const email = normalizeEmail(input.email);
   const user = await prisma.user.findUnique({ where: { email } });
-  if (!user || !user.passwordHash)
-    throw unauthorized("Credenciales inválidas");
+  if (!user || !user.passwordHash) throw unauthorized("invalid_credentials");
   const ok = await bcrypt.compare(input.password, user.passwordHash);
-  if (!ok) throw unauthorized("Credenciales inválidas");
+  if (!ok) throw unauthorized("invalid_credentials");
   const session = await createSession(user.id);
   return { user: toPublicUser(user), ...session };
 }

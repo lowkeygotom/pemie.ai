@@ -190,6 +190,11 @@ export async function notifyStoryAssigned(opts: {
       return { notified: false, reason: "recently_notified", email: resolved.recipient.email };
 
     const [actor] = await resolveActorNames([{ ...opts.actor, actorId: opts.actor.actorId ?? null }]);
+    // El idioma del correo es el de quien lo recibe. Un contributor externo (sin
+    // fila User) no tiene preferencia, así que cae al español por defecto.
+    const recipientLocale = resolved.recipient.id
+      ? (await prisma.user.findUnique({ where: { id: resolved.recipient.id }, select: { locale: true } }))?.locale
+      : null;
     const result: SendResult = await sendStoryAssignedEmail({
       to: resolved.recipient.email,
       storyKey: story.key,
@@ -198,6 +203,7 @@ export async function notifyStoryAssigned(opts: {
       assignerName: actor.actorName,
       storyUrl: storyAssignmentUrl(story.project.workspace.slug, story.project.slug, story.key),
       contentLite: !resolved.recipient.isMember,
+      locale: recipientLocale === "en" ? "en" : "es",
     });
     await prisma.assignmentNotification.upsert({
       where: { storyId_contributorId: { storyId: opts.storyId, contributorId: opts.assigneeId } },

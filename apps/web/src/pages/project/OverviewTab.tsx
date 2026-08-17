@@ -20,13 +20,12 @@ import {
   Skeleton,
   SkeletonList,
 } from "../../components/ui.js";
+import { formatDateOrDash } from "../../lib/dates.js";
 
 /** Etiqueta y tono de cada estado: la vista nunca muestra el valor crudo del backend. */
 const STATUS_META: Record<UserStoryStatus, { key: string; tone: BadgeTone }> = { backlog: { key: "statusBacklog", tone: "neutral" }, ready: { key: "statusReady", tone: "brand" }, in_progress: { key: "statusInProgress", tone: "brand" }, review: { key: "statusReview", tone: "warning" }, done: { key: "statusDone", tone: "success" } };
 
-function fmtDate(iso: string | null): string {
-  return iso ? new Date(iso).toLocaleDateString() : "—";
-}
+const fmtDate = formatDateOrDash;
 
 function alertDescription(alert: DriftAlert, t: (key: string, options?: Record<string, unknown>) => string): string {
   const e = alert.evidence;
@@ -57,7 +56,7 @@ function SkeletonOverview() {
 
 export default function OverviewTab({ ws, proj }: { ws: string; proj: string }) {
   const { t } = useTranslation("project");
-  const alertMeta = { unreported_work: { label: "Trabajo no reportado", tone: "danger" as const }, stalled_wip: { label: "Estancada", tone: "warning" as const } };
+  const alertMeta = { unreported_work: { label: t("driftUnreportedLabel"), tone: "danger" as const }, stalled_wip: { label: t("driftStalledLabel"), tone: "warning" as const } };
   const { data, isLoading, error } = useQuery({
     queryKey: queryKeys.overview(ws, proj),
     queryFn: () => api.projects.overview(ws, proj),

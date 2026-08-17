@@ -29,9 +29,9 @@ export async function requireMembership(
   const membership = await prisma.membership.findUnique({
     where: { userId_workspaceId: { userId, workspaceId } },
   });
-  if (!membership) throw notFound("Workspace no encontrado");
+  if (!membership) throw notFound("workspace_not_found");
   if (ROLE_RANK[membership.role as Role] < ROLE_RANK[minRole])
-    throw forbidden("No tienes permiso para esta acción en el workspace");
+    throw forbidden("insufficient_workspace_role");
   return membership;
 }
 
@@ -40,7 +40,7 @@ export async function requireMembership(
 /** Crea un workspace y hace al creador `owner`. */
 export async function createWorkspace(userId: string, name: string) {
   const trimmed = name.trim();
-  if (trimmed.length < 2) throw badRequest("El nombre es muy corto", "invalid_name");
+  if (trimmed.length < 2) throw badRequest("name_too_short");
   const slug = await uniqueSlug(trimmed, async (s) =>
     Boolean(await prisma.workspace.findUnique({ where: { slug: s } }))
   );
@@ -73,7 +73,7 @@ export async function listWorkspaces(userId: string) {
 /** Devuelve un workspace por slug si el usuario es miembro, con su rol. */
 export async function getWorkspace(userId: string, slug: string) {
   const workspace = await prisma.workspace.findUnique({ where: { slug } });
-  if (!workspace) throw notFound("Workspace no encontrado");
+  if (!workspace) throw notFound("workspace_not_found");
   const membership = await requireMembership(userId, workspace.id);
   return { ...workspace, role: membership.role as Role };
 }
@@ -86,7 +86,7 @@ export async function updateWorkspace(
 ) {
   const membership = await requireMembership(userId, workspaceId, "admin");
   const name = input.name.trim();
-  if (name.length < 2) throw badRequest("El nombre es muy corto", "invalid_name");
+  if (name.length < 2) throw badRequest("name_too_short");
   // El slug NO se regenera al renombrar: es la identidad del workspace en las URLs,
   // en los enlaces ya compartidos y en las configuraciones de los agentes. Cambiarlo
   // rompería todo eso, así que el nombre es solo la etiqueta visible.
@@ -137,9 +137,9 @@ export async function updateMemberRole(
     where: { id: membershipId },
     include: { user: { select: { id: true, email: true, name: true, avatarUrl: true } } },
   });
-  if (!target || target.workspaceId !== workspaceId) throw notFound("Miembro no encontrado");
-  if (target.role === "owner") throw forbidden("No se puede cambiar el rol del owner");
-  if (newRole === "owner") throw badRequest("No se puede asignar el rol owner", "invalid_role");
+  if (!target || target.workspaceId !== workspaceId) throw notFound("member_not_found");
+  if (target.role === "owner") throw forbidden("cannot_change_owner_role");
+  if (newRole === "owner") throw badRequest("invalid_role");
   const updated = await prisma.membership.update({ where: { id: membershipId }, data: { role: newRole } });
   // Misma forma que `listMembers` para que el cliente reemplace la fila en su estado.
   return { membershipId: updated.id, role: updated.role as Role, user: target.user };
@@ -149,9 +149,9 @@ export async function updateMemberRole(
 export async function removeMember(userId: string, workspaceId: string, membershipId: string) {
   await requireMembership(userId, workspaceId, "admin");
   const target = await prisma.membership.findUnique({ where: { id: membershipId } });
-  if (!target || target.workspaceId !== workspaceId) throw notFound("Miembro no encontrado");
-  if (target.role === "owner") throw forbidden("No se puede quitar al owner del workspace");
-  if (target.userId === userId) throw forbidden("No puedes quitarte a ti mismo del workspace");
+  if (!target || target.workspaceId !== workspaceId) throw notFound("member_not_found");
+  if (target.role === "owner") throw forbidden("cannot_remove_owner");
+  if (target.userId === userId) throw forbidden("cannot_remove_self");
   await prisma.membership.delete({ where: { id: membershipId } });
   return { ok: true };
 }
@@ -167,8 +167,8 @@ export async function createInvitation(
 ) {
   await requireMembership(userId, workspaceId, "admin");
   const normalized = normalizeEmail(email);
-  if (!normalized.includes("@")) throw badRequest("Email inválido", "invalid_email");
-  if (role === "owner") throw badRequest("No se puede invitar como owner", "invalid_role");
+  if (!normalized.includes("@")) throw badRequest("invalid_email");
+  if (role === "owner") throw badRequest("invalid_invite_role");
 
   // Si ya es miembro, no invitar.
   const existingUser = await prisma.user.findUnique({ where: { email: normalized } });
@@ -176,7 +176,7 @@ export async function createInvitation(
     const already = await prisma.membership.findUnique({
       where: { userId_workspaceId: { userId: existingUser.id, workspaceId } },
     });
-    if (already) throw conflict("Esa persona ya es miembro", "already_member");
+    if (already) throw conflict("already_member");
   }
 
   const token = randomBytes(24).toString("hex");
@@ -226,7 +226,7 @@ export async function listInvitations(userId: string, workspaceId: string) {
 /** Revoca una invitación (owner/admin). */
 export async function revokeInvitation(userId: string, invitationId: string) {
   const invite = await prisma.invitation.findUnique({ where: { id: invitationId } });
-  if (!invite) throw notFound("Invitación no encontrada");
+  if (!invite) throw notFound("invitation_not_found");
   await requireMembership(userId, invite.workspaceId, "admin");
   return prisma.invitation.update({
     where: { id: invitationId },
@@ -240,14 +240,14 @@ export async function revokeInvitation(userId: string, invitationId: string) {
  */
 export async function acceptInvitation(userId: string, token: string) {
   const invite = await prisma.invitation.findUnique({ where: { token } });
-  if (!invite || invite.status !== "pending") throw notFound("Invitación inválida");
+  if (!invite || invite.status !== "pending") throw notFound("invalid_invitation");
   if (invite.expiresAt.getTime() < Date.now())
-    throw badRequest("La invitación expiró", "invite_expired");
+    throw badRequest("invite_expired");
 
   const user = await prisma.user.findUnique({ where: { id: userId } });
-  if (!user) throw notFound("Usuario no encontrado");
+  if (!user) throw notFound("user_not_found");
   if (user.email.toLowerCase() !== invite.email.toLowerCase())
-    throw forbidden("Esta invitación es para otro email");
+    throw forbidden("invitation_email_mismatch");
 
   const existing = await prisma.membership.findUnique({
     where: { userId_workspaceId: { userId, workspaceId: invite.workspaceId } },
@@ -273,7 +273,7 @@ export async function getInvitationByToken(token: string) {
     where: { token },
     include: { workspace: { select: { name: true, slug: true } } },
   });
-  if (!invite || invite.status !== "pending") throw notFound("Invitación inválida");
+  if (!invite || invite.status !== "pending") throw notFound("invalid_invitation");
   return {
     email: invite.email,
     role: invite.role as Role,
@@ -293,7 +293,7 @@ export async function createProject(
 ) {
   await requireMembership(userId, workspaceId, "member");
   const name = input.name.trim();
-  if (name.length < 2) throw badRequest("El nombre es muy corto", "invalid_name");
+  if (name.length < 2) throw badRequest("name_too_short");
   const slug = await uniqueSlug(name, async (s) =>
     Boolean(await prisma.project.findUnique({ where: { workspaceId_slug: { workspaceId, slug: s } } }))
   );
@@ -341,11 +341,11 @@ export async function getProject(userId: string, workspaceSlug: string, projectS
     where: { slug: workspaceSlug, memberships: { some: { userId } } },
     include: { memberships: { where: { userId }, select: { role: true } } },
   });
-  if (!workspace) throw notFound("Workspace no encontrado");
+  if (!workspace) throw notFound("workspace_not_found");
   const project = await prisma.project.findUnique({
     where: { workspaceId_slug: { workspaceId: workspace.id, slug: projectSlug } },
   });
-  if (!project) throw notFound("Proyecto no encontrado");
+  if (!project) throw notFound("project_not_found");
   return {
     ...project,
     workspace: { name: workspace.name, slug: workspace.slug },

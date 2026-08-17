@@ -61,8 +61,7 @@ export async function opSearch(
   allowed: SearchableType[]
 ): Promise<{ query: string; types: SearchableType[]; hits: SearchHit[] }> {
   const query = input.query.trim();
-  if (query.length < MIN_QUERY)
-    throw badRequest(`La búsqueda necesita al menos ${MIN_QUERY} caracteres`, "query_too_short");
+  if (query.length < MIN_QUERY) throw badRequest("query_too_short", { min: MIN_QUERY });
 
   const requested = input.types?.length ? input.types : allowed;
   const types = SEARCHABLE_TYPES.filter((t) => requested.includes(t) && allowed.includes(t));

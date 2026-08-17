@@ -38,18 +38,16 @@ function botUsernameFromToken(_token: string | undefined): string | null {
 function parseLlmProvider(raw: string | undefined | null): ChannelLlmProvider {
   const p = (raw ?? "anthropic") as ChannelLlmProvider;
   if (!(CHANNEL_LLM_PROVIDERS as readonly string[]).includes(p))
-    throw badRequest(`Proveedor LLM inválido: ${raw}`, "invalid_llm_provider");
+    throw badRequest("invalid_llm_provider", { provider: String(raw) });
   return p;
 }
 
 function validateLlmKey(provider: ChannelLlmProvider, key: string) {
-  if (key.length < 20) throw badRequest("La API key es demasiado corta", "invalid_llm_key");
+  if (key.length < 20) throw badRequest("invalid_llm_key");
   if (provider === "anthropic") {
-    if (!key.startsWith("sk-ant-") && !key.startsWith("sk-"))
-      throw badRequest("La key de Anthropic no parece válida (sk-ant-…)", "invalid_llm_key");
+    if (!key.startsWith("sk-ant-") && !key.startsWith("sk-")) throw badRequest("invalid_anthropic_key");
   } else if (provider === "openai") {
-    if (!key.startsWith("sk-"))
-      throw badRequest("La key de OpenAI no parece válida (sk-…)", "invalid_llm_key");
+    if (!key.startsWith("sk-")) throw badRequest("invalid_openai_key");
   }
   // deepseek: acepta sk-… u otros prefijos comerciales
 }
@@ -127,16 +125,16 @@ export async function createLinkToken(
     trackServerEvent(analyticsEnabled, userId, "telegram_link_started_failed", {
       reason: "telegram_not_configured",
     });
-    throw badRequest("Telegram no está configurado en el servidor", "telegram_not_configured");
+    throw badRequest("telegram_not_configured");
   }
 
   if (projectId) {
     const project = await prisma.project.findUnique({ where: { id: projectId } });
-    if (!project) throw notFound("Proyecto no encontrado");
+    if (!project) throw notFound("project_not_found");
     const membership = await prisma.membership.findUnique({
       where: { userId_workspaceId: { workspaceId: project.workspaceId, userId } },
     });
-    if (!membership) throw forbidden("No eres miembro del workspace del proyecto");
+    if (!membership) throw forbidden("not_workspace_member");
   }
 
   const token = randomBytes(24).toString("hex");
@@ -181,9 +179,8 @@ export async function completeLinkFromToken(
     where: { token },
     include: { user: { select: { analyticsEnabled: true, locale: true } } },
   });
-  if (!row || row.usedAt) throw badRequest("Token de vínculo inválido o ya usado", "invalid_link_token");
-  if (row.expiresAt.getTime() < Date.now())
-    throw badRequest("Token de vínculo expirado; genera uno nuevo desde Pemie", "link_token_expired");
+  if (!row || row.usedAt) throw badRequest("invalid_link_token");
+  if (row.expiresAt.getTime() < Date.now()) throw badRequest("link_token_expired");
 
   const userId = row.userId;
 
@@ -213,7 +210,19 @@ export async function completeLinkFromToken(
 
   await ensureUserChannelConfig(userId, row.projectId);
   trackServerEvent(row.user.analyticsEnabled, userId, "telegram_linked");
-  return { userId, projectId: row.projectId };
+  return { userId, projectId: row.projectId, locale: row.user.locale };
+}
+
+/**
+ * Locale del usuario vinculado a un telegram id, sin cargar el resto de la
+ * sesión (`loadBotSession` trae config + credenciales, que no hacen falta acá).
+ */
+export async function getLinkedLocale(telegramUserId: string): Promise<string | null> {
+  const link = await prisma.channelLink.findUnique({
+    where: { provider_externalId: { provider: PROVIDER, externalId: telegramUserId } },
+    select: { user: { select: { locale: true } } },
+  });
+  return link?.user.locale ?? null;
 }
 
 /** Asegura config + user MCP key (reutiliza si ya existe). */
@@ -248,7 +257,7 @@ export async function ensureUserChannelConfig(userId: string, defaultProjectId?:
     });
     workspaceId = m?.workspaceId ?? null;
   }
-  if (!workspaceId) throw badRequest("Necesitas un workspace para conectar Telegram", "no_workspace");
+  if (!workspaceId) throw badRequest("no_workspace");
 
   const { apiKey } = await agents.createApiKey(userId, workspaceId, {
     name: "Telegram bot",
@@ -287,10 +296,7 @@ export async function setLlmKey(
     // Un modelo fuera del catálogo se rechaza igual que en `setChannelModel`: caer
     // al default en silencio dejaba al usuario creyendo que guardó otra cosa.
     if (requested && !isAllowedModel(provider, requested)) {
-      throw badRequest(
-        `Modelo inválido para ${provider}. Usa: ${listModelsForProvider(provider).join(", ")}`,
-        "invalid_model"
-      );
+      throw badRequest("invalid_model", { provider, models: listModelsForProvider(provider).join(", ") });
     }
     const model = requested || CHANNEL_LLM_DEFAULT_MODELS[provider];
 
@@ -360,10 +366,7 @@ export async function setChannelProvider(userId: string, rawProvider: string) {
         },
       });
     } else {
-      throw badRequest(
-        `No hay API key guardada para ${provider}. Pégala en Pemie → Agente → Telegram.`,
-        "provider_key_missing"
-      );
+      throw badRequest("provider_key_missing", { provider });
     }
   }
 
@@ -394,10 +397,7 @@ export async function setChannelModel(userId: string, rawModel: string) {
   const provider = parseLlmProvider(config.llmProvider);
   const model = rawModel.trim();
   if (!isAllowedModel(provider, model)) {
-    throw badRequest(
-      `Modelo inválido para ${provider}. Usa: ${listModelsForProvider(provider).join(", ")}`,
-      "invalid_model"
-    );
+    throw badRequest("invalid_model", { provider, models: listModelsForProvider(provider).join(", ") });
   }
   return prisma.userChannelConfig.update({
     where: { userId },
@@ -488,11 +488,11 @@ export async function setDefaultProject(
   await ensureUserChannelConfig(userId);
   if (projectId) {
     const project = await prisma.project.findUnique({ where: { id: projectId } });
-    if (!project) throw notFound("Proyecto no encontrado");
+    if (!project) throw notFound("project_not_found");
     const membership = await prisma.membership.findUnique({
       where: { userId_workspaceId: { workspaceId: project.workspaceId, userId } },
     });
-    if (!membership) throw forbidden("No eres miembro del workspace del proyecto");
+    if (!membership) throw forbidden("not_workspace_member");
   }
   const config = await prisma.userChannelConfig.update({
     where: { userId },

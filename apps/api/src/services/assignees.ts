@@ -34,17 +34,17 @@ export async function resolveAssigneeId(projectId: string, assigneeId: string): 
   if (!isVirtualMemberAssigneeId(assigneeId)) {
     const contributor = await prisma.contributor.findUnique({ where: { id: assigneeId } });
     if (!contributor || contributor.projectId !== projectId)
-      throw badRequest("El asignado no pertenece al proyecto", "assignee_mismatch");
+      throw badRequest("assignee_mismatch");
     return contributor.id;
   }
 
   const userId = assigneeId.slice(MEMBER_ASSIGNEE_PREFIX.length);
   const project = await prisma.project.findUnique({ where: { id: projectId }, select: { workspaceId: true } });
-  if (!project) throw badRequest("El asignado no pertenece al proyecto", "assignee_mismatch");
+  if (!project) throw badRequest("assignee_mismatch");
   const membership = await prisma.membership.findUnique({
     where: { userId_workspaceId: { userId, workspaceId: project.workspaceId } },
   });
-  if (!membership) throw badRequest("El asignado no pertenece al proyecto", "assignee_mismatch");
+  if (!membership) throw badRequest("assignee_mismatch");
 
   const user = await prisma.user.findUnique({ where: { id: userId }, select: { name: true, avatarUrl: true, email: true } });
   // Fallback al local-part del email cuando el User no puso nombre: evita

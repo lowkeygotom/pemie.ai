@@ -32,7 +32,7 @@ export async function createEpic(
 ) {
   await projectWithAccess(userId, projectId, "member");
   const title = input.title.trim();
-  if (title.length < 2) throw badRequest("El título de la épica es muy corto", "invalid_title");
+  if (title.length < 2) throw badRequest("invalid_title");
   return prisma.epic.create({
     data: { projectId, title, description: input.description?.trim() || null },
   });
@@ -86,14 +86,14 @@ export interface StoryActor {
 function validatePriority(p: string | undefined): string {
   if (p === undefined) return "medium";
   if (!PRIORITIES.includes(p as (typeof PRIORITIES)[number]))
-    throw badRequest(`Prioridad inválida: ${p}`, "invalid_priority");
+    throw badRequest("invalid_priority", { priority: p });
   return p;
 }
 
 function validateStatus(s: string | undefined): UserStoryStatus {
   if (s === undefined) return "backlog";
   if (!STATUSES.includes(s as UserStoryStatus))
-    throw badRequest(`Estado inválido: ${s}`, "invalid_status");
+    throw badRequest("invalid_status", { status: s });
   return s as UserStoryStatus;
 }
 
@@ -107,7 +107,7 @@ function asJson(v: unknown) {
     try {
       return JSON.parse(v) as Prisma.InputJsonValue;
     } catch {
-      throw badRequest("El valor debe ser JSON válido, no un string plano", "invalid_json_field");
+      throw badRequest("invalid_json_field");
     }
   }
   return v as Prisma.InputJsonValue;
@@ -152,15 +152,14 @@ export async function opCreateStory(
   actor: StoryActor
 ) {
   const project = await prisma.project.findUnique({ where: { id: projectId } });
-  if (!project) throw notFound("Proyecto no encontrado");
+  if (!project) throw notFound("project_not_found");
   const title = input.title.trim();
-  if (title.length < 2) throw badRequest("El título de la HU es muy corto", "invalid_title");
+  if (title.length < 2) throw badRequest("story_title_too_short");
   const priority = validatePriority(input.priority);
   const status = validateStatus(input.status);
   if (input.epicId) {
     const epic = await prisma.epic.findUnique({ where: { id: input.epicId } });
-    if (!epic || epic.projectId !== projectId)
-      throw badRequest("La épica no pertenece al proyecto", "epic_mismatch");
+    if (!epic || epic.projectId !== projectId) throw badRequest("epic_mismatch");
   }
   const resolvedAssigneeId = input.assigneeId ? await resolveAssigneeId(projectId, input.assigneeId) : null;
 
@@ -190,7 +189,7 @@ export async function opCreateStory(
       throw err;
     }
   }
-  if (!story) throw badRequest("No se pudo asignar una key única a la HU", "key_collision");
+  if (!story) throw badRequest("key_collision");
 
   const cardActor: CardActor = actor.createdById
     ? { actorType: "user", actorId: actor.createdById }
@@ -245,7 +244,7 @@ export function getStoryById(storyId: string) {
 /** Detalle de una HU (viewer+). */
 export async function getStory(userId: string, storyId: string) {
   const story = await getStoryById(storyId);
-  if (!story) throw notFound("HU no encontrada");
+  if (!story) throw notFound("story_not_found");
   await projectWithAccess(userId, story.projectId);
   return story;
 }
@@ -253,7 +252,7 @@ export async function getStory(userId: string, storyId: string) {
 /** Actualiza una HU (member+). */
 export async function updateStory(userId: string, storyId: string, patch: UpdateStoryInput) {
   const story = await getStoryById(storyId);
-  if (!story) throw notFound("HU no encontrada");
+  if (!story) throw notFound("story_not_found");
   await projectWithAccess(userId, story.projectId, "member");
   return opUpdateStory(story, patch, { actorType: "user", actorId: userId });
 }
@@ -274,7 +273,7 @@ export async function opUpdateStory(
   const data: Prisma.UserStoryUpdateInput = {};
   if (patch.title !== undefined) {
     const t = patch.title.trim();
-    if (t.length < 2) throw badRequest("El título de la HU es muy corto", "invalid_title");
+    if (t.length < 2) throw badRequest("story_title_too_short");
     data.title = t;
   }
   if (patch.priority !== undefined) data.priority = validatePriority(patch.priority);
@@ -286,8 +285,7 @@ export async function opUpdateStory(
   if (patch.epicId !== undefined) {
     if (patch.epicId) {
       const epic = await prisma.epic.findUnique({ where: { id: patch.epicId } });
-      if (!epic || epic.projectId !== story.projectId)
-        throw badRequest("La épica no pertenece al proyecto", "epic_mismatch");
+      if (!epic || epic.projectId !== story.projectId) throw badRequest("epic_mismatch");
       data.epic = { connect: { id: patch.epicId } };
     } else {
       data.epic = { disconnect: true };
@@ -302,7 +300,7 @@ export async function opUpdateStory(
   const updated = Object.keys(data).length
     ? await prisma.userStory.update({ where: { id: story.id }, data })
     : await getStoryById(story.id);
-  if (!updated) throw notFound("HU no encontrada");
+  if (!updated) throw notFound("story_not_found");
 
   // El tablero es la otra cara del estado: si cambió de verdad, la tarjeta se va
   // a la columna que le toca (mismo patrón que opAssignStory con el assignee).
@@ -319,7 +317,7 @@ export async function opUpdateStory(
 /** Elimina una HU (member+). */
 export async function deleteStory(userId: string, storyId: string, options: DeleteStoryOptions = {}) {
   const story = await getStoryById(storyId);
-  if (!story) throw notFound("HU no encontrada");
+  if (!story) throw notFound("story_not_found");
   await projectWithAccess(userId, story.projectId, "member");
   return opDeleteStory(story, options);
 }
@@ -363,7 +361,7 @@ export async function opDeleteStory(
     // Carrera: otro borrado concurrente ya se la llevó entre el findUnique y
     // el delete. Devolver 404 (no encontrada), no un 500 genérico.
     if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2025")
-      throw notFound("HU no encontrada");
+      throw notFound("story_not_found");
     throw err;
   }
 }
@@ -375,7 +373,7 @@ export async function opDeleteStory(
  */
 export async function opAssignStory(storyId: string, assigneeId: string | null, actor: CardActor) {
   const story = await getStoryById(storyId);
-  if (!story) throw notFound("HU no encontrada");
+  if (!story) throw notFound("story_not_found");
   const resolvedAssigneeId = assigneeId ? await resolveAssigneeId(story.projectId, assigneeId) : null;
 
   if (story.assigneeId === resolvedAssigneeId) return story;
@@ -455,11 +453,11 @@ export async function opListContributors(projectId: string, includeSuggestion = 
 /** Guarda el correo explícito de un contributor (owner/admin). */
 export async function updateContributorEmail(userId: string, contributorId: string, email: string | null) {
   const contributor = await prisma.contributor.findUnique({ where: { id: contributorId }, include: { project: { select: { workspaceId: true } } } });
-  if (!contributor) throw notFound("Contributor no encontrado");
+  if (!contributor) throw notFound("contributor_not_found");
   await requireMembership(userId, contributor.project.workspaceId, "admin");
   const normalized = email === null ? null : normalizeEmail(email);
-  if (normalized && !normalized.includes("@")) throw badRequest("Email inválido", "invalid_email");
-  if (normalized && normalized.endsWith("@users.noreply.github.com")) throw badRequest("Ese correo de GitHub no recibe mensajes", "placeholder_email");
+  if (normalized && !normalized.includes("@")) throw badRequest("invalid_email");
+  if (normalized && normalized.endsWith("@users.noreply.github.com")) throw badRequest("placeholder_email");
   return prisma.contributor.update({ where: { id: contributorId }, data: { email: normalized } });
 }
 

@@ -13,6 +13,7 @@ import {
 } from "../../lib/api.js";
 import { track } from "../../lib/analytics/index.js";
 import { useAuth } from "../../lib/auth.js";
+import { formatDateTime } from "../../lib/dates.js";
 import { useTranslation } from "react-i18next";
 import { ConnectPanel } from "../../components/ConnectPanel.js";
 import { ScopePicker } from "../../components/ScopePicker.js";
@@ -271,7 +272,7 @@ export default function WorkspaceSettings() {
                             {key.scopeLevel === "project" && key.agentId === null ? <Badge tone="warning">{t("noAgent")}</Badge> : null}
                             {key.scopes.map((scope) => <Badge key={scope} tone="neutral" mono>{scope}</Badge>)}
                           </div>
-                          <p className="mt-1 font-mono text-caption text-ink-400">{t("created", { date: new Date(key.createdAt).toLocaleString() })} · {key.lastUsedAt ? t("lastUse", { date: new Date(key.lastUsedAt).toLocaleString() }) : t("neverUsed")}</p>
+                          <p className="mt-1 font-mono text-caption text-ink-400">{t("created", { date: formatDateTime(key.createdAt) })} · {key.lastUsedAt ? t("lastUse", { date: formatDateTime(key.lastUsedAt) }) : t("neverUsed")}</p>
                         </div>
                         <div className="flex shrink-0 items-center gap-2">
                           <Select
@@ -307,7 +308,7 @@ export default function WorkspaceSettings() {
                   {logs.slice(0, 50).map((log) => (
                     <div key={log.id} className="flex items-center justify-between -mx-6 px-6 py-2.5 hover:bg-surface-50">
                       <span className="flex min-w-0 items-center gap-2"><Badge tone={log.actorType === "agent" ? "brand" : "neutral"} dot>{log.actorType}</Badge><span className="truncate text-body-sm text-ink-700">{log.actorName}</span><code className="truncate font-mono text-caption text-ink-700">{log.action}</code></span>
-                      <span className="shrink-0 font-mono text-caption text-ink-400">{new Date(log.createdAt).toLocaleString()}</span>
+                      <span className="shrink-0 font-mono text-caption text-ink-400">{formatDateTime(log.createdAt)}</span>
                     </div>
                   ))}
                 </div>

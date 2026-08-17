@@ -4,6 +4,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { useAuth } from "../lib/auth.js";
 import { useTheme, type Theme } from "../lib/theme.js";
+import { useTranslation } from "react-i18next";
 import { LogoMark, MoonIcon, Notice, SunIcon, Wordmark } from "./ui.js";
 
 const ANALYTICS_NOTICE_DISMISSED_KEY = "pemie_analytics_notice_dismissed";
@@ -41,13 +42,14 @@ export function Layout({ children }: { children: ReactNode }) {
 
 /** Botón de ícono visible en el header: alterna claro/oscuro directo, sin submenú. */
 function ThemeToggle({ theme, onToggle }: { theme: Theme; onToggle: () => void }) {
+  const { t } = useTranslation("common");
   const isDark = theme === "dark";
 
   return (
     <button
       type="button"
       onClick={onToggle}
-      aria-label={isDark ? "Cambiar a modo claro" : "Cambiar a modo oscuro"}
+      aria-label={isDark ? t("lightMode") : t("darkMode")}
       className="grid h-8 w-8 place-items-center rounded-pill text-ink-600 transition-colors hover:bg-surface-100 hover:text-ink-800 focus-visible:outline-none focus-visible:shadow-focus"
     >
       {isDark ? <SunIcon /> : <MoonIcon />}
@@ -57,6 +59,7 @@ function ThemeToggle({ theme, onToggle }: { theme: Theme; onToggle: () => void }
 
 /** Aviso no bloqueante, una sola vez por navegador — dismissible, no es un gate. */
 function AnalyticsNotice() {
+  const { t } = useTranslation("common");
   const [dismissed, setDismissed] = useState(
     () => localStorage.getItem(ANALYTICS_NOTICE_DISMISSED_KEY) === "1"
   );
@@ -70,9 +73,9 @@ function AnalyticsNotice() {
   return (
     <div className="mx-auto w-full max-w-container px-4 pt-4 sm:px-8">
       <Notice tone="info" onDismiss={dismiss}>
-        Usamos datos de uso para mejorar pemie.ai. Podés desactivarlo cuando quieras en{" "}
+        {t("analyticsNotice")} {" "}
         <Link to="/settings" onClick={dismiss} className="font-medium underline">
-          Ajustes
+          {t("settings")}
         </Link>
         .
       </Notice>
@@ -91,6 +94,7 @@ function AccountMenu({
   avatarUrl: string | null;
 }) {
   const { logout } = useAuth();
+  const { t } = useTranslation("common");
   const navigate = useNavigate();
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
@@ -123,7 +127,7 @@ function AccountMenu({
         type="button"
         aria-haspopup="menu"
         aria-expanded={open}
-        aria-label="Menú de cuenta"
+        aria-label={t("accountMenu")}
         onClick={() => setOpen((v) => !v)}
         className="flex items-center gap-2 rounded-pill transition-opacity hover:opacity-80 focus-visible:outline-none focus-visible:shadow-focus"
       >
@@ -149,7 +153,7 @@ function AccountMenu({
             onClick={() => setOpen(false)}
             className="block px-3.5 py-2 text-body-sm text-ink-800 transition-colors hover:bg-surface-50"
           >
-            Ajustes
+            {t("settings")}
           </Link>
           <button
             role="menuitem"
@@ -157,7 +161,7 @@ function AccountMenu({
             onClick={handleLogout}
             className="block w-full px-3.5 py-2 text-left text-body-sm text-ink-800 transition-colors hover:bg-surface-50"
           >
-            Salir
+            {t("logout")}
           </button>
         </div>
       )}

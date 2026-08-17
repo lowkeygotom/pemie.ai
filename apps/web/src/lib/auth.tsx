@@ -5,6 +5,7 @@ import { createContext, useContext, useEffect, useState, type ReactNode } from "
 import { api, type User } from "./api.js";
 import { applyAnalyticsConsent, identifyUser, resetAnalytics, track } from "./analytics/index.js";
 import { queryClient } from "./queryClient.js";
+import i18n from "../i18n/index.js";
 
 interface AuthState {
   user: User | null;
@@ -14,6 +15,7 @@ interface AuthState {
   logout: () => Promise<void>;
   refresh: () => Promise<void>;
   setAnalyticsPreference: (enabled: boolean) => Promise<void>;
+  setLocale: (locale: User["locale"]) => Promise<void>;
 }
 
 const AuthContext = createContext<AuthState | null>(null);
@@ -30,6 +32,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (next) {
       identifyUser(next);
       applyAnalyticsConsent(next.analyticsEnabled);
+      void i18n.changeLanguage(next.locale);
     }
   }
 
@@ -72,6 +75,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setAnalyticsPreference: async (enabled) => {
       const { user } = await api.auth.updateAnalyticsPreference(enabled);
       applyAnalyticsConsent(enabled); // efecto inmediato en cliente, sin esperar el próximo refresh
+      setUser(user);
+    },
+    setLocale: async (locale) => {
+      const { user } = await api.auth.updateLocale(locale);
+      await i18n.changeLanguage(user.locale);
       setUser(user);
     },
   };

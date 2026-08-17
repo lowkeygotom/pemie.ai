@@ -12,6 +12,7 @@ import {
   type Workspace as Ws,
 } from "../../lib/api.js";
 import { track } from "../../lib/analytics/index.js";
+import { useAuth } from "../../lib/auth.js";
 import { ConnectPanel } from "../../components/ConnectPanel.js";
 import { ScopePicker } from "../../components/ScopePicker.js";
 import { TelegramChannelCard } from "../../components/TelegramChannelCard.js";
@@ -54,6 +55,7 @@ function isSettingsTab(value: string | null): value is SettingsTab {
 
 /** Ajustes del workspace, separados del flujo diario de Equipo. */
 export default function WorkspaceSettings() {
+  const { user } = useAuth();
   const { slug = "" } = useParams();
   const [params, setParams] = useSearchParams();
   const [ws, setWs] = useState<Ws | null>(null);
@@ -168,9 +170,10 @@ export default function WorkspaceSettings() {
           scopes,
           keyRef: { kind: "plaintext", key: newKey },
           mcpUrl: MCP_URL,
+          locale: user?.locale,
         })
       : null,
-    [newKey, scopeLevel, scopes, slug]
+    [newKey, scopeLevel, scopes, slug, user?.locale]
   );
 
   if (loading) {

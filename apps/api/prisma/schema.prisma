@@ -26,6 +26,8 @@ model User {
   // Consentimiento de analítica de producto (PostHog). Un solo booleano no
   // justifica una tabla aparte; ver PLANS/PEMIE_POSTHOG_UX_CONSENT_EVENT_MAP.md.
   analyticsEnabled Boolean  @default(true)
+  // Preferencia personal de idioma. No depende del workspace ni del proyecto.
+  locale           String   @default("es")
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
 

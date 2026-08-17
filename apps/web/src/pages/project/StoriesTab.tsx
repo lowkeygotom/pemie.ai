@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useTranslation } from "react-i18next";
 import { formatNarrative } from "@pemie/shared";
 import { api, analyticsFailureReason, ApiError, type AssignmentNotification, type UserStory } from "../../lib/api.js";
 import { queryKeys, STALE_TIME } from "../../lib/queryClient.js";
@@ -46,6 +47,7 @@ const PRIORITY_TONE: Record<string, BadgeTone> = {
 };
 
 export default function StoriesTab({ ws, proj, canManage }: { ws: string; proj: string; canManage: boolean }) {
+  const { t } = useTranslation("project");
   const queryClient = useQueryClient();
   const storiesQuery = useQuery({
     queryKey: queryKeys.stories(ws, proj),
@@ -63,7 +65,7 @@ export default function StoriesTab({ ws, proj, canManage }: { ws: string; proj: 
   const loadError = storiesQuery.error ?? epicsQuery.error;
   const [actionError, setActionError] = useState<string | null>(null);
   const error =
-    actionError ?? (loadError ? (loadError instanceof ApiError ? loadError.message : "Error cargando historias") : null);
+    actionError ?? (loadError ? (loadError instanceof ApiError ? loadError.message : t("storiesLoadError")) : null);
 
   /** HU + board comparten tarjeta (una HU nueva crea su card): invalidar ambas. */
   function invalidateAfterStoryChange() {
@@ -213,11 +215,11 @@ export default function StoriesTab({ ws, proj, canManage }: { ws: string; proj: 
                 ? `${assignmentNotice.story.key} asignada, pero el correo falló. La asignación quedó guardada.`
                 : `${assignmentNotice.story.key} asignada, pero no se pudo avisar: no tiene correo.`}
         </Notice> : null}
-        <h3 className="text-h4 text-ink-900">Nueva historia de usuario</h3>
+        <h3 className="text-h4 text-ink-900">{t("newStory")}</h3>
         <form onSubmit={createStory} className="mt-4 space-y-4">
           <Field label="Título">
             <Input
-              placeholder="ej: Login con GitHub"
+              placeholder={t("storyExample")}
               value={title}
               onChange={(e) => setTitle(e.target.value)}
               aria-label="Título de historia"
@@ -271,12 +273,12 @@ export default function StoriesTab({ ws, proj, canManage }: { ws: string; proj: 
 
       {/* Lista */}
       <Card>
-        <h3 className="text-h4 text-ink-900">Historias ({stories.length})</h3>
+        <h3 className="text-h4 text-ink-900">{t("stories", { count: stories.length })}</h3>
         <div className="mt-4">
           {stories.length === 0 ? (
             <EmptyState
-              title="Aún no hay historias"
-              description="Crea la primera historia de usuario para comenzar a organizar el trabajo."
+              title={t("noStories")}
+              description={t("noStoriesDescription")}
             />
           ) : (
             <div className="divide-y divide-line-100">

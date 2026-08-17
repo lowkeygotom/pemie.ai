@@ -179,7 +179,7 @@ export async function completeLinkFromToken(
   // para trackear `telegram_linked` sin un fetch aparte.
   const row = await prisma.channelLinkToken.findUnique({
     where: { token },
-    include: { user: { select: { analyticsEnabled: true } } },
+    include: { user: { select: { analyticsEnabled: true, locale: true } } },
   });
   if (!row || row.usedAt) throw badRequest("Token de vínculo inválido o ya usado", "invalid_link_token");
   if (row.expiresAt.getTime() < Date.now())
@@ -574,11 +574,11 @@ export async function markChannelUpdateProcessed(updateId: string) {
 
 /** Carga contexto completo del bot para un telegram user id. */
 export async function loadBotSession(telegramUserId: string) {
-  // Incluye analyticsEnabled en la misma query (no un fetch aparte): los comandos
-  // del bot que trackean (/proyecto, /desvincular) lo leen de acá.
+  // Incluye preferencias de usuario en la misma query (no un fetch aparte): los
+  // comandos y el idioma del asistente las leen de acá.
   const link = await prisma.channelLink.findUnique({
     where: { provider_externalId: { provider: PROVIDER, externalId: telegramUserId } },
-    include: { user: { select: { analyticsEnabled: true } } },
+    include: { user: { select: { analyticsEnabled: true, locale: true } } },
   });
   if (!link) return null;
 

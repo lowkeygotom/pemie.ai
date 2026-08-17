@@ -1074,6 +1074,7 @@ function AddTeamModal({
   existingAgent?: RegisteredWorkspaceAgent;
 }) {
   const { t } = useTranslation("workspace");
+  const { user } = useAuth();
   const [mode, setMode] = useState<AddMode>(initialMode);
   const [email, setEmail] = useState("");
   const [agentProjectSlug, setAgentProjectSlug] = useState(existingAgent?.project.slug ?? projects[0]?.slug ?? "");
@@ -1100,11 +1101,12 @@ function AddTeamModal({
           workspaceSlug: slug,
           target: { scopeLevel: "project", project: { slug: selectedProject.slug, id: selectedProject.id } },
           scopes: scopes as ApiScope[],
-          keyRef: { kind: "placeholder", label: "<API_KEY_RECIÉN_CREADA>" },
+          keyRef: { kind: "placeholder", label: user?.locale === "en" ? "<NEWLY_CREATED_API_KEY>" : "<API_KEY_RECIÉN_CREADA>" },
           mcpUrl: MCP_URL,
+          locale: user?.locale,
         })
       : null,
-    [selectedProject, scopes, slug]
+    [selectedProject, scopes, slug, user?.locale]
   );
 
   useEffect(() => {
@@ -1316,6 +1318,7 @@ function AddTeamModal({
               scopes: scopes as ApiScope[],
               keyRef: { kind: "plaintext", key: newKey },
               mcpUrl: MCP_URL,
+              locale: user?.locale,
             })}
             onCopy={() => setConfirmedSaved(true)}
           />

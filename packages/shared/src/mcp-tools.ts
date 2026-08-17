@@ -136,10 +136,12 @@ export function isToolAvailable(access: ToolAccess, scopes: readonly ApiScope[])
 }
 
 /** Texto humano consistente para una denegación y la vista previa de capacidades. */
-export function describeToolAccess(access: ToolAccess): string {
+export function describeToolAccess(access: ToolAccess, locale?: string): string {
   if (access.kind === "scope") return access.scope;
-  if (access.kind === "anyOf") return `uno de: ${access.scopes.join(", ")}`;
-  return "sin permiso adicional";
+  if (access.kind === "anyOf") {
+    return locale === "en" ? `one of: ${access.scopes.join(", ")}` : `uno de: ${access.scopes.join(", ")}`;
+  }
+  return locale === "en" ? "no additional permission" : "sin permiso adicional";
 }
 
 /** La key real, su prefijo recuperable o un marcador explícitamente no secreto. */

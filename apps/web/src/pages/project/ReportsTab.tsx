@@ -18,6 +18,7 @@ import {
   Stat,
   Textarea,
 } from "../../components/ui.js";
+import { formatDate, formatDateTime } from "../../lib/dates.js";
 
 /** Informes antiguos o scope general pueden traer metrics null / incompleto. */
 function dayMetricsForDisplay(metrics: DayMetrics | null): DayMetrics | null {
@@ -134,7 +135,7 @@ export default function ReportsTab({ ws, proj }: { ws: string; proj: string }) {
           <h3 className="text-h4 text-ink-900">{t("objective")}</h3>
           {objective && (
             <span className="font-mono text-caption text-ink-400">
-              {t("updated")} {new Date(objective.updatedAt).toLocaleDateString()}
+              {t("updated")} {formatDate(objective.updatedAt)}
             </span>
           )}
         </div>
@@ -196,7 +197,7 @@ export default function ReportsTab({ ws, proj }: { ws: string; proj: string }) {
                         )}
                       </p>
                       <p className="mt-1 font-mono text-caption text-ink-400">
-                        {new Date(r.createdAt).toLocaleString()}
+                        {formatDateTime(r.createdAt)}
                       </p>
                     </div>
                     {r.score != null && (
@@ -205,10 +206,10 @@ export default function ReportsTab({ ws, proj }: { ws: string; proj: string }) {
                   </div>
                   {metrics && (
                     <div className="flex flex-wrap gap-6">
-                      <Stat value={metrics.commits} label="commits" />
-                      <Stat value={metrics.contributors} label="contribuidores" />
-                      <Stat value={metrics.cardMoves} label="movimientos" />
-                      <Stat value={metrics.storyStatusChanges} label="cambios de HU" />
+                      <Stat value={metrics.commits} label={t("metricCommits")} />
+                      <Stat value={metrics.contributors} label={t("metricContributors")} />
+                      <Stat value={metrics.cardMoves} label={t("metricCardMoves")} />
+                      <Stat value={metrics.storyStatusChanges} label={t("storyChanges")} />
                     </div>
                   )}
                   {r.comment ? (
@@ -216,7 +217,7 @@ export default function ReportsTab({ ws, proj }: { ws: string; proj: string }) {
                       <MarkdownBody>{r.comment}</MarkdownBody>
                     </div>
                   ) : (
-                    <p className="text-body-sm text-ink-400">Sin comentario.</p>
+                    <p className="text-body-sm text-ink-400">{t("noComment")}</p>
                   )}
                 </article>
                 );
@@ -228,19 +229,19 @@ export default function ReportsTab({ ws, proj }: { ws: string; proj: string }) {
 
       {/* Notas */}
       <Card>
-        <h3 className="text-h4 text-ink-900">Notas</h3>
+        <h3 className="text-h4 text-ink-900">{t("notes")}</h3>
         <form onSubmit={addNote} className="mt-4 flex gap-2">
           <Input
-            placeholder="Escribe una nota o pregunta…"
+            placeholder={t("notePlaceholder")}
             value={noteText}
             onChange={(e) => setNoteText(e.target.value)}
-            aria-label="Nueva nota"
+            aria-label={t("newNoteAria")}
           />
-          <Button type="submit">Agregar</Button>
+          <Button type="submit">{t("addNote")}</Button>
         </form>
         <div className="mt-4">
           {notes.length === 0 ? (
-            <EmptyState title="Sin notas" />
+            <EmptyState title={t("noNotes")} />
           ) : (
             <div className="space-y-3">
               {notes.map((n) => (
@@ -253,7 +254,7 @@ export default function ReportsTab({ ws, proj }: { ws: string; proj: string }) {
                       tone={n.status === "processed" ? "success" : "warning"}
                       dot
                     >
-                      {n.status === "processed" ? "respondida" : "pendiente"}
+                      {n.status === "processed" ? t("noteAnswered") : t("notePending")}
                     </Badge>
                   </div>
                   {n.response ? (
@@ -263,14 +264,14 @@ export default function ReportsTab({ ws, proj }: { ws: string; proj: string }) {
                   ) : (
                     <div className="mt-3 flex gap-2">
                       <Input
-                        placeholder="Responder…"
+                        placeholder={t("replyPlaceholder")}
                         value={answers[n.id] ?? ""}
                         onChange={(e) =>
                           setAnswers((a) => ({ ...a, [n.id]: e.target.value }))
                         }
                       />
                       <Button variant="secondary" onClick={() => answerNote(n.id)}>
-                        Responder
+                        {t("reply")}
                       </Button>
                     </div>
                   )}

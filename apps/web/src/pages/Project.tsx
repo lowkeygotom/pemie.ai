@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { Link, useParams, useSearchParams } from "react-router-dom";
 import { api, ApiError, type Project as Prj } from "../lib/api.js";
 import { Badge, Card, PageHeader, Spinner, Tabs } from "../components/ui.js";
@@ -11,24 +12,38 @@ import AgentTab from "./project/AgentTab.js";
 import LeaderboardTab from "./project/LeaderboardTab.js";
 import ContributorsTab from "./project/ContributorsTab.js";
 import ProjectSearch from "./project/ProjectSearch.js";
-const TABS = [
-  { id: "overview", label: "Estado" },
-  { id: "commits", label: "Ingesta de commits" },
-  { id: "reports", label: "Objetivo e informes" },
-  { id: "stories", label: "Historias de usuario" },
-  { id: "board", label: "Kanban" },
-  { id: "leaderboard", label: "Leaderboard" },
-  { id: "activity", label: "Actividad" },
-  { id: "team", label: "Colaboradores" },
+// El `id` viaja en la URL (`?tab=`), así que es parte del contrato de un enlace
+// compartido y nunca se traduce; solo la etiqueta sale del catálogo.
+const TAB_IDS = [
+  "overview",
+  "commits",
+  "reports",
+  "stories",
+  "board",
+  "leaderboard",
+  "activity",
+  "team",
 ] as const;
 
-type TabId = (typeof TABS)[number]["id"];
+type TabId = (typeof TAB_IDS)[number];
+
+const TAB_LABEL_KEYS: Record<TabId, string> = {
+  overview: "tabOverview",
+  commits: "tabCommits",
+  reports: "tabReports",
+  stories: "tabStories",
+  board: "tabBoard",
+  leaderboard: "tabLeaderboard",
+  activity: "tabActivity",
+  team: "tabTeam",
+};
 
 function isTabId(value: string | null): value is TabId {
-  return TABS.some((t) => t.id === value);
+  return TAB_IDS.some((id) => id === value);
 }
 
 export default function Project() {
+  const { t } = useTranslation("project");
   const { slug = "", projectSlug = "" } = useParams();
   const [searchParams, setSearchParams] = useSearchParams();
   const [project, setProject] = useState<Prj | null>(null);
@@ -59,9 +74,9 @@ export default function Project() {
       .get(slug, projectSlug)
       .then((r) => setProject(r.project))
       .catch((e) =>
-        setError(e instanceof ApiError ? e.message : "No se pudo cargar el proyecto")
+        setError(e instanceof ApiError ? e.message : t("projectLoadError"))
       );
-  }, [slug, projectSlug]);
+  }, [slug, projectSlug, t]);
 
   if (error) return <Card className="text-red-600">{error}</Card>;
   if (!project) return <Spinner />;
@@ -83,7 +98,7 @@ export default function Project() {
       />
 
       <Tabs
-        items={[...TABS]}
+        items={TAB_IDS.map((id) => ({ id, label: t(TAB_LABEL_KEYS[id]) }))}
         value={tab}
         onChange={(id) => selectTab(id as TabId)}
         className="mb-6"

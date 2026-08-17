@@ -231,7 +231,7 @@ export function TelegramChannelCard({ projects }: { projects: TelegramProjectOpt
                 <Select
                   value={homeProjectId}
                   onChange={(e) => setHomeProjectId(e.target.value)}
-                  aria-label="Proyecto por defecto de Telegram"
+                  aria-label={t("telegramDefaultProjectAria")}
                 >
                   {projects.map((p) => (
                     <option key={p.id} value={p.id}>
@@ -328,7 +328,7 @@ export function TelegramChannelCard({ projects }: { projects: TelegramProjectOpt
                   setLlmProvider(p);
                   setLlmModel(CHANNEL_LLM_DEFAULT_MODELS[p]);
                 }}
-                aria-label="Proveedor LLM"
+                aria-label={t("llmProviderAria")}
               >
                 {CHANNEL_LLM_PROVIDERS.map((p) => (
                   <option key={p} value={p}>
@@ -340,7 +340,7 @@ export function TelegramChannelCard({ projects }: { projects: TelegramProjectOpt
               <Select
                 value={llmModel}
                 onChange={(e) => setLlmModel(e.target.value)}
-                aria-label="Modelo LLM"
+                aria-label={t("llmModelAria")}
               >
                 {(CHANNEL_LLM_MODELS[llmProvider] ?? [CHANNEL_LLM_DEFAULT_MODELS[llmProvider]]).map(
                   (m) => (
@@ -360,7 +360,7 @@ export function TelegramChannelCard({ projects }: { projects: TelegramProjectOpt
                 value={llmKey}
                 onChange={(e) => setLlmKey(e.target.value)}
                 className="max-w-md min-w-0 flex-1"
-                aria-label="API key LLM"
+                aria-label={t("llmKeyAria")}
               />
               <Button type="submit" disabled={busy || llmKey.trim().length < 20} variant="secondary">
                 {t("saveKey")}

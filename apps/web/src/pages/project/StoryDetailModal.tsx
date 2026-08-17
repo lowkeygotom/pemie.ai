@@ -190,8 +190,8 @@ export default function StoryDetailModal({
         </div>
 
         <div className="grid min-w-0 gap-3 sm:grid-cols-3">
-          <Field label={`Como… (${t("role")})`}>
-            <Input value={role} onChange={(e) => setRole(e.target.value)} aria-label="Rol" />
+          <Field label={`${t("narrativeAs")} (${t("role")})`}>
+            <Input value={role} onChange={(e) => setRole(e.target.value)} aria-label={t("role")} />
           </Field>
           <Field label={`${t("want")}…`}>
             <Input value={want} onChange={(e) => setWant(e.target.value)} aria-label="Quiero" />

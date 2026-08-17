@@ -608,6 +608,7 @@ export function Collapsible({
   children: ReactNode;
   className?: string;
 }) {
+  const { t } = useTranslation("common");
   const [uncontrolled, setUncontrolled] = useState(defaultOpen);
   const open = openControlled ?? uncontrolled;
 
@@ -645,7 +646,7 @@ export function Collapsible({
           ) : null}
         </span>
         <span className="mt-0.5 shrink-0 font-mono text-caption uppercase text-ink-400">
-          {open ? "Ocultar" : "Mostrar"}
+          {open ? t("hide") : t("show")}
         </span>
       </button>
       {open ? <div className="border-t border-line-100 px-6 py-5">{children}</div> : null}

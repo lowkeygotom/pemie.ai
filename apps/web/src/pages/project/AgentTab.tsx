@@ -12,6 +12,7 @@ import {
   SkeletonStats,
   Stat,
 } from "../../components/ui.js";
+import { formatDateTime } from "../../lib/dates.js";
 
 /** Actividad de alcance proyecto; la conexión y los agentes viven ahora en Equipo. */
 export default function AgentTab({ ws, proj }: { ws: string; proj: string }) {
@@ -119,7 +120,7 @@ export default function AgentTab({ ws, proj }: { ws: string; proj: string }) {
                         </code>
                       </span>
                       <span className="shrink-0 font-mono text-caption text-ink-400">
-                        {new Date(log.createdAt).toLocaleString()}
+                        {formatDateTime(log.createdAt)}
                       </span>
                     </div>
                   ))}

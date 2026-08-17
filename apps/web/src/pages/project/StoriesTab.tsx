@@ -227,25 +227,25 @@ export default function StoriesTab({ ws, proj, canManage }: { ws: string; proj: 
           </Field>
 
           <div className="grid gap-3 sm:grid-cols-3">
-            <Field label={`Como… (${t("role")})`}>
+            <Field label={`${t("narrativeAs")} (${t("role")})`}>
               <Input
                 value={role}
                 onChange={(e) => setRole(e.target.value)}
-                aria-label="Rol"
+                aria-label={t("role")}
               />
             </Field>
             <Field label={`${t("want")}…`}>
               <Input
                 value={want}
                 onChange={(e) => setWant(e.target.value)}
-                aria-label="Quiero"
+                aria-label={t("want")}
               />
             </Field>
             <Field label={`${t("benefit")}…`}>
               <Input
                 value={benefit}
                 onChange={(e) => setBenefit(e.target.value)}
-                aria-label="Beneficio"
+                aria-label={t("benefit")}
               />
             </Field>
           </div>
@@ -256,7 +256,7 @@ export default function StoriesTab({ ws, proj, canManage }: { ws: string; proj: 
                 <Select
                   value={priority}
                   onChange={(e) => setPriority(e.target.value)}
-                  aria-label="Prioridad"
+                  aria-label={t("priority")}
                 >
                   {PRIORITIES.map((p) => (
                     <option key={p} value={p}>

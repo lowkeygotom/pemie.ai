@@ -1136,7 +1136,7 @@ function AddTeamModal({
           workspaceSlug: slug,
           target: { scopeLevel: "project", project: { slug: selectedProject.slug, id: selectedProject.id } },
           scopes: scopes as ApiScope[],
-          keyRef: { kind: "placeholder", label: "<API_KEY_RECIÉN_CREADA>" },
+          keyRef: { kind: "placeholder", label: user?.locale === "en" ? "<NEWLY_CREATED_API_KEY>" : "<API_KEY_RECIÉN_CREADA>" },
           mcpUrl: MCP_URL,
           locale: user?.locale,
         })

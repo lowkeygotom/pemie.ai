@@ -8,6 +8,7 @@ import collaborationEn from "./en/collaboration.js";
 import searchEn from "./en/search.js";
 import agentsEn from "./en/agents.js";
 import commitsEn from "./en/commits.js";
+import configurationEn from "./en/configuration.js";
 import accountEs from "./es/account.js";
 import commonEs from "./es/common.js";
 import reportsEs from "./es/reports.js";
@@ -16,12 +17,13 @@ import collaborationEs from "./es/collaboration.js";
 import searchEs from "./es/search.js";
 import agentsEs from "./es/agents.js";
 import commitsEs from "./es/commits.js";
+import configurationEs from "./es/configuration.js";
 
 /** Los diccionarios se dividen por feature; `common` queda para chrome reutilizable. */
 void i18n.use(initReactI18next).init({
   resources: {
-    es: { common: commonEs, account: accountEs, reports: reportsEs, project: projectEs, collaboration: collaborationEs, search: searchEs, agents: agentsEs, commits: commitsEs },
-    en: { common: commonEn, account: accountEn, reports: reportsEn, project: projectEn, collaboration: collaborationEn, search: searchEn, agents: agentsEn, commits: commitsEn },
+    es: { common: commonEs, account: accountEs, reports: reportsEs, project: projectEs, collaboration: collaborationEs, search: searchEs, agents: agentsEs, commits: commitsEs, configuration: configurationEs },
+    en: { common: commonEn, account: accountEn, reports: reportsEn, project: projectEn, collaboration: collaborationEn, search: searchEn, agents: agentsEn, commits: commitsEn, configuration: configurationEn },
   },
   lng: "es",
   fallbackLng: "es",

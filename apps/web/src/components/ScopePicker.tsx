@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { API_SCOPES, type ApiScope } from "@pemie/shared";
 import { Button, ToggleChip } from "./ui.js";
+import { useTranslation } from "react-i18next";
 
 type ScopePreset = "read" | "write" | "custom";
 
@@ -31,6 +32,7 @@ function presetFor(scopes: readonly ApiScope[]): ScopePreset {
 }
 
 export function ScopePicker({ value, onChange }: { value: ApiScope[]; onChange: (scopes: ApiScope[]) => void }) {
+  const { t } = useTranslation("configuration");
   const [preset, setPreset] = useState<ScopePreset>(() => presetFor(value));
 
   useEffect(() => setPreset(presetFor(value)), [value]);
@@ -56,17 +58,17 @@ export function ScopePicker({ value, onChange }: { value: ApiScope[]; onChange: 
 
   return (
     <div className="space-y-4">
-      <div className="grid gap-2 sm:grid-cols-3" role="radiogroup" aria-label="Preset de permisos">
-        <PresetButton active={preset === "read"} onClick={() => selectPreset("read")} label="Solo lectura" description="Consulta el estado sin modificarlo." />
-        <PresetButton active={preset === "write"} onClick={() => selectPreset("write")} label="Lectura y escritura" description="Puede leer y también actualizar el trabajo." recommended />
-        <PresetButton active={preset === "custom"} onClick={() => selectPreset("custom")} label="Personalizado" description="Elige permisos por dominio." />
+      <div className="grid gap-2 sm:grid-cols-3" role="radiogroup" aria-label={t("scopePreset")}>
+        <PresetButton active={preset === "read"} onClick={() => selectPreset("read")} label={t("readOnly")} description={t("readOnlyDescription")} />
+        <PresetButton active={preset === "write"} onClick={() => selectPreset("write")} label={t("readWrite")} description={t("readWriteDescription")} recommended />
+        <PresetButton active={preset === "custom"} onClick={() => selectPreset("custom")} label={t("custom")} description={t("customDescription")} />
       </div>
       {preset === "custom" ? (
         <div className="overflow-x-auto rounded-md border border-line-200">
           {/* min-w evita que los chips de scope se solapen en pantallas angostas: la tabla prefiere scroll horizontal */}
           <div className="min-w-[24.5rem]">
             <div className="grid grid-cols-[minmax(5.5rem,1fr)_minmax(0,1fr)_minmax(0,1fr)] gap-2 border-b border-line-100 bg-surface-50 px-3 py-2 text-caption font-mono uppercase text-ink-500">
-              <span>Dominio</span><span>Lectura</span><span>Escritura</span>
+              <span>{t("domain")}</span><span>{t("read")}</span><span>{t("write")}</span>
             </div>
             {GROUPS.map(({ label, read, write }) => (
               <div key={label} className="grid grid-cols-[minmax(5.5rem,1fr)_minmax(0,1fr)_minmax(0,1fr)] items-center gap-2 border-b border-line-100 px-3 py-2 last:border-b-0">

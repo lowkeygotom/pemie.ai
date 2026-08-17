@@ -1022,7 +1022,7 @@ function TeamSection({
         />
       ) : null}
       {canManage && connection ? (
-        <Modal title={`Conexión · ${connection.agent.name}`} onClose={() => setConnection(null)} size="xl">
+        <Modal title={t("connectionModalTitle", { name: connection.agent.name })} onClose={() => setConnection(null)} size="xl">
           <div className="space-y-4">
             <Notice tone="info">{t("keyHashNotice")}</Notice>
             <ConnectPanel

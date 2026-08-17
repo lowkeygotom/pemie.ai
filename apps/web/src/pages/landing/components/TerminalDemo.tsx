@@ -3,6 +3,7 @@
 // pero necesita tabs + estado propio, así que vive como su propio componente.
 
 import { useState } from "react";
+import { useTranslation } from "react-i18next";
 import { TERMINAL_SCRIPTS, type TerminalTone } from "../data/terminalScripts.js";
 import { useTerminalPlayback } from "../hooks/useTerminalPlayback.js";
 
@@ -14,6 +15,7 @@ const TONE_CLASSES: Record<TerminalTone, string> = {
 };
 
 export function TerminalDemo() {
+  const { t } = useTranslation("landing");
   const [activeId, setActiveId] = useState(TERMINAL_SCRIPTS[0].id);
   const script = TERMINAL_SCRIPTS.find((s) => s.id === activeId) ?? TERMINAL_SCRIPTS[0];
   const { typed, lines } = useTerminalPlayback(script);
@@ -24,10 +26,10 @@ export function TerminalDemo() {
         <span className="h-2.5 w-2.5 rounded-pill bg-[#ff5f57]" />
         <span className="h-2.5 w-2.5 rounded-pill bg-[#febc2e]" />
         <span className="h-2.5 w-2.5 rounded-pill bg-[#28c840]" />
-        <span className="ml-3 font-mono text-mono-label text-on-ink-muted">pemie · agente (MCP)</span>
+        <span className="ml-3 font-mono text-mono-label text-on-ink-muted">{t("terminalDemo.agentMcp")}</span>
       </div>
 
-      <div className="flex flex-wrap gap-2 px-4.5 pt-3" role="tablist" aria-label="Comandos de ejemplo">
+      <div className="flex flex-wrap gap-2 px-4.5 pt-3" role="tablist" aria-label={t("terminalDemo.exampleCommands")}>
         {TERMINAL_SCRIPTS.map((s) => {
           const active = s.id === activeId;
           return (
@@ -47,7 +49,7 @@ export function TerminalDemo() {
             </button>
           );
         })}
-        <span className="ml-auto self-center font-mono text-caption text-on-ink-muted">pruébalo →</span>
+        <span className="ml-auto self-center font-mono text-caption text-on-ink-muted">{t("terminalDemo.tryIt")}</span>
       </div>
 
       <div

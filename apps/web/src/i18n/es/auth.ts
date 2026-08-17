@@ -24,4 +24,10 @@ export default {
   oauthUnknown: "No se pudo iniciar sesión con GitHub.",
   loginError: "No se pudo iniciar sesión",
   registerError: "No se pudo crear la cuenta",
+  shellEyebrow: "OPERACIONES EN VIVO",
+  shellTitle: "Tus proyectos, entendidos en tiempo real.",
+  shellSubtitle: "Historias, commits y señales del equipo conectadas en una sola vista para personas y agentes.",
+  shellCore: "NÚCLEO DE NEGOCIO",
+  goHome: "Ir al inicio de pemie.ai",
+  systemActive: "Sistema activo",
 } as const;

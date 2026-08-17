@@ -127,5 +127,5 @@ export default {
   blockError: "No se pudo bloquear el agente",
   removeMemberError: "No se pudo quitar al miembro",
   roleError: "No se pudo cambiar el rol",
-  deleteAgentError: "No se pudo eliminar el agente",
+  deleteAgentError: "No se pudo eliminar el agente", connectionModalTitle: "Conexión · {{name}}"
 } as const;

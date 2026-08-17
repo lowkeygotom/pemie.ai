@@ -277,10 +277,10 @@ export function TelegramChannelCard({ projects }: { projects: TelegramProjectOpt
                 </p>
               )}
               {!deepLink && startPayload && (
-                <CodeBlock title="En el bot, envía">{`/start ${startPayload}`}</CodeBlock>
+                <CodeBlock title={t("sendInBot")}>{`/start ${startPayload}`}</CodeBlock>
               )}
               {deepLink && startPayload && (
-                <p className="font-mono text-caption text-ink-400">o /start {startPayload}</p>
+                <p className="font-mono text-caption text-ink-400">{t("orStart", { payload: startPayload })}</p>
               )}
             </div>
           )}

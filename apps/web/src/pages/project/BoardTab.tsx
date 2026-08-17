@@ -68,24 +68,24 @@ function columnLabel(board: Board, id: string) {
   return board.columns.find((c) => c.id === id)?.name ?? id;
 }
 
-function announcements(board: Board): Announcements {
+function announcements(board: Board, t: (key: string, options?: Record<string, unknown>) => string): Announcements {
   return {
-    onDragStart: ({ active }) => `Levantaste la tarjeta "${cardLabel(board, String(active.id))}".`,
+    onDragStart: ({ active }) => t("dragLifted", { card: cardLabel(board, String(active.id)) }),
     onDragOver: ({ active, over }) =>
       over
-        ? `Tarjeta "${cardLabel(board, String(active.id))}" sobre la columna "${columnLabel(
-            board,
-            findContainer(board, String(over.id)) ?? String(over.id)
-          )}".`
-        : `Tarjeta "${cardLabel(board, String(active.id))}" fuera de cualquier columna.`,
+        ? t("dragOverColumn", {
+            card: cardLabel(board, String(active.id)),
+            column: columnLabel(board, findContainer(board, String(over.id)) ?? String(over.id)),
+          })
+        : t("dragOverEmpty", { card: cardLabel(board, String(active.id)) }),
     onDragEnd: ({ active, over }) =>
       over
-        ? `Tarjeta "${cardLabel(board, String(active.id))}" soltada en la columna "${columnLabel(
-            board,
-            findContainer(board, String(over.id)) ?? String(over.id)
-          )}".`
-        : `Se canceló el movimiento de "${cardLabel(board, String(active.id))}".`,
-    onDragCancel: ({ active }) => `Se canceló el movimiento de "${cardLabel(board, String(active.id))}".`,
+        ? t("dragDropped", {
+            card: cardLabel(board, String(active.id)),
+            column: columnLabel(board, findContainer(board, String(over.id)) ?? String(over.id)),
+          })
+        : t("dragCancelled", { card: cardLabel(board, String(active.id)) }),
+    onDragCancel: ({ active }) => t("dragCancelled", { card: cardLabel(board, String(active.id)) }),
   };
 }
 
@@ -536,7 +536,7 @@ export default function BoardTab({ ws, proj, canManage }: { ws: string; proj: st
           // reordenamiento optimista de handleDragOver sin persistir — resincroniza.
           void resyncBoard();
         }}
-        accessibility={{ announcements: announcements(board) }}
+        accessibility={{ announcements: announcements(board, t) }}
       >
         <div className="relative">
           {canScrollLeft && (

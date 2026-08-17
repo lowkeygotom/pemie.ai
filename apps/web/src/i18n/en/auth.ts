@@ -24,4 +24,10 @@ export default {
   oauthUnknown: "Could not sign in with GitHub.",
   loginError: "Could not sign in",
   registerError: "Could not create the account",
+  shellEyebrow: "LIVE OPERATIONS",
+  shellTitle: "Your projects, understood in real time.",
+  shellSubtitle: "Stories, commits, and team signals connected in one view for people and agents.",
+  shellCore: "BUSINESS CORE",
+  goHome: "Go to pemie.ai home",
+  systemActive: "System active",
 } as const;

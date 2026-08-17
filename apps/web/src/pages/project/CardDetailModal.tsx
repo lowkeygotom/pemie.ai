@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { formatNarrative } from "@pemie/shared";
 import {
@@ -25,20 +26,20 @@ import {
 } from "../../components/ui.js";
 import { AssigneeNotice, AssigneeSelect } from "./AssigneeField.js";
 
-function activityLabel(a: CardActivity): string {
+function activityLabel(a: CardActivity, t: (key: string, options?: Record<string, unknown>) => string): string {
   switch (a.action) {
     case "created":
-      return `Creada en ${a.toValue ?? "columna"}`;
+      return t("activityCreated", { column: a.toValue ?? t("column") });
     case "moved":
-      return `Movida de ${a.fromValue ?? "?"} a ${a.toValue ?? "?"}`;
+      return t("activityMoved", { from: a.fromValue ?? "?", to: a.toValue ?? "?" });
     case "assigned":
-      return a.toValue ? `Asignada` : `Sin asignar`;
+      return a.toValue ? t("activityAssigned") : t("activityUnassigned");
     case "linked_story":
-      return `HU vinculada`;
+      return t("activityLinked");
     case "unlinked_story":
-      return `HU desvinculada`;
+      return t("activityUnlinked");
     case "updated":
-      return `Actualizada: ${a.fromValue ?? "?"} → ${a.toValue ?? "?"}`;
+      return t("activityUpdated", { from: a.fromValue ?? "?", to: a.toValue ?? "?" });
     default:
       return a.action;
   }
@@ -92,6 +93,7 @@ export default function CardDetailModal({
   onDeleted: (cardId: string) => void;
   canManage: boolean;
 }) {
+  const { t } = useTranslation("project");
   const queryClient = useQueryClient();
   const [title, setTitle] = useState(card.title);
   const [type, setType] = useState(card.type);
@@ -135,7 +137,7 @@ export default function CardDetailModal({
   const metaLoading = assigneesQuery.isLoading || storiesQuery.isLoading || activitiesQuery.isLoading;
   const loadError = assigneesQuery.error ?? storiesQuery.error ?? activitiesQuery.error;
   const error =
-    actionError ?? (loadError ? (loadError instanceof ApiError ? loadError.message : "No se pudieron cargar los datos") : null);
+    actionError ?? (loadError ? (loadError instanceof ApiError ? loadError.message : t("cardLoadError")) : null);
 
   // Stories disponibles: sin tarjeta, o la vinculada a esta card.
   const storyOptions = useMemo(() => {
@@ -147,7 +149,7 @@ export default function CardDetailModal({
 
   async function save() {
     if (title.trim().length < 1) {
-      setActionError("El título no puede estar vacío");
+      setActionError(t("emptyTitle"));
       return;
     }
     setSaving(true);
@@ -169,7 +171,7 @@ export default function CardDetailModal({
       queryClient.invalidateQueries({ queryKey: activitiesQueryKey });
       onChanged(finalCard, updated.assignmentNotification);
     } catch (e) {
-      setActionError(e instanceof ApiError ? e.message : "No se pudo guardar la tarjeta");
+      setActionError(e instanceof ApiError ? e.message : t("saveCardError"));
     } finally {
       setSaving(false);
     }
@@ -184,34 +186,34 @@ export default function CardDetailModal({
       onDeleted(card.id);
     } catch (e) {
       track("board_card_deleted_failed", { reason: analyticsFailureReason(e) });
-      setActionError(e instanceof ApiError ? e.message : "No se pudo eliminar la tarjeta");
+      setActionError(e instanceof ApiError ? e.message : t("deleteCardError"));
       setDeleting(false);
       setConfirmingDelete(false);
     }
   }
 
   return (
-    <Modal title="Detalle de tarjeta" onClose={onClose} wide>
+    <Modal title={t("cardDetailTitle")} onClose={onClose} wide>
       <ErrorText>{error}</ErrorText>
 
       <div className="min-w-0 space-y-4">
-        <Field label="Título">
-          <Input value={title} onChange={(e) => setTitle(e.target.value)} aria-label="Título" />
+        <Field label={t("title")}>
+          <Input value={title} onChange={(e) => setTitle(e.target.value)} aria-label={t("title")} />
         </Field>
 
         <div className="grid min-w-0 gap-3 sm:grid-cols-2">
-          <Field label="Tipo">
-            <Select value={type} onChange={(e) => setType(e.target.value)} aria-label="Tipo">
+          <Field label={t("type")}>
+            <Select value={type} onChange={(e) => setType(e.target.value)} aria-label={t("type")}>
               <option value="task">task</option>
               <option value="story">story</option>
               <option value="bug">bug</option>
             </Select>
           </Field>
-          <Field label="Columna">
+          <Field label={t("column")}>
             <Select
               value={columnId}
               onChange={(e) => setColumnId(e.target.value)}
-              aria-label="Columna"
+              aria-label={t("column")}
             >
               {columns.map((c) => (
                 <option key={c.id} value={c.id}>
@@ -222,13 +224,13 @@ export default function CardDetailModal({
           </Field>
         </div>
 
-        <Field label="Descripción">
+        <Field label={t("description")}>
           <Textarea
             rows={4}
             value={description}
             onChange={(e) => setDescription(e.target.value)}
-            placeholder="Detalles de la tarjeta…"
-            aria-label="Descripción"
+            placeholder={t("cardDescriptionPlaceholder")}
+            aria-label={t("description")}
           />
         </Field>
 
@@ -238,13 +240,13 @@ export default function CardDetailModal({
           <>
             <div className="grid min-w-0 gap-3 sm:grid-cols-2">
               <AssigneeSelect value={assigneeId} onChange={setAssigneeId} candidates={assigneeCandidates} />
-              <Field label="Historia de usuario">
+              <Field label={t("userStory")}>
                 <Select
                   value={userStoryId}
                   onChange={(e) => setUserStoryId(e.target.value)}
-                  aria-label="Historia de usuario"
+                  aria-label={t("userStory")}
                 >
-                  <option value="">Sin HU</option>
+                  <option value="">{t("noStory")}</option>
                   {storyOptions.map((s) => (
                     <option key={s.id} value={s.id}>
                       {s.key} — {s.title}
@@ -262,9 +264,9 @@ export default function CardDetailModal({
             ) : null}
 
             <div className="min-w-0 border-t border-line-100 pt-4">
-              <h4 className="mb-2 text-body-sm font-semibold text-ink-800">Actividad</h4>
+              <h4 className="mb-2 text-body-sm font-semibold text-ink-800">{t("activity")}</h4>
               {activities.length === 0 ? (
-                <p className="text-body-sm text-ink-400">Sin actividad todavía.</p>
+                <p className="text-body-sm text-ink-400">{t("noActivity")}</p>
               ) : (
                 <ul className="space-y-2">
                   {activities.map((a) => (
@@ -276,7 +278,7 @@ export default function CardDetailModal({
                           </Badge>
                         </span>
                         <span className="mr-2 text-body-sm text-ink-700">{a.actorName}</span>
-                        {activityLabel(a)}
+                        {activityLabel(a, t)}
                       </span>
                       <time className="shrink-0 font-mono text-caption text-ink-400">
                         {new Date(a.createdAt).toLocaleString()}
@@ -292,13 +294,11 @@ export default function CardDetailModal({
         {confirmingDelete ? (
           <div className="space-y-3 border-t border-line-100 pt-4">
             <p className="text-body-sm text-ink-700">
-              ¿Eliminar <span className="font-medium text-ink-900">{card.title}</span> del
-              tablero? Se pierde también su actividad y no se puede deshacer.
+              {t("deleteCardQuestion", { title: card.title })}
             </p>
             <p className="text-body-sm text-ink-500">
               {card.userStoryId
-                ? "Su Historia de Usuario NO se elimina: sigue en el listado, sin tarjeta."
-                : "Esta tarjeta no tiene ninguna Historia de Usuario vinculada."}
+                ? t("linkedStoryKept") : t("noLinkedStory")}
             </p>
             <div className="flex flex-wrap justify-end gap-2">
               <Button
@@ -306,10 +306,10 @@ export default function CardDetailModal({
                 onClick={() => setConfirmingDelete(false)}
                 disabled={deleting}
               >
-                Cancelar
+                {t("cancel")}
               </Button>
               <Button variant="danger" onClick={remove} disabled={deleting}>
-                {deleting ? "Eliminando…" : "Eliminar tarjeta"}
+                {deleting ? t("deleting") : t("deleteCard")}
               </Button>
             </div>
           </div>
@@ -319,16 +319,16 @@ export default function CardDetailModal({
               variant="danger"
               onClick={() => setConfirmingDelete(true)}
               disabled={saving}
-              aria-label={`Eliminar tarjeta ${card.title}`}
+              aria-label={t("deleteCardAria", { title: card.title })}
             >
-              Eliminar
+              {t("delete")}
             </Button>
             <div className="flex gap-2">
               <Button variant="secondary" onClick={onClose} disabled={saving}>
-                Cancelar
+                {t("cancel")}
               </Button>
               <Button onClick={save} disabled={saving || metaLoading}>
-                {saving ? "Guardando…" : "Guardar"}
+                {saving ? t("saving") : t("save")}
               </Button>
             </div>
           </div>

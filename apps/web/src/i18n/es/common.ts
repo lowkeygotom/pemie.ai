@@ -16,4 +16,5 @@ export default {
   noWorkspaces: "Aún no tienes workspaces",
   noWorkspacesDescription: "Crea el primero para empezar a organizar tus proyectos y equipo.",
   createWorkspace: "Crear workspace",
+  dismissNotice: "Descartar aviso", copy: "Copiar", close: "Cerrar", noData: "Sin datos", dropSkillFolder: "Arrastrá una carpeta de skill acá", chooseSkillFolder: "o hacé clic para elegirla", capabilityReceipt: "Este prompt lista {{included}} de {{total}} herramientas: las que permiten los permisos elegidos. El servidor MCP aplica el mismo filtro.", excludedTools: "Ver las herramientas que quedan fuera", enableWith: "habilítala con {{needs}}", keyShownOnce: "Esta key solo se muestra ahora. Guárdala antes de cerrar este diálogo.", manualConnection: "Conexión manual", manualConnectionDescription: "El endpoint y un curl para diagnosticar la conexión.",
 };

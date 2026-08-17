@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useTranslation } from "react-i18next";
 import { isValidSkillSlug } from "@pemie/shared";
 import { api, ApiError } from "../../lib/api.js";
 import { queryKeys, STALE_TIME } from "../../lib/queryClient.js";
@@ -55,6 +56,7 @@ function inferMeta(files: Array<{ path: string; file: File }>) {
 }
 
 export default function WorkspaceSkills() {
+  const { t } = useTranslation("skills");
   const { slug = "" } = useParams();
   const queryClient = useQueryClient();
   const [selected, setSelected] = useState<string | null>(null);
@@ -67,16 +69,16 @@ export default function WorkspaceSkills() {
     staleTime: STALE_TIME.moderate,
   });
   const skills = data ?? [];
-  const errorMessage = error instanceof ApiError ? error.message : error ? "Error cargando las skills" : null;
+  const errorMessage = error instanceof ApiError ? error.message : error ? t("loadError") : null;
 
   const upload = useMutation({
     mutationFn: async (fileList: FileList) => {
       setUploadError(null);
       setUploadProgress(0);
       const parts = relativeSkillFiles(fileList);
-      if (parts.length === 0) throw new ApiError(400, "La carpeta no tiene archivos", "empty_files");
+      if (parts.length === 0) throw new ApiError(400, t("emptyFiles"), "empty_files");
       if (!parts.some((p) => p.path === "SKILL.md"))
-        throw new ApiError(400, "Falta SKILL.md en la raíz de la carpeta", "missing_skill_md");
+        throw new ApiError(400, t("missingSkillMd"), "missing_skill_md");
 
       const meta = inferMeta(parts);
       const ticket = await api.skills.create(slug, meta);
@@ -96,7 +98,7 @@ export default function WorkspaceSkills() {
     },
     onError: (err) => {
       setUploadProgress(null);
-      setUploadError(err instanceof ApiError ? err.message : "No se pudo subir la skill");
+      setUploadError(err instanceof ApiError ? err.message : t("uploadError"));
     },
   });
 
@@ -114,11 +116,11 @@ export default function WorkspaceSkills() {
   return (
     <div>
       <Link to={`/w/${slug}`} className="mb-1 block text-body-sm text-ink-400 hover:text-ink-700">
-        ← workspace
+        {t("workspace")}
       </Link>
       <PageHeader
-        title="Skills del equipo"
-        description="Biblioteca del workspace: publicá desde un agente (tar|curl) o arrastrá una carpeta acá."
+        title={t("title")}
+        description={t("description")}
       />
 
       <div className="space-y-6">
@@ -128,20 +130,20 @@ export default function WorkspaceSkills() {
         <DropZone
           disabled={upload.isPending}
           onFiles={(files) => upload.mutate(files)}
-          label="Arrastrá una carpeta de skill"
-          hint="Debe incluir SKILL.md en la raíz. También podés publicar vía MCP (publish_skill → tar|curl)."
+          label={t("dropLabel")}
+          hint={t("dropHint")}
         />
         {uploadProgress != null ? (
-          <ProgressBar value={uploadProgress} label="Subiendo skill" />
+          <ProgressBar value={uploadProgress} label={t("uploading")} />
         ) : null}
 
         <Card>
-          <h3 className="text-h4 text-ink-900">Catálogo</h3>
+          <h3 className="text-h4 text-ink-900">{t("catalog")}</h3>
           <div className="mt-4">
             {skills.length === 0 ? (
               <EmptyState
-                title="Todavía no hay skills en este workspace"
-                description="Arrastrá la primera carpeta arriba, o pedile a un agente conectado que publique una con publish_skill."
+                title={t("empty")}
+                description={t("emptyDescription")}
               />
             ) : (
               <div className="divide-y divide-line-100">
@@ -163,7 +165,7 @@ export default function WorkspaceSkills() {
                     </div>
                     <div className="flex flex-shrink-0 items-center gap-3 font-mono text-caption text-ink-400">
                       <Badge tone={skill.publishedByType === "agent" ? "brand" : "neutral"} dot mono>
-                        {skill.publishedByType === "agent" ? "Agente" : "Persona"}
+                        {skill.publishedByType === "agent" ? t("agent") : t("person")}
                       </Badge>
                       <span>{formatDate(skill.updatedAt)}</span>
                     </div>

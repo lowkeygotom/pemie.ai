@@ -4,7 +4,8 @@
 // propósito: viven en su propia pestaña y repetirlos acá diluía el foco.
 
 import { useQuery } from "@tanstack/react-query";
-import type { DriftAlert, DriftAlertType, UserStoryStatus } from "@pemie/shared";
+import { useTranslation } from "react-i18next";
+import type { DriftAlert, UserStoryStatus } from "@pemie/shared";
 import { api, ApiError } from "../../lib/api.js";
 import { queryKeys, STALE_TIME } from "../../lib/queryClient.js";
 import {
@@ -20,35 +21,22 @@ import {
   SkeletonList,
 } from "../../components/ui.js";
 
-const ALERT_META: Record<DriftAlertType, { label: string; tone: BadgeTone }> = {
-  unreported_work: { label: "Trabajo no reportado", tone: "danger" },
-  stalled_wip: { label: "Estancada", tone: "warning" },
-};
-
 /** Etiqueta y tono de cada estado: la vista nunca muestra el valor crudo del backend. */
-const STATUS_META: Record<UserStoryStatus, { label: string; tone: BadgeTone }> = {
-  backlog: { label: "Backlog", tone: "neutral" },
-  ready: { label: "Por hacer", tone: "brand" },
-  in_progress: { label: "En progreso", tone: "brand" },
-  review: { label: "Revisión", tone: "warning" },
-  done: { label: "Hecho", tone: "success" },
-};
+const STATUS_META: Record<UserStoryStatus, { key: string; tone: BadgeTone }> = { backlog: { key: "statusBacklog", tone: "neutral" }, ready: { key: "statusReady", tone: "brand" }, in_progress: { key: "statusInProgress", tone: "brand" }, review: { key: "statusReview", tone: "warning" }, done: { key: "statusDone", tone: "success" } };
 
 function fmtDate(iso: string | null): string {
   return iso ? new Date(iso).toLocaleDateString() : "—";
 }
 
-const plural = (n: number, singular: string) => `${n} ${singular}${n === 1 ? "" : "s"}`;
-
-function alertDescription(alert: DriftAlert): string {
+function alertDescription(alert: DriftAlert, t: (key: string, options?: Record<string, unknown>) => string): string {
   const e = alert.evidence;
   switch (e.type) {
     case "unreported_work":
-      return `${plural(e.commitCount, "commit")} sin que la HU haya salido del backlog (último el ${fmtDate(e.lastCommitAt)}).`;
+      return t("driftUnreported", { count: e.commitCount, suffix: e.commitCount === 1 ? "" : "s", date: fmtDate(e.lastCommitAt) });
     case "stalled_wip":
       return e.lastCommitAt
-        ? `Sin commits nuevos hace ${plural(e.daysSince, "día")} (último el ${fmtDate(e.lastCommitAt)}).`
-        : `Sin ningún commit desde que entró en curso, hace ${plural(e.daysSince, "día")}.`;
+        ? t("driftStalled", { count: e.daysSince, suffix: e.daysSince === 1 ? "" : "s", date: fmtDate(e.lastCommitAt) })
+        : t("driftNeverCommitted", { count: e.daysSince, suffix: e.daysSince === 1 ? "" : "s" });
   }
 }
 
@@ -68,6 +56,8 @@ function SkeletonOverview() {
 }
 
 export default function OverviewTab({ ws, proj }: { ws: string; proj: string }) {
+  const { t } = useTranslation("project");
+  const alertMeta = { unreported_work: { label: "Trabajo no reportado", tone: "danger" as const }, stalled_wip: { label: "Estancada", tone: "warning" as const } };
   const { data, isLoading, error } = useQuery({
     queryKey: queryKeys.overview(ws, proj),
     queryFn: () => api.projects.overview(ws, proj),
@@ -80,7 +70,7 @@ export default function OverviewTab({ ws, proj }: { ws: string; proj: string }) 
     return (
       <Card>
         <ErrorText>
-          {error instanceof ApiError ? error.message : "No se pudo cargar el estado del proyecto"}
+          {error instanceof ApiError ? error.message : t("overviewLoadError")}
         </ErrorText>
       </Card>
     );
@@ -99,9 +89,9 @@ export default function OverviewTab({ ws, proj }: { ws: string; proj: string }) 
       {/* WIP por columna */}
       <Card>
         <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
-          <h3 className="text-h4 text-ink-900">Carga del tablero</h3>
+          <h3 className="text-h4 text-ink-900">{t("boardLoad")}</h3>
           <span className="font-mono text-caption text-ink-400">
-            {plural(totalWip, "tarjeta")} en total
+            {t("totalCards", { count: totalWip, suffix: totalWip === 1 ? "" : "s" })}
           </span>
         </div>
         {/* Las columnas van en el orden del tablero, no por tamaño: la vista
@@ -112,26 +102,25 @@ export default function OverviewTab({ ws, proj }: { ws: string; proj: string }) 
               .slice()
               .sort((a, b) => a.order - b.order)
               .map((col) => ({ label: col.name, value: col.cardCount }))}
-            emptyLabel="El tablero todavía no tiene columnas"
+            emptyLabel={t("boardLoadEmpty")}
           />
         </div>
         <p className="mt-4 text-caption text-ink-400">
-          {stats.totalCommits} commit{stats.totalCommits === 1 ? "" : "s"} ingestados de{" "}
-          {stats.repoCount} repo{stats.repoCount === 1 ? "" : "s"}.
+          {t("commitsInRepos", { commits: stats.totalCommits, commitSuffix: stats.totalCommits === 1 ? "" : "s", repos: stats.repoCount, repoSuffix: stats.repoCount === 1 ? "" : "s" })}
         </p>
       </Card>
 
       {/* Drift (PEM-50 + PEM-51) */}
       <Collapsible
-        title="Alertas de drift"
+        title={t("driftAlerts")}
         badge={
           drift.correlationAvailable ? (
             <>
               <Badge tone={drift.alerts.length > 0 ? "danger" : "neutral"} mono>
-                {plural(drift.alerts.length, "alerta")}
+                {t("alerts", { count: drift.alerts.length, suffix: drift.alerts.length === 1 ? "" : "s" })}
               </Badge>
               <Badge tone="neutral" mono>
-                {(drift.correlationCoverage * 100).toFixed(0)}% cobertura
+                {t("coverage", { value: (drift.correlationCoverage * 100).toFixed(0) })}
               </Badge>
             </>
           ) : null
@@ -139,32 +128,29 @@ export default function OverviewTab({ ws, proj }: { ws: string; proj: string }) 
       >
         {!drift.correlationAvailable ? (
           <Notice tone="info">
-            Este proyecto no referencia keys de HU (ej. "PRJ-123") en sus commits, así que no
-            podemos comparar el tablero contra la evidencia real. El resto del resumen es igual
-            de confiable.
+            {t("noCorrelation")}
           </Notice>
         ) : (
           <>
             <p className="mb-4 font-mono text-caption text-ink-400">
-              umbral: {drift.staleDaysThreshold}d sin commits
+              {t("threshold", { days: drift.staleDaysThreshold })}
             </p>
             {drift.coverageBelowThreshold ? (
               <div className="mb-4">
                 <Notice tone="info">
-                  Cobertura baja ({(drift.correlationCoverage * 100).toFixed(0)}% &lt;{" "}
-                  {(drift.coverageThreshold * 100).toFixed(0)}%): alertas de "estancada" suprimidas.
+                  {t("lowCoverage", { coverage: (drift.correlationCoverage * 100).toFixed(0), threshold: (drift.coverageThreshold * 100).toFixed(0) })}
                 </Notice>
               </div>
             ) : null}
             {drift.alerts.length === 0 ? (
               <EmptyState
-                title="Sin alertas"
-                description="El tablero coincide con la evidencia de commits: nada parece fuera de sincronía."
+                title={t("noAlerts")}
+                description={t("noAlertsDescription")}
               />
             ) : (
               <div className="divide-y divide-line-100">
                 {drift.alerts.map((alert) => {
-                  const meta = ALERT_META[alert.evidence.type];
+                  const meta = alertMeta[alert.evidence.type];
                   return (
                     <div key={`${alert.evidence.type}:${alert.story.id}`} className="flex items-start gap-3 py-3.5">
                       <Badge tone={meta.tone} dot>
@@ -177,10 +163,10 @@ export default function OverviewTab({ ws, proj }: { ws: string; proj: string }) 
                             {alert.story.title}
                           </span>
                           <Badge tone={STATUS_META[alert.story.status].tone}>
-                            {STATUS_META[alert.story.status].label}
+                            {t(STATUS_META[alert.story.status].key)}
                           </Badge>
                         </div>
-                        <p className="mt-1 text-body-sm text-ink-500">{alertDescription(alert)}</p>
+                        <p className="mt-1 text-body-sm text-ink-500">{alertDescription(alert, t)}</p>
                       </div>
                     </div>
                   );

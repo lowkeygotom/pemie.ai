@@ -26,13 +26,8 @@ import {
   Stat,
 } from "../../components/ui.js";
 import DomainConfigEditor from "./DomainConfigEditor.js";
+import { useTranslation } from "react-i18next";
 
-const DATE_PRESETS = [
-  { value: "", label: "Todo" },
-  { value: "7", label: "Últimos 7 días" },
-  { value: "30", label: "Últimos 30 días" },
-  { value: "90", label: "Últimos 90 días" },
-];
 
 /**
  * Inicio (UTC) del día que abre la ventana del preset.
@@ -63,6 +58,8 @@ const AUTO_SYNC_INTERVAL_MS = 10 * 60 * 1000;
 const lastAutoSyncAt = new Map<string, number>();
 
 export default function CommitsTab({ ws, proj, project }: { ws: string; proj: string; project: Project }) {
+  const { t } = useTranslation("commits");
+  const datePresets = [{ value: "", label: t("everything") }, { value: "7", label: t("last7") }, { value: "30", label: t("last30") }, { value: "90", label: t("last90") }];
   const queryClient = useQueryClient();
   const [domainConfig, setDomainConfig] = useState<DomainConfig | null>(project.domainConfig);
   const [domainFilter, setDomainFilter] = useState<string | null>(null);
@@ -110,7 +107,7 @@ export default function CommitsTab({ ws, proj, project }: { ws: string; proj: st
   const loading = reposQuery.isLoading || statsQuery.isLoading;
   const loadError = reposQuery.error ?? statsQuery.error ?? commitsQuery.error;
   const error =
-    actionError ?? (loadError ? (loadError instanceof ApiError ? loadError.message : "Error cargando la ingesta") : null);
+    actionError ?? (loadError ? (loadError instanceof ApiError ? loadError.message : t("loadError")) : null);
 
   const resolvedConfig = domainConfig ?? DEFAULT_DOMAIN_CONFIG;
   const labelByKey = useMemo(() => {
@@ -178,7 +175,7 @@ export default function CommitsTab({ ws, proj, project }: { ws: string; proj: st
       setSyncResult(result);
       invalidateIngestData();
     } catch (e) {
-      setActionError(e instanceof ApiError ? e.message : "No se pudo sincronizar con GitHub");
+      setActionError(e instanceof ApiError ? e.message : t("syncFailed"));
     } finally {
       setSyncing(false);
     }
@@ -219,7 +216,7 @@ export default function CommitsTab({ ws, proj, project }: { ws: string; proj: st
       });
       invalidateIngestData();
     } catch (e) {
-      setActionError(e instanceof ApiError ? e.message : "No se pudo vincular el repo");
+      setActionError(e instanceof ApiError ? e.message : t("linkFailed"));
     } finally {
       setLinking(null);
     }
@@ -274,10 +271,10 @@ export default function CommitsTab({ ws, proj, project }: { ws: string; proj: st
           onDismiss={() => setSyncResult(null)}
         >
           {syncResult.ingested > 0
-            ? `Se registraron ${syncResult.ingested} commits nuevos.`
+            ? t("synced", { count: syncResult.ingested })
             : syncResult.failed.length === syncResult.repos
-              ? "No se pudo leer ningún repositorio."
-              : "Todo al día: no había commits nuevos."}
+              ? t("syncNone")
+              : t("upToDate")}
           {syncResult.failed.length > 0 && (
             <ul className="mt-2 space-y-1">
               {syncResult.failed.map((f) => (
@@ -294,13 +291,13 @@ export default function CommitsTab({ ws, proj, project }: { ws: string; proj: st
       {stats && (
         <div className="grid gap-4 sm:grid-cols-3">
           <Card>
-            <Stat value={stats.totalCommits} label="Commits totales" />
+            <Stat value={stats.totalCommits} label={t("total")} />
           </Card>
           <Card>
-            <Stat value={stats.repoCount} label="Repositorios" />
+            <Stat value={stats.repoCount} label={t("repositories")} />
           </Card>
           <Card>
-            <p className="text-caption font-mono uppercase text-ink-500">Por dominio</p>
+            <p className="text-caption font-mono uppercase text-ink-500">{t("byDomain")}</p>
             <div className="mt-2 flex flex-wrap gap-1.5">
               {stats.byDomain.length === 0 && (
                 <span className="text-body-sm text-ink-400">—</span>
@@ -350,11 +347,11 @@ export default function CommitsTab({ ws, proj, project }: { ws: string; proj: st
       {/* Repos vinculados */}
       <Card>
         <div className="flex flex-wrap items-center justify-between gap-2">
-          <h3 className="text-h4 text-ink-900">Repositorios vinculados</h3>
+          <h3 className="text-h4 text-ink-900">{t("linkedRepositories")}</h3>
           <div className="flex flex-wrap items-center gap-2">
             {repos.length > 0 && (
               <Button variant="secondary" size="sm" onClick={sync} disabled={syncing}>
-                {syncing ? "Sincronizando…" : "Sincronizar commits"}
+                {syncing ? t("syncing") : t("sync")}
               </Button>
             )}
             <Button variant="secondary" size="sm" onClick={openPicker}>
@@ -365,8 +362,8 @@ export default function CommitsTab({ ws, proj, project }: { ws: string; proj: st
         <div className="mt-4">
           {repos.length === 0 ? (
             <EmptyState
-              title="Sin repositorios"
-              description='Pulsa "Vincular repo de GitHub" y elige de tu lista.'
+              title={t("noRepositories")}
+              description={t("noRepositoriesDescription")}
             />
           ) : (
             <div className="divide-y divide-line-100">
@@ -434,10 +431,10 @@ export default function CommitsTab({ ws, proj, project }: { ws: string; proj: st
                 <div className="border-b border-line-100 p-3">
                   <Input
                     autoFocus
-                    placeholder="Buscar repo…"
+                    placeholder={t("searchRepo")}
                     value={query}
                     onChange={(e) => setQuery(e.target.value)}
-                    aria-label="Buscar repositorio"
+                    aria-label={t("searchRepoAria")}
                   />
                 </div>
                 <div className="max-h-[55vh] divide-y divide-line-100 overflow-y-auto">
@@ -475,7 +472,7 @@ export default function CommitsTab({ ws, proj, project }: { ws: string; proj: st
                             disabled={linking === r.fullName}
                             onClick={() => linkFromGithub(r)}
                           >
-                            {linking === r.fullName ? "…" : "Vincular"}
+                            {linking === r.fullName ? "…" : t("link")}
                           </Button>
                         )}
                       </div>
@@ -545,7 +542,7 @@ export default function CommitsTab({ ws, proj, project }: { ws: string; proj: st
                 aria-label="Filtrar por fecha"
                 className="!py-2 !text-body-sm"
               >
-                {DATE_PRESETS.map((p) => (
+                {datePresets.map((p) => (
                   <option key={p.value} value={p.value}>
                     {p.label}
                   </option>
@@ -573,13 +570,13 @@ export default function CommitsTab({ ws, proj, project }: { ws: string; proj: st
             <SkeletonList rows={5} />
           ) : commits.length === 0 ? (
             <EmptyState
-              title="Sin commits todavía"
+              title={t("noCommits")}
               description={
                 domainFilter || contributorFilter || datePreset
-                  ? "No hay commits que coincidan con estos filtros."
+                    ? t("noMatch")
                   : repos.length === 0
-                    ? "Vincula un repositorio de GitHub para empezar a ver la actividad del equipo."
-                    : 'Pulsa "Sincronizar commits" para traer el historial con tu cuenta de GitHub.'
+                    ? t("noRepoActivity")
+                    : t("syncHistory")
               }
             />
           ) : (

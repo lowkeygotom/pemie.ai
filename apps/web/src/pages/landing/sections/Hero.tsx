@@ -1,26 +1,27 @@
+import { useTranslation } from "react-i18next";
 import { Button, GithubIcon } from "../../../components/ui.js";
 import { AnimatedWordmark } from "../components/AnimatedWordmark.js";
 import { TerminalDemo } from "../components/TerminalDemo.js";
 
 export function Hero({ githubUrl }: { githubUrl: string }) {
+  const { t } = useTranslation("landing");
   return (
     <header className="bg-gradient-to-b from-surface-0 to-surface-50 px-4 py-16 text-center sm:px-8 sm:py-24">
       <div className="mx-auto flex max-w-[960px] flex-col items-center gap-7">
         <AnimatedWordmark />
         <p className="animate-fade-up m-0 max-w-[760px] text-h3 font-bold leading-tight text-ink-900 sm:text-h1 [animation-delay:120ms]">
-          El avance del equipo, legible para humanos y agentes.
+          {t("hero.title")}
         </p>
         <p className="animate-fade-up m-0 max-w-[620px] text-body-lg leading-relaxed text-ink-600 [animation-delay:220ms]">
-          Pemie conecta tu GitHub, clasifica el trabajo real por dominio y expone la misma
-          verdad a tu equipo y a tus agentes, con permisos de verdad.
+          {t("hero.subtitle")}
         </p>
         <div className="animate-fade-up flex flex-wrap justify-center gap-3.5 [animation-delay:320ms]">
           <a href="/login">
-            <Button size="lg">Empezar</Button>
+            <Button size="lg">{t("footer.start")}</Button>
           </a>
           <a href={githubUrl}>
             <Button variant="secondary" size="lg" className="gap-2.5 border-[1.5px] border-ink-900">
-              <GithubIcon /> Continuar con GitHub
+              <GithubIcon /> {t("nav.continueWithGithub")}
             </Button>
           </a>
         </div>

@@ -28,7 +28,7 @@ import { fetchUserRepos } from "../lib/github-oauth.js";
 /** Carga un proyecto verificando que el usuario tenga `minRole` en su workspace. */
 export async function projectWithAccess(userId: string, projectId: string, minRole: Role = "viewer") {
   const project = await prisma.project.findUnique({ where: { id: projectId } });
-  if (!project) throw notFound("Proyecto no encontrado");
+  if (!project) throw notFound("project_not_found");
   await requireMembership(userId, project.workspaceId, minRole);
   return project;
 }
@@ -36,7 +36,7 @@ export async function projectWithAccess(userId: string, projectId: string, minRo
 /** Carga un repo (con su proyecto) verificando acceso del usuario. */
 async function repoWithAccess(userId: string, repoId: string, minRole: Role = "viewer") {
   const repo = await prisma.repo.findUnique({ where: { id: repoId } });
-  if (!repo) throw notFound("Repo no encontrado");
+  if (!repo) throw notFound("repo_not_found");
   await projectWithAccess(userId, repo.projectId, minRole);
   return repo;
 }
@@ -53,8 +53,7 @@ async function userGithubToken(userId: string): Promise<string> {
     where: { userId, provider: "github" },
     select: { accessToken: true },
   });
-  if (!account?.accessToken)
-    throw badRequest("Conecta tu cuenta de GitHub", "github_not_connected");
+  if (!account?.accessToken) throw badRequest("github_not_connected");
   return account.accessToken;
 }
 
@@ -81,12 +80,12 @@ export async function linkRepo(userId: string, projectId: string, input: LinkRep
   await projectWithAccess(userId, projectId, "member");
   const owner = input.owner.trim();
   const name = input.name.trim();
-  if (!owner || !name) throw badRequest("Owner y nombre del repo son obligatorios", "invalid_repo");
+  if (!owner || !name) throw badRequest("invalid_repo");
 
   const existing = await prisma.repo.findUnique({
     where: { projectId_provider_owner_name: { projectId, provider: "github", owner, name } },
   });
-  if (existing) throw conflict("Ese repo ya está vinculado al proyecto", "repo_exists");
+  if (existing) throw conflict("repo_exists");
 
   const repo = await prisma.repo.create({
     data: {
@@ -158,8 +157,7 @@ export async function listProjectInstallationRepos(
 ) {
   await projectWithAccess(userId, projectId);
   const linked = await prisma.repo.findFirst({ where: { projectId, installationId } });
-  if (!linked)
-    throw forbidden("Esa instalación de GitHub no está vinculada a este proyecto");
+  if (!linked) throw forbidden("installation_not_linked");
   return listInstallationRepos(installationId);
 }
 
@@ -407,17 +405,9 @@ const INCREMENTAL_OVERLAP_MS = 60 * 60 * 1000;
  */
 function describeGithubFailure(err: unknown, repoLabel: string): never {
   if (err instanceof GithubApiError) {
-    if (err.status === 401)
-      throw badRequest(
-        "Tu autorización de GitHub venció. Vuelve a conectar tu cuenta.",
-        "github_token_expired"
-      );
-    if (err.status === 403)
-      throw forbidden(
-        `Tu cuenta de GitHub no tiene permiso para leer ${repoLabel}. Si es de una organización, revisa que la autorización de pemie.ai esté aprobada allí.`
-      );
-    if (err.status === 404)
-      throw notFound(`No encontramos ${repoLabel}, o tu cuenta de GitHub no tiene acceso.`);
+    if (err.status === 401) throw badRequest("github_token_expired");
+    if (err.status === 403) throw forbidden("github_repo_forbidden", { repoLabel });
+    if (err.status === 404) throw notFound("github_repo_not_found", { repoLabel });
   }
   throw err;
 }
@@ -523,10 +513,8 @@ export async function updateDomainConfig(userId: string, projectId: string, conf
   await projectWithAccess(userId, projectId, "member");
 
   const keys = config.categories.map((c) => c.key);
-  if (new Set(keys).size !== keys.length)
-    throw badRequest("Las keys de categoría deben ser únicas", "duplicate_keys");
-  if (!config.fallback.trim())
-    throw badRequest("El fallback no puede estar vacío", "empty_fallback");
+  if (new Set(keys).size !== keys.length) throw badRequest("duplicate_keys");
+  if (!config.fallback.trim()) throw badRequest("empty_fallback");
 
   await prisma.project.update({
     where: { id: projectId },

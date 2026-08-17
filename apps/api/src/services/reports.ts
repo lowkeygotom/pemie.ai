@@ -45,7 +45,7 @@ export async function opSetObjective(
   updatedById: string | null
 ) {
   const desc = description.trim();
-  if (desc.length < 3) throw badRequest("El objetivo es muy corto", "invalid_objective");
+  if (desc.length < 3) throw badRequest("invalid_objective");
 
   const [objective] = await prisma.$transaction([
     prisma.objective.upsert({
@@ -80,7 +80,7 @@ export function opListObjectiveHistory(projectId: string) {
 /** Carga un informe (con su proyecto) verificando acceso del usuario. */
 async function reportWithAccess(userId: string, reportId: string, minRole: "viewer" | "member" | "admin" = "viewer") {
   const report = await prisma.report.findUnique({ where: { id: reportId } });
-  if (!report) throw notFound("Informe no encontrado");
+  if (!report) throw notFound("report_not_found");
   await projectWithAccess(userId, report.projectId, minRole);
   return report;
 }
@@ -165,11 +165,10 @@ export async function opPublishReport(projectId: string, input: PublishReportInp
   const scope: ReportScope = input.scope ?? "day";
   const date = (input.date?.trim() || (scope === "general" ? "todos" : "")).trim();
   if (scope === "day" && !/^\d{4}-\d{2}-\d{2}$/.test(date))
-    throw badRequest("Fecha inválida (usa YYYY-MM-DD)", "invalid_date");
+    throw badRequest("invalid_date");
   const slot = input.slot?.trim() || "manual";
 
-  if (input.score != null && (input.score < 0 || input.score > 100))
-    throw badRequest("El score debe estar entre 0 y 100", "invalid_score");
+  if (input.score != null && (input.score < 0 || input.score > 100)) throw badRequest("invalid_score");
 
   let metrics = input.metrics ?? undefined;
   if (metrics === undefined && scope === "day") {
@@ -241,7 +240,7 @@ export async function deleteReport(userId: string, reportId: string) {
 /** Carga una nota (con su proyecto) verificando acceso del usuario. */
 async function noteWithAccess(userId: string, noteId: string, minRole: "viewer" | "member" | "admin" = "viewer") {
   const note = await prisma.note.findUnique({ where: { id: noteId } });
-  if (!note) throw notFound("Nota no encontrada");
+  if (!note) throw notFound("note_not_found");
   await projectWithAccess(userId, note.projectId, minRole);
   return note;
 }
@@ -277,7 +276,7 @@ export async function createNote(userId: string, projectId: string, message: str
 /** Operación (ya autorizada): crea una nota. `authorId` null si la crea un agente. */
 export function opCreateNote(projectId: string, message: string, authorId: string | null) {
   const msg = message.trim();
-  if (msg.length < 1) throw badRequest("La nota está vacía", "empty_note");
+  if (msg.length < 1) throw badRequest("empty_note");
   return prisma.note.create({ data: { projectId, authorId, message: msg } });
 }
 
@@ -310,12 +309,11 @@ export async function opAnswerNote(
   reportId?: string
 ) {
   const resp = response.trim();
-  if (resp.length < 1) throw badRequest("La respuesta está vacía", "empty_response");
+  if (resp.length < 1) throw badRequest("empty_response");
 
   if (reportId) {
     const report = await prisma.report.findUnique({ where: { id: reportId } });
-    if (!report || report.projectId !== note.projectId)
-      throw badRequest("El informe no pertenece al proyecto de la nota", "report_mismatch");
+    if (!report || report.projectId !== note.projectId) throw badRequest("report_mismatch");
   }
 
   return prisma.note.update({

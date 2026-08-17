@@ -68,7 +68,9 @@ const createApiKeySchema = z.object({
   agentId: z.string().optional(),
   scopes: z.array(z.string()).min(1),
   expiresAt: z.coerce.date().optional(),
+  locale: z.enum(["es", "en"]).optional(),
 });
+const updateApiKeyLocaleSchema = z.object({ locale: z.enum(["es", "en"]) });
 const createEpicSchema = z.object({
   title: z.string().min(2),
   description: z.string().optional(),
@@ -155,7 +157,7 @@ export function workspaceRoutes() {
   app.post("/", async (c) => {
     const user = requireUser(c);
     const body = createWorkspaceSchema.safeParse(await c.req.json().catch(() => null));
-    if (!body.success) throw badRequest("Nombre inválido", "invalid_body");
+    if (!body.success) throw badRequest("invalid_workspace_name");
     const ws = await tenancy.createWorkspace(user.id, body.data.name);
     return c.json({ workspace: ws }, 201);
   });
@@ -169,7 +171,7 @@ export function workspaceRoutes() {
     const user = requireUser(c);
     const ws = await tenancy.getWorkspace(user.id, c.req.param("slug"));
     const body = updateWorkspaceSchema.safeParse(await c.req.json().catch(() => null));
-    if (!body.success) throw badRequest("Nombre inválido", "invalid_body");
+    if (!body.success) throw badRequest("invalid_workspace_name");
     return c.json({ workspace: await tenancy.updateWorkspace(user.id, ws.id, body.data) });
   });
 
@@ -189,7 +191,7 @@ export function workspaceRoutes() {
     const user = requireUser(c);
     const ws = await tenancy.getWorkspace(user.id, c.req.param("slug"));
     const body = updateMemberRoleSchema.safeParse(await c.req.json().catch(() => null));
-    if (!body.success) throw badRequest("Rol inválido", "invalid_body");
+    if (!body.success) throw badRequest("invalid_member_role");
     const member = await tenancy.updateMemberRole(
       user.id,
       ws.id,
@@ -216,7 +218,7 @@ export function workspaceRoutes() {
     const user = requireUser(c);
     const ws = await tenancy.getWorkspace(user.id, c.req.param("slug"));
     const body = inviteSchema.safeParse(await c.req.json().catch(() => null));
-    if (!body.success) throw badRequest("Datos de invitación inválidos", "invalid_body");
+    if (!body.success) throw badRequest("invalid_invitation_body");
     const invite = await tenancy.createInvitation(
       user.id,
       ws.id,
@@ -243,7 +245,7 @@ export function workspaceRoutes() {
     const user = requireUser(c);
     const ws = await tenancy.getWorkspace(user.id, c.req.param("slug"));
     const body = createProjectSchema.safeParse(await c.req.json().catch(() => null));
-    if (!body.success) throw badRequest("Datos de proyecto inválidos", "invalid_body");
+    if (!body.success) throw badRequest("invalid_project_body");
     const project = await tenancy.createProject(user.id, ws.id, body.data);
     return c.json({ project }, 201);
   });
@@ -273,7 +275,7 @@ export function workspaceRoutes() {
     const user = requireUser(c);
     const project = await resolveProject(c);
     const body = linkRepoSchema.safeParse(await c.req.json().catch(() => null));
-    if (!body.success) throw badRequest("Datos del repo inválidos", "invalid_body");
+    if (!body.success) throw badRequest("invalid_repo_body");
     const { repo, ingested, syncError } = await ingest.linkRepo(user.id, project.id, body.data);
     return c.json({ repo, ingested, syncError }, 201);
   });
@@ -284,7 +286,7 @@ export function workspaceRoutes() {
     const user = requireUser(c);
     const project = await resolveProject(c);
     const installationId = c.req.query("installationId");
-    if (!installationId) throw badRequest("Falta installationId", "missing_installation");
+    if (!installationId) throw badRequest("missing_installation");
     return c.json({
       repos: await ingest.listProjectInstallationRepos(user.id, project.id, installationId),
     });
@@ -368,7 +370,7 @@ export function workspaceRoutes() {
     const user = requireUser(c);
     const project = await resolveProject(c);
     const body = domainConfigSchema.safeParse(await c.req.json().catch(() => null));
-    if (!body.success) throw badRequest("DomainConfig inválida", "invalid_body");
+    if (!body.success) throw badRequest("invalid_domain_config");
     const result = await ingest.updateDomainConfig(user.id, project.id, body.data);
     return c.json(result);
   });
@@ -383,7 +385,7 @@ export function workspaceRoutes() {
     const user = requireUser(c);
     const project = await resolveProject(c);
     const body = objectiveSchema.safeParse(await c.req.json().catch(() => null));
-    if (!body.success) throw badRequest("Objetivo inválido", "invalid_body");
+    if (!body.success) throw badRequest("invalid_objective_body");
     return c.json({ objective: await reports.setObjective(user.id, project.id, body.data.description) });
   });
 
@@ -407,7 +409,7 @@ export function workspaceRoutes() {
     const user = requireUser(c);
     const project = await resolveProject(c);
     const body = publishReportSchema.safeParse(await c.req.json().catch(() => null));
-    if (!body.success) throw badRequest("Datos del informe inválidos", "invalid_body");
+    if (!body.success) throw badRequest("invalid_report_body");
     const report = await reports.publishReport(user.id, project.id, body.data);
     return c.json({ report }, 201);
   });
@@ -437,14 +439,14 @@ export function workspaceRoutes() {
     const user = requireUser(c);
     const project = await resolveProject(c);
     const body = createNoteSchema.safeParse(await c.req.json().catch(() => null));
-    if (!body.success) throw badRequest("Nota inválida", "invalid_body");
+    if (!body.success) throw badRequest("invalid_note_body");
     return c.json({ note: await reports.createNote(user.id, project.id, body.data.message) }, 201);
   });
 
   app.post("/:slug/projects/:projectSlug/notes/:noteId/answer", async (c) => {
     const user = requireUser(c);
     const body = answerNoteSchema.safeParse(await c.req.json().catch(() => null));
-    if (!body.success) throw badRequest("Respuesta inválida", "invalid_body");
+    if (!body.success) throw badRequest("invalid_answer_body");
     const note = await reports.answerNote(user.id, c.req.param("noteId"), body.data.response, body.data.reportId);
     return c.json({ note });
   });
@@ -459,7 +461,7 @@ export function workspaceRoutes() {
     const user = requireUser(c);
     const project = await resolveProject(c);
     const body = createAgentSchema.safeParse(await c.req.json().catch(() => null));
-    if (!body.success) throw badRequest("Datos del agente inválidos", "invalid_body");
+    if (!body.success) throw badRequest("invalid_agent_body");
     const agent = await agentsSvc.createAgent(user.id, project.id, body.data.name, body.data.kind);
     return c.json({ agent }, 201);
   });
@@ -512,7 +514,7 @@ export function workspaceRoutes() {
     const user = requireUser(c);
     const ws = await tenancy.getWorkspace(user.id, c.req.param("slug"));
     const body = createApiKeySchema.safeParse(await c.req.json().catch(() => null));
-    if (!body.success) throw badRequest("Datos de la API key inválidos", "invalid_body");
+    if (!body.success) throw badRequest("invalid_api_key_body");
     // El servicio valida que los scopes existan; aquí solo pasamos los datos.
     const result = await agentsSvc.createApiKey(user.id, ws.id, {
       name: body.data.name,
@@ -521,8 +523,18 @@ export function workspaceRoutes() {
       agentId: body.data.agentId,
       scopes: body.data.scopes,
       expiresAt: body.data.expiresAt,
+      locale: body.data.locale,
     });
     return c.json(result, 201);
+  });
+
+  app.patch("/:slug/api-keys/:keyId/locale", async (c) => {
+    const user = requireUser(c);
+    await tenancy.getWorkspace(user.id, c.req.param("slug"));
+    const body = updateApiKeyLocaleSchema.safeParse(await c.req.json().catch(() => null));
+    if (!body.success) throw badRequest("invalid_preference_body");
+    const apiKey = await agentsSvc.updateApiKeyLocale(user.id, c.req.param("keyId"), body.data.locale);
+    return c.json({ apiKey });
   });
 
   app.delete("/:slug/api-keys/:keyId", async (c) => {
@@ -548,7 +560,7 @@ export function workspaceRoutes() {
     const user = requireUser(c);
     const project = await resolveProject(c);
     const body = createEpicSchema.safeParse(await c.req.json().catch(() => null));
-    if (!body.success) throw badRequest("Datos de la épica inválidos", "invalid_body");
+    if (!body.success) throw badRequest("invalid_epic_body");
     return c.json({ epic: await stories.createEpic(user.id, project.id, body.data) }, 201);
   });
 
@@ -577,7 +589,7 @@ export function workspaceRoutes() {
   app.patch("/:slug/projects/:projectSlug/contributors/:contributorId", async (c) => {
     const user = requireUser(c);
     const body = updateContributorSchema.safeParse(await c.req.json().catch(() => null));
-    if (!body.success) throw badRequest("Datos de contributor inválidos", "invalid_body");
+    if (!body.success) throw badRequest("invalid_contributor_body");
     return c.json({ contributor: await stories.updateContributorEmail(user.id, c.req.param("contributorId"), body.data.email) });
   });
 
@@ -585,7 +597,7 @@ export function workspaceRoutes() {
     const user = requireUser(c);
     const project = await resolveProject(c);
     const body = createStorySchema.safeParse(await c.req.json().catch(() => null));
-    if (!body.success) throw badRequest("Datos de la HU inválidos", "invalid_body");
+    if (!body.success) throw badRequest("invalid_story_body");
     return c.json({ userStory: await stories.createStory(user.id, project.id, body.data) }, 201);
   });
 
@@ -597,7 +609,7 @@ export function workspaceRoutes() {
   app.patch("/:slug/projects/:projectSlug/user-stories/:storyId", async (c) => {
     const user = requireUser(c);
     const body = updateStorySchema.safeParse(await c.req.json().catch(() => null));
-    if (!body.success) throw badRequest("Datos de la HU inválidos", "invalid_body");
+    if (!body.success) throw badRequest("invalid_story_body");
     return c.json({ userStory: await stories.updateStory(user.id, c.req.param("storyId"), body.data) });
   });
 
@@ -608,8 +620,7 @@ export function workspaceRoutes() {
     // la gente escribe y ruidoso con lo que no entiende: silencioso y estricto
     // convertiría un `keepCard=true` en un borrado que nadie pidió.
     const rawKeepCard = c.req.query("keepCard");
-    if (rawKeepCard !== undefined && !KEEP_CARD_VALUES.has(rawKeepCard))
-      throw badRequest("keepCard admite 1, true, 0 o false", "invalid_keep_card");
+    if (rawKeepCard !== undefined && !KEEP_CARD_VALUES.has(rawKeepCard)) throw badRequest("invalid_keep_card");
     const keepCard = rawKeepCard === "1" || rawKeepCard === "true";
     return c.json(
       await stories.deleteStory(user.id, c.req.param("storyId"), { deleteCard: !keepCard })
@@ -626,14 +637,14 @@ export function workspaceRoutes() {
     const user = requireUser(c);
     const project = await resolveProject(c);
     const body = createCardSchema.safeParse(await c.req.json().catch(() => null));
-    if (!body.success) throw badRequest("Datos de la tarjeta inválidos", "invalid_body");
+    if (!body.success) throw badRequest("invalid_card_body");
     return c.json({ card: await board.createCard(user.id, project.id, body.data) }, 201);
   });
 
   app.patch("/:slug/projects/:projectSlug/board/cards/:cardId", async (c) => {
     const user = requireUser(c);
     const body = updateCardSchema.safeParse(await c.req.json().catch(() => null));
-    if (!body.success) throw badRequest("Datos de la tarjeta inválidos", "invalid_body");
+    if (!body.success) throw badRequest("invalid_card_body");
     return c.json({ card: await board.updateCard(user.id, c.req.param("cardId"), body.data) });
   });
 
@@ -653,7 +664,7 @@ export function workspaceRoutes() {
   app.post("/:slug/projects/:projectSlug/board/cards/:cardId/move", async (c) => {
     const user = requireUser(c);
     const body = moveCardSchema.safeParse(await c.req.json().catch(() => null));
-    if (!body.success) throw badRequest("Datos de movimiento inválidos", "invalid_body");
+    if (!body.success) throw badRequest("invalid_move_body");
     return c.json({ card: await board.moveCard(user.id, c.req.param("cardId"), body.data) });
   });
 
@@ -672,9 +683,9 @@ export function workspaceRoutes() {
     const target = c.req.query("target");
     const destination = c.req.query("destination");
     if (!target || !SKILL_TARGETS.includes(target as SkillTarget))
-      throw badRequest(`target inválido (usa: ${SKILL_TARGETS.join(", ")})`, "invalid_target");
+      throw badRequest("invalid_target_list", { targets: SKILL_TARGETS.join(", ") });
     if (!destination || !SKILL_DESTINATIONS.includes(destination as SkillDestination))
-      throw badRequest(`destination inválido (usa: ${SKILL_DESTINATIONS.join(", ")})`, "invalid_destination");
+      throw badRequest("invalid_destination_list", { destinations: SKILL_DESTINATIONS.join(", ") });
     return c.json(
       await skills.getSkill(user.id, ws.id, c.req.param("skillSlug"), {
         target: target as SkillTarget,
@@ -694,7 +705,7 @@ export function workspaceRoutes() {
         description: z.string().min(1),
       })
       .safeParse(await c.req.json().catch(() => null));
-    if (!body.success) throw badRequest("Datos de skill inválidos", "invalid_body");
+    if (!body.success) throw badRequest("invalid_skill_body");
     const ticket = await skills.startSkillUpload(
       user.id,
       ws.id,

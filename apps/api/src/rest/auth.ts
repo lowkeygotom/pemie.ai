@@ -51,7 +51,7 @@ export function authRoutes() {
 
   app.post("/register", async (c) => {
     const body = registerSchema.safeParse(await c.req.json().catch(() => null));
-    if (!body.success) throw badRequest("Datos de registro inválidos", "invalid_body");
+    if (!body.success) throw badRequest("invalid_body");
     const { user, token, expiresAt } = await auth.register(body.data);
     setSessionCookie(c, token, expiresAt);
     return c.json({ user }, 201);
@@ -59,7 +59,7 @@ export function authRoutes() {
 
   app.post("/login", async (c) => {
     const body = loginSchema.safeParse(await c.req.json().catch(() => null));
-    if (!body.success) throw badRequest("Datos de login inválidos", "invalid_body");
+    if (!body.success) throw badRequest("invalid_login_body");
     const { user, token, expiresAt } = await auth.login(body.data);
     setSessionCookie(c, token, expiresAt);
     return c.json({ user });
@@ -80,7 +80,7 @@ export function authRoutes() {
   app.patch("/me/analytics-preference", async (c) => {
     const user = requireUser(c);
     const body = analyticsPreferenceSchema.safeParse(await c.req.json().catch(() => null));
-    if (!body.success) throw badRequest("Preferencia inválida", "invalid_body");
+    if (!body.success) throw badRequest("invalid_preference_body");
     const updated = await auth.updateAnalyticsPreference(user.id, body.data.analyticsEnabled);
     return c.json({ user: updated });
   });
@@ -88,7 +88,7 @@ export function authRoutes() {
   app.patch("/me/locale", async (c) => {
     const user = requireUser(c);
     const body = localeSchema.safeParse(await c.req.json().catch(() => null));
-    if (!body.success) throw badRequest("Preferencia inválida", "invalid_body");
+    if (!body.success) throw badRequest("invalid_preference_body");
     return c.json({ user: await auth.updateLocale(user.id, body.data.locale) });
   });
 

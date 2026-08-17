@@ -362,7 +362,7 @@ test("get_skill corta si el paquete guardado tiene un path inseguro", async (t) 
         destination: "user",
         apiBaseUrl: "http://localhost:4000",
       }),
-    isServiceErrorWithCode("invalid_path")
+    isServiceErrorWithCode("unsafe_skill_path")
   );
 });
 

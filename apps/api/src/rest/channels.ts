@@ -31,7 +31,7 @@ export function channelRoutes() {
   app.post("/telegram/link-token", async (c) => {
     const user = requireUser(c);
     const body = linkTokenSchema.safeParse(await c.req.json().catch(() => ({})));
-    if (!body.success) throw badRequest("Body inválido", "invalid_body");
+    if (!body.success) throw badRequest("invalid_request_body");
     const result = await channels.createLinkToken(user.id, user.analyticsEnabled, body.data.projectId);
     return c.json(result, 201);
   });
@@ -39,7 +39,7 @@ export function channelRoutes() {
   app.put("/telegram/llm-key", async (c) => {
     const user = requireUser(c);
     const body = llmKeySchema.safeParse(await c.req.json().catch(() => null));
-    if (!body.success) throw badRequest("API key LLM inválida", "invalid_body");
+    if (!body.success) throw badRequest("invalid_llm_key_body");
     await channels.setLlmKey(user.id, user.analyticsEnabled, body.data.apiKey, {
       provider: body.data.provider,
       model: body.data.model,
@@ -56,7 +56,7 @@ export function channelRoutes() {
   app.put("/telegram/default-project", async (c) => {
     const user = requireUser(c);
     const body = defaultProjectSchema.safeParse(await c.req.json().catch(() => null));
-    if (!body.success) throw badRequest("Body inválido", "invalid_body");
+    if (!body.success) throw badRequest("invalid_request_body");
     await channels.setDefaultProject(user.id, user.analyticsEnabled, body.data.projectId);
     return c.json({ channel: await channels.getChannelStatus(user.id) });
   });

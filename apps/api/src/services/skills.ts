@@ -55,11 +55,11 @@ function hashToken(raw: string): string {
 /** Valida slug/name/description; compartido por start upload (antes en opPublishSkill). */
 export function validateSkillMeta(input: StartSkillUploadInput) {
   const slug = input.slug.trim();
-  if (!isValidSkillSlug(slug)) throw badRequest("Slug inválido (usa kebab-case)", "invalid_slug");
+  if (!isValidSkillSlug(slug)) throw badRequest("invalid_slug");
   const name = input.name.trim();
-  if (!name) throw badRequest("El nombre es obligatorio", "invalid_name");
+  if (!name) throw badRequest("invalid_name");
   const description = input.description.trim();
-  if (!description) throw badRequest("La descripción es obligatoria", "invalid_description");
+  if (!description) throw badRequest("invalid_description");
   return { slug, name, description };
 }
 
@@ -75,32 +75,23 @@ export async function accumulateSkillFiles(
   let totalBytes = 0;
 
   for await (const file of source) {
-    if (!isSafeSkillFilePath(file.path))
-      throw badRequest(`Path de archivo inválido: ${file.path}`, "invalid_path");
-    if (seen.has(file.path)) throw badRequest(`Path duplicado: ${file.path}`, "invalid_path");
+    if (!isSafeSkillFilePath(file.path)) throw badRequest("invalid_path", { path: file.path });
+    if (seen.has(file.path)) throw badRequest("duplicate_path", { path: file.path });
     seen.add(file.path);
 
     const bytes = Buffer.byteLength(file.content, "utf8");
     if (bytes > SKILL_MAX_FILE_BYTES)
-      throw badRequest(
-        `Archivo supera el límite de ${SKILL_MAX_FILE_BYTES} bytes: ${file.path}`,
-        "file_too_large"
-      );
+      throw badRequest("file_too_large", { max: SKILL_MAX_FILE_BYTES, path: file.path });
     totalBytes += bytes;
-    if (files.length + 1 > SKILL_MAX_FILES)
-      throw badRequest(`Demasiados archivos (máx ${SKILL_MAX_FILES})`, "too_many_files");
+    if (files.length + 1 > SKILL_MAX_FILES) throw badRequest("too_many_files", { max: SKILL_MAX_FILES });
     if (totalBytes > SKILL_MAX_TOTAL_BYTES)
-      throw badRequest(
-        `La skill supera el límite de ${SKILL_MAX_TOTAL_BYTES} bytes`,
-        "skill_too_large"
-      );
+      throw badRequest("skill_too_large", { max: SKILL_MAX_TOTAL_BYTES });
 
     files.push({ path: file.path, content: file.content });
   }
 
-  if (files.length === 0) throw badRequest("La skill no tiene archivos", "empty_files");
-  if (!files.some((f) => f.path === SKILL_ENTRY_FILE))
-    throw badRequest(`Falta ${SKILL_ENTRY_FILE}`, "missing_skill_md");
+  if (files.length === 0) throw badRequest("empty_files");
+  if (!files.some((f) => f.path === SKILL_ENTRY_FILE)) throw badRequest("missing_skill_md", { file: SKILL_ENTRY_FILE });
 
   return { files, totalBytes };
 }
@@ -150,22 +141,21 @@ export async function getSkill(
 
 /** Operación (ya autorizada): arma el paquete instalable. Ver `getSkill`. */
 export async function opGetSkill(workspaceId: string, slug: string, opts: GetSkillOptions) {
-  if (!SKILL_TARGETS.includes(opts.target))
-    throw badRequest(`target inválido: ${opts.target}`, "invalid_target");
+  if (!SKILL_TARGETS.includes(opts.target)) throw badRequest("invalid_target", { target: opts.target });
   if (!SKILL_DESTINATIONS.includes(opts.destination))
-    throw badRequest(`destination inválido: ${opts.destination}`, "invalid_destination");
+    throw badRequest("invalid_destination", { destination: opts.destination });
 
   const skill = await prisma.workspaceSkill.findUnique({
     where: { workspaceId_slug: { workspaceId, slug } },
     include: { files: { select: { path: true, content: true, bytes: true }, orderBy: { path: "asc" } } },
   });
-  if (!skill) throw notFound("Skill no encontrada");
+  if (!skill) throw notFound("skill_not_found");
 
   // Los paths ya se validaron al publicar, pero esto es lo único que un agente
   // escribe en disco: si un dato llegó por otra vía (seed, migración) con un
   // path inseguro, se corta acá y no en el disco de quien instala.
   const unsafe = skill.files.find((f) => !isSafeSkillFilePath(f.path));
-  if (unsafe) throw badRequest(`La skill tiene un path inválido: ${unsafe.path}`, "invalid_path");
+  if (unsafe) throw badRequest("unsafe_skill_path", { path: unsafe.path });
 
   const manifest = skill.files.map((f) => ({ path: f.path, bytes: f.bytes }));
   const rootPath = resolveSkillRootPath(opts.target, opts.destination, skill.slug);
@@ -283,10 +273,10 @@ export async function opStartSkillUpload(
 export async function opCompleteSkillUpload(rawToken: string, source: AsyncIterable<SkillFile>) {
   const tokenHash = hashToken(rawToken);
   const draft = await prisma.skillUpload.findUnique({ where: { tokenHash } });
-  if (!draft) throw notFound("Ticket de upload no encontrado o ya usado");
+  if (!draft) throw notFound("upload_ticket_not_found");
   if (draft.expiresAt.getTime() < Date.now()) {
     await prisma.skillUpload.delete({ where: { id: draft.id } }).catch(() => undefined);
-    throw badRequest("El ticket de upload expiró", "upload_expired");
+    throw badRequest("upload_expired");
   }
 
   // Un solo uso: se borra al consumirlo, antes de parsear el cuerpo completo,
@@ -384,10 +374,10 @@ export async function opBuildSkillArchiveByToken(rawToken: string) {
     where: { tokenHash: hashToken(rawToken) },
     include: { skill: true },
   });
-  if (!row) throw notFound("Token de descarga no encontrado");
+  if (!row) throw notFound("download_token_not_found");
   if (row.expiresAt.getTime() < Date.now()) {
     await prisma.skillDownload.delete({ where: { id: row.id } }).catch(() => undefined);
-    throw badRequest("El token de descarga expiró", "download_expired");
+    throw badRequest("download_expired");
   }
   return opBuildSkillArchive(row.skill.workspaceId, row.skill.slug);
 }
@@ -400,7 +390,7 @@ export async function opBuildSkillArchive(workspaceId: string, slug: string) {
   const skill = await prisma.workspaceSkill.findUnique({
     where: { workspaceId_slug: { workspaceId, slug } },
   });
-  if (!skill) throw notFound("Skill no encontrada");
+  if (!skill) throw notFound("skill_not_found");
 
   const PAGE = 50;
   async function* pages() {
@@ -438,7 +428,7 @@ export async function opDeleteSkill(workspaceId: string, slug: string) {
   const skill = await prisma.workspaceSkill.findUnique({
     where: { workspaceId_slug: { workspaceId, slug } },
   });
-  if (!skill) throw notFound("Skill no encontrada");
+  if (!skill) throw notFound("skill_not_found");
   await prisma.workspaceSkill.delete({ where: { id: skill.id } });
   return { ok: true as const, slug };
 }

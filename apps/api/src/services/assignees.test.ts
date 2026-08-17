@@ -34,7 +34,7 @@ test("un Contributor.id de otro proyecto se rechaza", async (t) => {
 
   await assert.rejects(
     () => resolveAssigneeId("project-1", "contributor-1"),
-    /asignado no pertenece al proyecto/
+    { code: "assignee_mismatch" }
   );
 });
 
@@ -92,7 +92,7 @@ test("un member:<userId> sin membership en el workspace del proyecto se rechaza"
 
   await assert.rejects(
     () => resolveAssigneeId("project-1", "member:user-1"),
-    /asignado no pertenece al proyecto/
+    { code: "assignee_mismatch" }
   );
 });
 

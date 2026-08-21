@@ -49,4 +49,10 @@ export default {
   convertToEpic: "Convert to epic",
   convertToStory: "Convert to User Story",
   cannotConvertHasChildren: "Cannot convert: it has {{count}} linked User Story(-ies).",
+  linkExistingStory: "Search and add an existing User Story",
+  searchStoriesPlaceholder: "Search by key or title…",
+  noMatchingStories: "No unlinked User Story matches that search.",
+  addToEpic: "Add",
+  addToEpicAria: "Add {{key}} — {{title}} to this epic",
+  linkStoryError: "Couldn't link the User Story. Try again.",
 };

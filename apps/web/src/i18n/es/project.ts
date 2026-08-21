@@ -49,4 +49,10 @@ export default {
   convertToEpic: "Convertir en épica",
   convertToStory: "Convertir en HU normal",
   cannotConvertHasChildren: "No se puede convertir: tiene {{count}} HU(s) vinculada(s).",
+  linkExistingStory: "Buscar y agregar una HU existente",
+  searchStoriesPlaceholder: "Buscar por key o título…",
+  noMatchingStories: "Ninguna HU sin épica coincide con la búsqueda.",
+  addToEpic: "Agregar",
+  addToEpicAria: "Agregar {{key}} — {{title}} a esta épica",
+  linkStoryError: "No se pudo vincular la HU. Probá de nuevo.",
 };

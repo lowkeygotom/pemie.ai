@@ -98,6 +98,19 @@ export default function StoriesTab({ ws, proj, canManage }: { ws: string; proj: 
   const [benefit, setBenefit] = useState("");
   const [isEpic, setIsEpic] = useState(false);
 
+  // Plegado por defecto: una épica con varias hijas no las vuelca todas en la
+  // lista de entrada. `selectedEpic` (filtro por épica) fuerza el despliegue
+  // de esa épica puntual — es exactamente lo que se pidió al filtrar por ella.
+  const [expandedEpicIds, setExpandedEpicIds] = useState<Set<string>>(new Set());
+  function toggleEpic(id: string) {
+    setExpandedEpicIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
   const [editingStory, setEditingStory] = useState<UserStory | null>(null);
   const [assignmentNotice, setAssignmentNotice] = useState<{ story: UserStory; notification: AssignmentNotification } | null>(null);
   const [inviteEmail, setInviteEmail] = useState<string | null>(null);
@@ -227,6 +240,23 @@ export default function StoriesTab({ ws, proj, canManage }: { ws: string; proj: 
     }
   }
 
+  /** Asigna/reasigna/desvincula (`epicId: null`) la épica de una HU directo
+   *  desde la fila — mismo mecanismo que ya usaba el buscador de la épica,
+   *  ahora también disponible desde el lado de la HU. */
+  async function setEpic(id: string, epicId: string | null) {
+    const key = queryKeys.stories(ws, proj);
+    await queryClient.cancelQueries({ queryKey: key });
+    const previous = queryClient.getQueryData<UserStory[]>(key);
+    queryClient.setQueryData<UserStory[]>(key, (prev) =>
+      (prev ?? []).map((s) => (s.id === id ? { ...s, epicId } : s))
+    );
+    try {
+      await api.stories.update(ws, proj, id, { epicId });
+    } catch {
+      queryClient.setQueryData(key, previous);
+    }
+  }
+
   async function confirmDelete() {
     if (!pendingDelete) return;
     setDeleting(true);
@@ -254,7 +284,7 @@ export default function StoriesTab({ ws, proj, canManage }: { ws: string; proj: 
     }
   }
 
-  function renderRow(s: UserStory, opts: { indent?: boolean } = {}) {
+  function renderRow(s: UserStory, opts: { indent?: boolean; expanded?: boolean; onToggle?: () => void } = {}) {
     const count = s.isEpic ? childCountFor(s) : 0;
     return (
       <ListRow
@@ -272,6 +302,22 @@ export default function StoriesTab({ ws, proj, canManage }: { ws: string; proj: 
                 </option>
               ))}
             </Select>
+            {/* Asignar/reasignar/desvincular ("Sin épica") directo desde la fila,
+                sin abrir el detalle — mismo control que ya existía para status. */}
+            {!s.isEpic && (
+              <Select
+                value={s.epicId ?? ""}
+                onChange={(e) => setEpic(s.id, e.target.value || null)}
+                aria-label={t("epic")}
+              >
+                <option value="">{t("noEpic")}</option>
+                {epics.map((ep) => (
+                  <option key={ep.id} value={ep.id}>
+                    {ep.key} · {ep.title}
+                  </option>
+                ))}
+              </Select>
+            )}
             <button
               type="button"
               className="grid h-8 w-8 shrink-0 place-items-center rounded-md text-ink-400 transition-colors hover:bg-surface-100 hover:text-ink-900"
@@ -297,8 +343,24 @@ export default function StoriesTab({ ws, proj, canManage }: { ws: string; proj: 
             {s.key}
           </Badge>
           <span className="text-body font-medium text-ink-900">{s.title}</span>
-          {s.isEpic && (
-            <Badge tone="epic">{t("epicBadge", { count, suffix: count === 1 ? "" : "s" })}</Badge>
+          {s.isEpic && count > 0 && (
+            <button
+              type="button"
+              onClick={opts.onToggle}
+              aria-expanded={opts.expanded}
+              className="rounded-pill focus-visible:outline-none focus-visible:shadow-focus"
+              aria-label={t("toggleChildStories", { count })}
+            >
+              <Badge tone="epic">
+                <span
+                  aria-hidden
+                  className={`mr-0.5 inline-block transition-transform duration-150 ${opts.expanded ? "rotate-90" : ""}`}
+                >
+                  ▸
+                </span>
+                {t("epicBadge", { count, suffix: count === 1 ? "" : "s" })}
+              </Badge>
+            </button>
           )}
         </div>
         {formatNarrative(s.narrative) && (
@@ -432,12 +494,18 @@ export default function StoriesTab({ ws, proj, canManage }: { ws: string; proj: 
             <EmptyState title={t("noStories")} description={t("noStoriesDescription")} />
           ) : (
             <div className="divide-y divide-line-100">
-              {visibleEpics.map((epic) => (
-                <Fragment key={epic.id}>
-                  {renderRow(epic)}
-                  {(childrenByEpicId.get(epic.id) ?? []).map((child) => renderRow(child, { indent: true }))}
-                </Fragment>
-              ))}
+              {visibleEpics.map((epic) => {
+                // Filtrar a una épica puntual ya es pedir ver sus hijas: no
+                // tiene sentido que además queden plegadas detrás de un click.
+                const expanded = expandedEpicIds.has(epic.id) || selectedEpic?.id === epic.id;
+                return (
+                  <Fragment key={epic.id}>
+                    {renderRow(epic, { expanded, onToggle: () => toggleEpic(epic.id) })}
+                    {expanded &&
+                      (childrenByEpicId.get(epic.id) ?? []).map((child) => renderRow(child, { indent: true }))}
+                  </Fragment>
+                );
+              })}
               {visibleOrphans.length > 0 && (
                 <>
                   {/* Solo hace falta distinguir el grupo cuando también hay épicas

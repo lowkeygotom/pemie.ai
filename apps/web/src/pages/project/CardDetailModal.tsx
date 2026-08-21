@@ -178,6 +178,18 @@ export default function CardDetailModal({
     }
   }
 
+  // La épica es un campo de la HU, no de la card: se guarda al toque en vez
+  // de esperar al botón "Guardar" de la card (mismo patrón que el buscador
+  // de HUs en el detalle de una épica).
+  const linkedStory = card.userStoryId ? stories.find((s) => s.id === card.userStoryId) : undefined;
+
+  async function setStoryEpic(epicId: string | null) {
+    if (!card.userStoryId) return;
+    await api.stories.update(ws, proj, card.userStoryId, { epicId });
+    queryClient.invalidateQueries({ queryKey: queryKeys.stories(ws, proj) });
+    queryClient.invalidateQueries({ queryKey: queryKeys.board(ws, proj) });
+  }
+
   async function remove() {
     setDeleting(true);
     setActionError(null);
@@ -256,6 +268,25 @@ export default function CardDetailModal({
                 </Select>
               </Field>
             </div>
+
+            {linkedStory && !linkedStory.isEpic && (
+              <Field label={t("epic")}>
+                <Select
+                  value={linkedStory.epicId ?? ""}
+                  onChange={(e) => setStoryEpic(e.target.value || null)}
+                  aria-label={t("epic")}
+                >
+                  <option value="">{t("noEpic")}</option>
+                  {stories
+                    .filter((s) => s.isEpic)
+                    .map((ep) => (
+                      <option key={ep.id} value={ep.id}>
+                        {ep.key} · {ep.title}
+                      </option>
+                    ))}
+                </Select>
+              </Field>
+            )}
 
             {assigneeId && assigneesQuery.data ? (
               <AssigneeNotice

@@ -244,26 +244,9 @@ export async function ensureUserChannelConfig(userId: string, defaultProjectId?:
     return existing;
   }
 
-  // Home workspace: del default project, o el primero donde sea member.
-  let workspaceId: string | null = null;
-  if (defaultProjectId) {
-    const p = await prisma.project.findUnique({ where: { id: defaultProjectId } });
-    workspaceId = p?.workspaceId ?? null;
-  }
-  if (!workspaceId) {
-    const m = await prisma.membership.findFirst({
-      where: { userId },
-      orderBy: { createdAt: "asc" },
-    });
-    workspaceId = m?.workspaceId ?? null;
-  }
-  if (!workspaceId) throw badRequest("no_workspace");
-
-  const { apiKey } = await agents.createApiKey(userId, workspaceId, {
+  const { apiKey } = await agents.createPersonalApiKey(userId, {
     name: "Telegram bot",
-    scopeLevel: "user",
     scopes: [...API_SCOPES],
-    skipAdminCheck: true,
   });
 
   // createApiKey returns public view; we need the id

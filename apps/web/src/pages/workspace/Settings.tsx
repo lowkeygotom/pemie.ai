@@ -63,7 +63,7 @@ export default function WorkspaceSettings() {
   const [error, setError] = useState<string | null>(null);
 
   const [keyName, setKeyName] = useState("");
-  const [scopeLevel, setScopeLevel] = useState<Extract<ApiKeyScopeLevel, "workspace" | "user">>("workspace");
+  const [scopeLevel, setScopeLevel] = useState<Extract<ApiKeyScopeLevel, "workspace">>("workspace");
   const [scopes, setScopes] = useState<ApiScope[]>([...API_SCOPES]);
   const [keyLocale, setKeyLocale] = useState<"es" | "en">(user?.locale ?? "es");
   const [creating, setCreating] = useState(false);
@@ -227,12 +227,12 @@ export default function WorkspaceSettings() {
             <Card>
               <h2 className="text-h4 text-ink-900">{t("credentialsTitle")}</h2>
               <p className="mt-2 text-body-sm text-ink-600">{t("credentialsDescription")}</p>
+              <Link className="mt-2 inline-block text-body-sm text-brand-600 hover:text-brand-700" to="/settings">{t("personalKeySettings", { ns: "account" })}</Link>
               <form onSubmit={createKey} className="mt-5 space-y-4">
                 <div className="grid gap-3 sm:grid-cols-3">
                   <Field label={t("scope")}>
-                    <Select value={scopeLevel} onChange={(event) => setScopeLevel(event.target.value as Extract<ApiKeyScopeLevel, "workspace" | "user">)}>
+                    <Select value={scopeLevel} onChange={(event) => setScopeLevel(event.target.value as Extract<ApiKeyScopeLevel, "workspace">)}>
                       <option value="workspace">{t("workspace")}</option>
-                      <option value="user">{t("user")}</option>
                     </Select>
                   </Field>
                   <Field label={t("keyName")} hint={keyName.trim().length < 2 ? t("minChars") : undefined}>

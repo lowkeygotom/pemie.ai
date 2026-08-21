@@ -7,6 +7,7 @@ import { invitationRoutes } from "./invitations.js";
 import { webhookRoutes } from "./webhooks.js";
 import { channelRoutes } from "./channels.js";
 import { skillDownloadRoutes, skillTransferRoutes } from "./skill-transfer.js";
+import { accountKeyRoutes } from "./account-keys.js";
 
 /**
  * Monta la interfaz REST/JSON (consumida por el frontend web) sobre `app`.
@@ -57,6 +58,7 @@ export function registerRest(app: Hono<AppEnv>) {
   app.route("/api/workspaces", workspaceRoutes());
   app.route("/api/invitations", invitationRoutes());
   app.route("/api/me/channels", channelRoutes());
+  app.route("/api/me/api-keys", accountKeyRoutes());
   // Tokens opacos (no sesión): curl pelado desde el agente / browser multipart.
   app.route("/api/skill-uploads", skillTransferRoutes());
   app.route("/api/skill-downloads", skillDownloadRoutes());

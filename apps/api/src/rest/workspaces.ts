@@ -63,7 +63,7 @@ const createAgentSchema = z.object({
 });
 const createApiKeySchema = z.object({
   name: z.string().min(2),
-  scopeLevel: z.enum(["project", "workspace", "user"]).optional(),
+  scopeLevel: z.enum(["project", "workspace"]).optional(),
   projectId: z.string().optional(),
   agentId: z.string().optional(),
   scopes: z.array(z.string()).min(1),

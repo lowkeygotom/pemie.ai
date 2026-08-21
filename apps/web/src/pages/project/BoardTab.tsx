@@ -105,10 +105,15 @@ function CardBody({ card }: { card: CardData }) {
         {card.type}
       </Badge>
       {card.userStory ? (
-        <p className="mt-1.5 basis-full">
+        <p className="mt-1.5 flex basis-full flex-wrap items-center gap-1.5">
           <Badge tone="brand" mono>
             {card.userStory.key}
           </Badge>
+          {card.userStory.epic && (
+            <Badge tone="epic" mono>
+              {card.userStory.epic.key}
+            </Badge>
+          )}
         </p>
       ) : (
         card.type === "story" && (

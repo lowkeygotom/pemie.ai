@@ -35,4 +35,18 @@ export default {
   narrativeAs: "Como…",
   driftUnreportedLabel: "Trabajo no reportado",
   driftStalledLabel: "Estancada",
+  // PEM-57: épica unificada dentro de user_stories (isEpic).
+  epic: "Épica",
+  isEpicToggle: "Es una épica",
+  epicHint: "Las épicas no tienen story points ni tarjeta en el tablero, y no pueden pertenecer a otra épica.",
+  childStories: "Historias vinculadas",
+  noChildStories: "Todavía no hay HUs vinculadas a esta épica.",
+  filterByEpic: "Filtrar por épica",
+  allEpics: "Todas",
+  epicHasChildrenWarning: "Esta épica tiene {{count}} HU(s) vinculada(s). Elimínalas o desvincúlalas antes de borrar la épica.",
+  openChildStory: "Abrir {{key}} — {{title}}",
+  epicBadge: "{{count}} HU{{suffix}}",
+  convertToEpic: "Convertir en épica",
+  convertToStory: "Convertir en HU normal",
+  cannotConvertHasChildren: "No se puede convertir: tiene {{count}} HU(s) vinculada(s).",
 };

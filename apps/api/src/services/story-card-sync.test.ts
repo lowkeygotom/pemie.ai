@@ -155,7 +155,7 @@ test("pasar la HU a done mueve su tarjeta a Hecho sin reentrar en la HU", async 
   const { writes } = stubKanban(t);
 
   await stories.opUpdateStory(
-    { id: "story-1", projectId: "project-1", status: "backlog" },
+    { id: "story-1", projectId: "project-1", status: "backlog", isEpic: false, epicId: null },
     { status: "done" },
     USER
   );
@@ -176,7 +176,7 @@ test("guardar la HU con el estado que ya tenía no mueve la tarjeta", async (t) 
   const { writes } = stubKanban(t);
 
   await stories.opUpdateStory(
-    { id: "story-1", projectId: "project-1", status: "backlog" },
+    { id: "story-1", projectId: "project-1", status: "backlog", isEpic: false, epicId: null },
     { status: "backlog", title: "Buscador global v2" },
     USER
   );
@@ -194,7 +194,7 @@ test("un asignado de otro proyecto rechaza todo el patch antes de escribir", asy
   await assert.rejects(
     () =>
       stories.opUpdateStory(
-        { id: "story-1", projectId: "project-1", status: "backlog" },
+        { id: "story-1", projectId: "project-1", status: "backlog", isEpic: false, epicId: null },
         { title: "Título que no debe guardarse", assigneeId: "contributor-foreign" },
         USER
       ),

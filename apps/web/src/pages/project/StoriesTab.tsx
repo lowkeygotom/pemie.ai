@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { Fragment, useEffect, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
@@ -14,6 +14,7 @@ import {
   Checkbox,
   EmptyState,
   Field,
+  ListRow,
   Skeleton,
   SkeletonCard,
   SkeletonList,
@@ -22,6 +23,7 @@ import {
   Modal,
   PencilIcon,
   Select,
+  Switch,
   TrashIcon,
   Notice,
 } from "../../components/ui.js";
@@ -46,31 +48,46 @@ const PRIORITY_TONE: Record<string, BadgeTone> = {
   critical: "danger",
 };
 
+/** Sentinel de `?epic=` para "HUs sin épica" (distinto de una key real de proyecto). */
+const NO_EPIC_FILTER = "none";
+
 export default function StoriesTab({ ws, proj, canManage }: { ws: string; proj: string; canManage: boolean }) {
   const { t } = useTranslation("project");
   const queryClient = useQueryClient();
+  // PEM-57: épicas y HUs viven en la misma tabla — una sola query trae todo.
   const storiesQuery = useQuery({
     queryKey: queryKeys.stories(ws, proj),
     queryFn: () => api.stories.list(ws, proj).then((r) => r.userStories),
     staleTime: STALE_TIME.live,
   });
-  const epicsQuery = useQuery({
-    queryKey: queryKeys.epics(ws, proj),
-    queryFn: () => api.epics.list(ws, proj).then((r) => r.epics),
-    staleTime: STALE_TIME.live,
-  });
   const stories = storiesQuery.data ?? [];
-  const epics = epicsQuery.data ?? [];
-  const loading = storiesQuery.isLoading || epicsQuery.isLoading;
-  const loadError = storiesQuery.error ?? epicsQuery.error;
+  const loading = storiesQuery.isLoading;
+  const loadError = storiesQuery.error;
   const [actionError, setActionError] = useState<string | null>(null);
   const error =
     actionError ?? (loadError ? (loadError instanceof ApiError ? loadError.message : t("storiesLoadError")) : null);
 
+  // Derivado localmente: épicas, sus hijas agrupadas por epicId, y HUs sueltas.
+  const epics = stories.filter((s) => s.isEpic);
+  const childrenByEpicId = new Map<string, UserStory[]>();
+  const orphanStories: UserStory[] = [];
+  for (const s of stories) {
+    if (s.isEpic) continue;
+    if (s.epicId) {
+      const arr = childrenByEpicId.get(s.epicId) ?? [];
+      arr.push(s);
+      childrenByEpicId.set(s.epicId, arr);
+    } else {
+      orphanStories.push(s);
+    }
+  }
+  function childCountFor(epic: UserStory): number {
+    return epic._count?.children ?? childrenByEpicId.get(epic.id)?.length ?? 0;
+  }
+
   /** HU + board comparten tarjeta (una HU nueva crea su card): invalidar ambas. */
   function invalidateAfterStoryChange() {
     queryClient.invalidateQueries({ queryKey: queryKeys.stories(ws, proj) });
-    queryClient.invalidateQueries({ queryKey: queryKeys.epics(ws, proj) });
     queryClient.invalidateQueries({ queryKey: queryKeys.board(ws, proj) });
   }
 
@@ -79,12 +96,34 @@ export default function StoriesTab({ ws, proj, canManage }: { ws: string; proj: 
   const [role, setRole] = useState("");
   const [want, setWant] = useState("");
   const [benefit, setBenefit] = useState("");
+  const [isEpic, setIsEpic] = useState(false);
 
   const [editingStory, setEditingStory] = useState<UserStory | null>(null);
   const [assignmentNotice, setAssignmentNotice] = useState<{ story: UserStory; notification: AssignmentNotification } | null>(null);
   const [inviteEmail, setInviteEmail] = useState<string | null>(null);
   const [searchParams, setSearchParams] = useSearchParams();
   const storyParam = searchParams.get("story");
+  const epicParam = searchParams.get("epic");
+
+  // Filtro por épica (AC3), persistido en la URL igual que el deep link `?story=`:
+  // "" = todas, "none" = solo HUs sin épica, o la key de una épica puntual.
+  function setEpicFilter(value: string) {
+    const next = new URLSearchParams(searchParams);
+    if (value) next.set("epic", value);
+    else next.delete("epic");
+    setSearchParams(next, { replace: true });
+  }
+
+  const selectedEpicKey = epicParam && epicParam !== NO_EPIC_FILTER ? epicParam : null;
+  // Una key inválida (deep link viejo) no rompe el filtro: cae de vuelta a "todas",
+  // igual que el deep link de `?story=` ignora una key que no resuelve.
+  const selectedEpic = selectedEpicKey
+    ? (epics.find((e) => e.key.toLowerCase() === selectedEpicKey.toLowerCase()) ?? null)
+    : null;
+  const showOnlyOrphans = epicParam === NO_EPIC_FILTER;
+  const visibleEpics = showOnlyOrphans ? [] : selectedEpic ? [selectedEpic] : epics;
+  const visibleOrphans = selectedEpic ? [] : orphanStories;
+  const hasVisibleContent = visibleEpics.length > 0 || visibleOrphans.length > 0;
 
   // Deep link (PEM-38): `?story=<KEY>` abre el detalle de esa HU en cuanto la
   // lista carga. Una key que no resuelve (HU eliminada, correo viejo) deja la
@@ -123,6 +162,21 @@ export default function StoriesTab({ ws, proj, canManage }: { ws: string; proj: 
   // Marcado por defecto: la tarjeta nace con la HU, así que lo esperable es que
   // se vaya con ella. Quien quiera conservarla lo desmarca (PEM-19).
   const [deleteCard, setDeleteCard] = useState(true);
+  // Distinto de `deleteError`: solo se setea cuando el borrado falló porque la
+  // épica tiene hijas (carrera con un agente que las creó después de abrir el
+  // modal) — habilita el botón que lleva directo al filtro de esa épica.
+  const [deleteBlockedEpicKey, setDeleteBlockedEpicKey] = useState<string | null>(null);
+
+  function resetDeleteState() {
+    setPendingDelete(null);
+    setDeleteError(null);
+    setDeleteCard(true);
+    setDeleteBlockedEpicKey(null);
+  }
+
+  // Guarda preventiva (AC6): conteo de hijas de la épica a borrar, para
+  // deshabilitar el botón de confirmar antes de siquiera intentar el request.
+  const pendingDeleteChildCount = pendingDelete?.isEpic ? childCountFor(pendingDelete) : 0;
 
   async function createStory(e: React.FormEvent) {
     e.preventDefault();
@@ -132,15 +186,17 @@ export default function StoriesTab({ ws, proj, canManage }: { ws: string; proj: 
       await api.stories.create(ws, proj, {
         title: title.trim(),
         priority,
+        isEpic,
         narrative:
           role || want || benefit ? { role, want, benefit } : undefined,
       });
-      track("story_created");
+      track("story_created", { is_epic: isEpic });
       setTitle("");
       setRole("");
       setWant("");
       setBenefit("");
       setPriority("medium");
+      setIsEpic(false);
       invalidateAfterStoryChange();
     } catch (e) {
       track("story_created_failed", { reason: analyticsFailureReason(e) });
@@ -175,18 +231,86 @@ export default function StoriesTab({ ws, proj, canManage }: { ws: string; proj: 
     if (!pendingDelete) return;
     setDeleting(true);
     setDeleteError(null);
+    setDeleteBlockedEpicKey(null);
     try {
       await api.stories.remove(ws, proj, pendingDelete.id, !deleteCard);
-      track("story_deleted", { card_deleted: deleteCard });
-      setPendingDelete(null);
-      setDeleteCard(true);
+      track("story_deleted", { card_deleted: deleteCard, is_epic: pendingDelete.isEpic });
+      resetDeleteState();
       invalidateAfterStoryChange();
     } catch (e) {
       track("story_delete_failed", { reason: analyticsFailureReason(e) });
-      setDeleteError(e instanceof ApiError ? e.message : t("storyDeleteError"));
+      // Reactiva (AC6): la guarda preventiva ya cubre el caso normal, pero un
+      // agente puede haber vinculado una HU a esta épica entre que se abrió el
+      // modal y se confirmó el borrado. En vez del texto crudo, se ofrece un
+      // atajo directo al filtro de esa épica.
+      if (e instanceof ApiError && e.code === "epic_has_children") {
+        setDeleteError(e.message);
+        setDeleteBlockedEpicKey(pendingDelete.key);
+      } else {
+        setDeleteError(e instanceof ApiError ? e.message : t("storyDeleteError"));
+      }
     } finally {
       setDeleting(false);
     }
+  }
+
+  function renderRow(s: UserStory, opts: { indent?: boolean } = {}) {
+    const count = s.isEpic ? childCountFor(s) : 0;
+    return (
+      <ListRow
+        key={s.id}
+        indent={opts.indent}
+        actions={
+          <>
+            <Badge tone={STATUS_TONE[s.status] ?? "neutral"} dot>
+              {s.status}
+            </Badge>
+            <Select value={s.status} onChange={(e) => setStatus(s.id, e.target.value)} aria-label={t("status")}>
+              {STATUSES.map((st) => (
+                <option key={st} value={st}>
+                  {st}
+                </option>
+              ))}
+            </Select>
+            <button
+              type="button"
+              className="grid h-8 w-8 shrink-0 place-items-center rounded-md text-ink-400 transition-colors hover:bg-surface-100 hover:text-ink-900"
+              aria-label={t("editStory", { key: s.key, title: s.title })}
+              onClick={() => openStory(s)}
+            >
+              <PencilIcon />
+            </button>
+            <button
+              type="button"
+              className="grid h-8 w-8 shrink-0 place-items-center rounded-md text-ink-400 transition-colors hover:bg-red-100 hover:text-red-600"
+              aria-label={t("deleteStoryAria", { key: s.key, title: s.title })}
+              onClick={() => setPendingDelete(s)}
+            >
+              <TrashIcon />
+            </button>
+          </>
+        }
+      >
+        <div className="flex flex-wrap items-center gap-2">
+          {/* Opción A: la key de una épica usa el chip morado, el resto de la fila no cambia. */}
+          <Badge tone={s.isEpic ? "epic" : "brand"} mono>
+            {s.key}
+          </Badge>
+          <span className="text-body font-medium text-ink-900">{s.title}</span>
+          {s.isEpic && (
+            <Badge tone="epic">{t("epicBadge", { count, suffix: count === 1 ? "" : "s" })}</Badge>
+          )}
+        </div>
+        {formatNarrative(s.narrative) && (
+          <p className="mt-1 text-body-sm text-ink-500">{formatNarrative(s.narrative)}</p>
+        )}
+        <div className="mt-1.5">
+          <Badge tone={PRIORITY_TONE[s.priority] ?? "neutral"} mono>
+            {s.priority}
+          </Badge>
+        </div>
+      </ListRow>
+    );
   }
 
   if (loading)
@@ -250,6 +374,11 @@ export default function StoriesTab({ ws, proj, canManage }: { ws: string; proj: 
             </Field>
           </div>
 
+          <div>
+            <Switch checked={isEpic} onChange={setIsEpic} label={t("isEpicToggle")} />
+            {isEpic && <p className="mt-1.5 text-caption text-ink-400">{t("epicHint")}</p>}
+          </div>
+
           <div className="flex items-end justify-between gap-3 border-t border-line-100 pt-4">
             <div className="w-40">
               <Field label={t("priority")}>
@@ -273,86 +402,59 @@ export default function StoriesTab({ ws, proj, canManage }: { ws: string; proj: 
 
       {/* Lista */}
       <Card>
-        <h3 className="text-h4 text-ink-900">{t("stories", { count: stories.length })}</h3>
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <h3 className="text-h4 text-ink-900">{t("stories", { count: stories.length })}</h3>
+          {epics.length > 0 && (
+            <div className="w-56">
+              <Select
+                value={epicParam ?? ""}
+                onChange={(e) => setEpicFilter(e.target.value)}
+                aria-label={t("filterByEpic")}
+              >
+                <option value="">{t("allEpics")}</option>
+                <option value={NO_EPIC_FILTER}>{t("noEpic")}</option>
+                {epics.map((ep) => (
+                  <option key={ep.id} value={ep.key}>
+                    {ep.key} · {ep.title}
+                  </option>
+                ))}
+              </Select>
+            </div>
+          )}
+        </div>
         <div className="mt-4">
           {stories.length === 0 ? (
             <EmptyState
               title={t("noStories")}
               description={t("noStoriesDescription")}
             />
+          ) : !hasVisibleContent ? (
+            <EmptyState title={t("noStories")} description={t("noStoriesDescription")} />
           ) : (
             <div className="divide-y divide-line-100">
-              {stories.map((s) => (
-                <div
-                  key={s.id}
-                  className="flex items-start justify-between gap-3 -mx-6 px-6 py-3 hover:bg-surface-50"
-                >
-                  <div className="min-w-0 flex-1">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <Badge tone="brand" mono>
-                        {s.key}
-                      </Badge>
-                      <span className="text-body font-medium text-ink-900">{s.title}</span>
-                    </div>
-                    {formatNarrative(s.narrative) && (
-                      <p className="mt-1 text-body-sm text-ink-500">{formatNarrative(s.narrative)}</p>
-                    )}
-                    <div className="mt-1.5">
-                      <Badge tone={PRIORITY_TONE[s.priority] ?? "neutral"} mono>
-                        {s.priority}
-                      </Badge>
-                    </div>
-                  </div>
-                  <div className="flex shrink-0 items-center gap-2">
-                    <Badge tone={STATUS_TONE[s.status] ?? "neutral"} dot>
-                      {s.status}
-                    </Badge>
-                    <Select
-                      value={s.status}
-                      onChange={(e) => setStatus(s.id, e.target.value)}
-                    >
-                      {STATUSES.map((st) => (
-                        <option key={st} value={st}>
-                          {st}
-                        </option>
-                      ))}
-                    </Select>
-                    <button
-                      type="button"
-                      className="grid h-8 w-8 shrink-0 place-items-center rounded-md text-ink-400 transition-colors hover:bg-surface-100 hover:text-ink-900"
-                      aria-label={t("editStory", { key: s.key, title: s.title })}
-                      onClick={() => openStory(s)}
-                    >
-                      <PencilIcon />
-                    </button>
-                    <button
-                      type="button"
-                      className="grid h-8 w-8 shrink-0 place-items-center rounded-md text-ink-400 transition-colors hover:bg-red-100 hover:text-red-600"
-                      aria-label={t("deleteStoryAria", { key: s.key, title: s.title })}
-                      onClick={() => setPendingDelete(s)}
-                    >
-                      <TrashIcon />
-                    </button>
-                  </div>
-                </div>
+              {visibleEpics.map((epic) => (
+                <Fragment key={epic.id}>
+                  {renderRow(epic)}
+                  {(childrenByEpicId.get(epic.id) ?? []).map((child) => renderRow(child, { indent: true }))}
+                </Fragment>
               ))}
+              {visibleOrphans.length > 0 && (
+                <>
+                  {/* Solo hace falta distinguir el grupo cuando también hay épicas
+                      visibles arriba (modo "todas"): filtrado a "sin épica" o a
+                      una épica puntual, la lista ya es autoexplicativa. */}
+                  {visibleEpics.length > 0 && (
+                    <div className="px-6 pt-4 pb-1 text-caption font-semibold uppercase tracking-wide text-ink-400">
+                      {t("noEpic")}
+                    </div>
+                  )}
+                  {visibleOrphans.map((s) => renderRow(s))}
+                </>
+              )}
             </div>
           )}
         </div>
       </Card>
-
-      {epics.length > 0 && (
-        <Card>
-          <h3 className="text-h4 text-ink-900">{t("epics")}</h3>
-          <div className="mt-3 flex flex-wrap gap-2">
-            {epics.map((e) => (
-              <Badge key={e.id} tone="brand">
-                {e.title} · {e._count.stories}
-              </Badge>
-            ))}
-          </div>
-        </Card>
-      )}
 
       {editingStory && (
         <StoryDetailModal
@@ -360,6 +462,8 @@ export default function StoriesTab({ ws, proj, canManage }: { ws: string; proj: 
           ws={ws}
           proj={proj}
           epics={epics}
+          childStories={editingStory.isEpic ? (childrenByEpicId.get(editingStory.id) ?? []) : []}
+          onOpenStory={openStory}
           onClose={closeStory}
           canManage={canManage}
           onSaved={(updated, notification) => {
@@ -375,38 +479,55 @@ export default function StoriesTab({ ws, proj, canManage }: { ws: string; proj: 
         <Modal
           title={t("deleteStoryTitle")}
           onClose={() => {
-            if (!deleting) {
-              setPendingDelete(null);
-              setDeleteError(null);
-              setDeleteCard(true);
-            }
+            if (!deleting) resetDeleteState();
           }}
         >
           <div className="space-y-4">
             <ErrorText>{deleteError}</ErrorText>
+            {deleteBlockedEpicKey && (
+              <div className="flex justify-end">
+                <Button
+                  type="button"
+                  variant="secondary"
+                  size="sm"
+                  onClick={() => {
+                    const key = deleteBlockedEpicKey;
+                    resetDeleteState();
+                    setEpicFilter(key);
+                  }}
+                >
+                  {t("filterByEpic")}
+                </Button>
+              </div>
+            )}
             <p className="text-body text-ink-700">
               {t("deleteStoryQuestion", { key: pendingDelete.key, title: pendingDelete.title })}
             </p>
-            <Checkbox checked={deleteCard} onChange={setDeleteCard}>
-              {t("deleteCardToo")}
-            </Checkbox>
-            <p className="text-body-sm text-ink-500">
-              {deleteCard
-                ? t("cardDeletedWithStory") : t("cardKeptWithoutStory")}
-            </p>
+            {pendingDeleteChildCount > 0 && (
+              <Notice tone="warning">
+                {t("epicHasChildrenWarning", { count: pendingDeleteChildCount })}
+              </Notice>
+            )}
+            {!pendingDelete.isEpic && (
+              <>
+                <Checkbox checked={deleteCard} onChange={setDeleteCard}>
+                  {t("deleteCardToo")}
+                </Checkbox>
+                <p className="text-body-sm text-ink-500">
+                  {deleteCard
+                    ? t("cardDeletedWithStory") : t("cardKeptWithoutStory")}
+                </p>
+              </>
+            )}
             <div className="flex justify-end gap-2 border-t border-line-100 pt-4">
               <Button
                 variant="secondary"
                 disabled={deleting}
-                onClick={() => {
-                  setPendingDelete(null);
-                  setDeleteError(null);
-                  setDeleteCard(true);
-                }}
+                onClick={() => resetDeleteState()}
               >
                 {t("cancel")}
               </Button>
-              <Button variant="danger" disabled={deleting} onClick={confirmDelete}>
+              <Button variant="danger" disabled={deleting || pendingDeleteChildCount > 0} onClick={confirmDelete}>
                 {deleting ? t("deleting") : t("delete")}
               </Button>
             </div>

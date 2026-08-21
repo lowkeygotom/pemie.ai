@@ -1,23 +1,37 @@
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useQuery } from "@tanstack/react-query";
-import { api, analyticsFailureReason, ApiError, type AssignmentNotification, type Epic, type UserStory } from "../../lib/api.js";
+import { api, analyticsFailureReason, ApiError, type AssignmentNotification, type UserStory } from "../../lib/api.js";
 import { queryKeys, STALE_TIME } from "../../lib/queryClient.js";
 import { track } from "../../lib/analytics/index.js";
 import {
+  Badge,
+  type BadgeTone,
   Button,
   ErrorText,
   Field,
   Input,
+  ListRow,
   Modal,
+  Notice,
   Select,
   Skeleton,
+  Switch,
   TrashIcon,
 } from "../../components/ui.js";
 import { AssigneeNotice, AssigneeSelect } from "./AssigneeField.js";
 
 const STATUSES = ["backlog", "ready", "in_progress", "review", "done"];
 const PRIORITIES = ["low", "medium", "high", "critical"];
+
+/** Tono del badge de estado en la lista de hijas de una épica (mismo mapeo que StoriesTab). */
+const CHILD_STATUS_TONE: Record<string, BadgeTone> = {
+  backlog: "neutral",
+  ready: "brand",
+  in_progress: "brand",
+  review: "warning",
+  done: "success",
+};
 
 interface CriterionRow {
   given: string;
@@ -47,6 +61,8 @@ export default function StoryDetailModal({
   ws,
   proj,
   epics,
+  childStories,
+  onOpenStory,
   onClose,
   onSaved,
   canManage,
@@ -54,7 +70,12 @@ export default function StoryDetailModal({
   story: UserStory;
   ws: string;
   proj: string;
-  epics: Epic[];
+  /** Épicas del proyecto (isEpic: true), para vincular una HU normal. Ya cargadas por StoriesTab. */
+  epics: UserStory[];
+  /** Hijas de `story` cuando es una épica (ya agrupadas por StoriesTab a partir de la misma lista). */
+  childStories: UserStory[];
+  /** Navega al detalle de otra HU (click en una hija) — mismo callback que abre `?story=`. */
+  onOpenStory: (story: UserStory) => void;
   onClose: () => void;
   onSaved: (story: UserStory, notification?: AssignmentNotification) => void;
   canManage: boolean;
@@ -69,8 +90,14 @@ export default function StoryDetailModal({
   const [criteria, setCriteria] = useState<CriterionRow[]>(criteriaFromStory(story));
   const [epicId, setEpicId] = useState(story.epicId ?? "");
   const [assigneeId, setAssigneeId] = useState(story.assigneeId ?? "");
+  const [isEpic, setIsEpic] = useState(story.isEpic);
   const [saving, setSaving] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
+
+  // D4: normal→épica solo si no tiene ya una épica propia; épica→normal solo
+  // si no le cuelga ninguna HU. Se evalúa contra el estado ya guardado
+  // (`story`), no contra el toggle pendiente, para permitir revertirlo.
+  const conversionAllowed = story.isEpic ? childStories.length === 0 : !story.epicId;
 
   // Candidatos asignables no viajan con la lista de HUs (StoriesTab no los
   // necesita para otra cosa): se piden acá, con el mismo caché que usa CardDetailModal.
@@ -136,10 +163,16 @@ export default function StoryDetailModal({
           c.then !== originalCriteria[i]?.then
       );
     if (criteriaChanged) patch.acceptanceCriteria = cleanCriteria;
-    const nextEpicId = epicId || null;
-    if (nextEpicId !== (story.epicId ?? null)) patch.epicId = nextEpicId;
+    // El select de épica padre solo se renderiza (y solo importa) cuando la HU
+    // no es (ni está por convertirse en) una épica: con `isEpic` true no hay
+    // que tocar `epicId` aunque el estado local del select haya quedado stale.
+    if (!isEpic) {
+      const nextEpicId = epicId || null;
+      if (nextEpicId !== (story.epicId ?? null)) patch.epicId = nextEpicId;
+    }
     const nextAssigneeId = assigneeId || null;
     if (nextAssigneeId !== (story.assigneeId ?? null)) patch.assigneeId = nextAssigneeId;
+    if (isEpic !== story.isEpic) patch.isEpic = isEpic;
 
     if (Object.keys(patch).length === 0) {
       onSaved(story);
@@ -149,7 +182,7 @@ export default function StoryDetailModal({
 
     try {
       const { userStory: updated } = await api.stories.update(ws, proj, story.id, patch);
-      track("story_updated");
+      track("story_updated", { epic_changed: isEpic !== story.isEpic });
       onSaved(updated, updated.assignmentNotification);
     } catch (e) {
       track("story_update_failed", { reason: analyticsFailureReason(e) });
@@ -213,20 +246,71 @@ export default function StoryDetailModal({
             </div>
           </div>
         ) : (
-          <div className="grid min-w-0 gap-3 sm:grid-cols-2">
-            <Field label={t("epics")}>
-              <Select value={epicId} onChange={(e) => setEpicId(e.target.value)} aria-label={t("epics")}>
-                <option value="">{t("noEpic")}</option>
-                {epics.map((ep) => (
-                  <option key={ep.id} value={ep.id}>
-                    {ep.title}
-                  </option>
-                ))}
-              </Select>
-            </Field>
+          <div className={`grid min-w-0 gap-3 ${isEpic ? "sm:grid-cols-1" : "sm:grid-cols-2"}`}>
+            {/* AC5: una épica nunca se vincula a otra épica — con `isEpic` activo
+                (guardado o recién tildado en el toggle de abajo) este select
+                desaparece y en su lugar se ven las hijas, más abajo. */}
+            {!isEpic && (
+              <Field label={t("epic")}>
+                <Select value={epicId} onChange={(e) => setEpicId(e.target.value)} aria-label={t("epic")}>
+                  <option value="">{t("noEpic")}</option>
+                  {epics
+                    .filter((ep) => ep.id !== story.id)
+                    .map((ep) => (
+                      <option key={ep.id} value={ep.id}>
+                        {ep.key} · {ep.title}
+                      </option>
+                    ))}
+                </Select>
+              </Field>
+            )}
             <AssigneeSelect value={assigneeId} onChange={setAssigneeId} candidates={assigneeCandidates} />
           </div>
         )}
+
+        {isEpic && (
+          <div className="min-w-0 border-t border-line-100 pt-4">
+            <h4 className="mb-2 text-body-sm font-semibold text-ink-800">{t("childStories")}</h4>
+            {childStories.length === 0 ? (
+              <p className="text-body-sm text-ink-400">{t("noChildStories")}</p>
+            ) : (
+              <div className="-mx-6 divide-y divide-line-100">
+                {childStories.map((child) => (
+                  <button
+                    key={child.id}
+                    type="button"
+                    className="block w-full rounded-md text-left focus-visible:outline-none focus-visible:shadow-focus"
+                    aria-label={t("openChildStory", { key: child.key, title: child.title })}
+                    onClick={() => onOpenStory(child)}
+                  >
+                    <ListRow actions={<Badge tone={CHILD_STATUS_TONE[child.status] ?? "neutral"} dot>{child.status}</Badge>}>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <Badge tone="brand" mono>
+                          {child.key}
+                        </Badge>
+                        <span className="text-body font-medium text-ink-900">{child.title}</span>
+                      </div>
+                    </ListRow>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* D4: normal→épica solo si no tiene ya una épica propia; épica→normal
+            solo si no le cuelga ninguna HU (AC6). */}
+        <div className="min-w-0 border-t border-line-100 pt-4">
+          <h4 className="mb-2 text-body-sm font-semibold text-ink-800">
+            {t(story.isEpic ? "convertToStory" : "convertToEpic")}
+          </h4>
+          {story.isEpic && childStories.length > 0 && (
+            <div className="mb-2">
+              <Notice tone="warning">{t("cannotConvertHasChildren", { count: childStories.length })}</Notice>
+            </div>
+          )}
+          <Switch checked={isEpic} onChange={setIsEpic} label={t("isEpicToggle")} disabled={!conversionAllowed} />
+        </div>
 
         {assigneeId && assigneesQuery.data ? (
           <AssigneeNotice

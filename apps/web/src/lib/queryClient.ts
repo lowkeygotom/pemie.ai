@@ -48,7 +48,8 @@ export const queryKeys = {
   objective: (ws: string, proj: string) => ["objective", ws, proj] as const,
   reports: (ws: string, proj: string) => ["reports", ws, proj] as const,
   notes: (ws: string, proj: string) => ["notes", ws, proj] as const,
-  epics: (ws: string, proj: string) => ["epics", ws, proj] as const,
+  // Épicas viven en la misma tabla que las HUs (PEM-57): comparten esta key,
+  // no hay una query aparte que invalidar.
   stories: (ws: string, proj: string) => ["stories", ws, proj] as const,
   contributors: (ws: string, proj: string) => ["contributors", ws, proj] as const,
   assignees: (ws: string, proj: string) => ["assignees", ws, proj] as const,

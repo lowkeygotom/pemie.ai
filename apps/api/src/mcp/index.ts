@@ -349,12 +349,15 @@ const TOOLS: McpTool[] = [
     inputSchema: withProjectId({
       status: { type: "string" },
       epicId: { type: "string" },
+      type: { type: "string", enum: ["story", "epic"], description: "tool_list_user_stories_type" },
     }),
     handler: async (ctx, args) => {
       const projectId = await requireProject(ctx, args, "stories:read");
+      const type = args.type as string | undefined;
       return stories.opListStories(projectId, {
         status: args.status as string | undefined,
         epicId: args.epicId as string | undefined,
+        isEpic: type === "epic" ? true : type === "story" ? false : undefined,
       });
     },
   },
@@ -379,6 +382,7 @@ const TOOLS: McpTool[] = [
         storyPoints: { type: "number" },
         epicId: { type: "string" },
         status: { type: "string" },
+        isEpic: { type: "boolean", description: "tool_create_user_story_is_epic" },
       },
       ["title"]
     ),
@@ -394,6 +398,7 @@ const TOOLS: McpTool[] = [
           storyPoints: typeof args.storyPoints === "number" ? args.storyPoints : undefined,
           epicId: args.epicId as string | undefined,
           status: args.status as string | undefined,
+          isEpic: typeof args.isEpic === "boolean" ? args.isEpic : undefined,
         },
         { createdByAgentId: ctx.key.agentId ?? undefined }
       );
@@ -423,6 +428,7 @@ const TOOLS: McpTool[] = [
           },
         },
         epicId: { type: ["string", "null"] },
+        isEpic: { type: "boolean", description: "tool_update_user_story_is_epic" },
       },
       required: ["storyId"],
       additionalProperties: true,
@@ -441,6 +447,7 @@ const TOOLS: McpTool[] = [
           narrative: args.narrative as never,
           acceptanceCriteria: args.acceptanceCriteria as never,
           epicId: args.epicId as string | null | undefined,
+          isEpic: typeof args.isEpic === "boolean" ? args.isEpic : undefined,
         },
         { actorType: "agent", actorId: ctx.key.agentId ?? ctx.key.id }
       );
@@ -626,7 +633,7 @@ const TOOLS: McpTool[] = [
       const projectId = await requireProject(ctx, args, "stories:read");
       const story = await stories.getStoryById(String(args.storyId));
       if (!story || story.projectId !== projectId) throw forbidden("story_not_in_project");
-      return story;
+      return stories.opGetStoryDetail(story);
     },
   },
   {

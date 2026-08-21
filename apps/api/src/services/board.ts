@@ -94,7 +94,16 @@ export async function opListBoard(projectId: string) {
           cards: {
             orderBy: { order: "asc" },
             include: {
-              userStory: { select: { id: true, key: true, title: true, status: true, narrative: true } },
+              userStory: {
+                select: {
+                  id: true,
+                  key: true,
+                  title: true,
+                  status: true,
+                  narrative: true,
+                  epic: { select: { id: true, key: true } },
+                },
+              },
               assignee: { select: { id: true, githubLogin: true, name: true, avatarUrl: true } },
             },
           },
@@ -160,6 +169,9 @@ export async function opCreateCard(projectId: string, input: CreateCardInput, ac
   if (input.userStoryId) {
     const story = await prisma.userStory.findUnique({ where: { id: input.userStoryId } });
     if (!story || story.projectId !== projectId) throw badRequest("story_mismatch");
+    // D2 (PEM-57): una épica agrupa HUs, no es un ítem de trabajo — nunca
+    // tiene tarjeta Kanban propia.
+    if (story.isEpic) throw badRequest("epic_cannot_have_card");
     const existing = await prisma.card.findUnique({ where: { userStoryId: input.userStoryId } });
     if (existing) throw badRequest("story_has_card");
   }
@@ -328,9 +340,12 @@ async function syncCardAssigneeToStory(userStoryId: string | null, assigneeId: s
  */
 export async function opLinkStoryToCard(
   card: { id: string },
-  story: { id: string },
+  story: { id: string; isEpic: boolean },
   actor: CardActor
 ) {
+  // D2 (PEM-57): igual que al crear la tarjeta, una épica no puede terminar
+  // con una tarjeta Kanban vinculada.
+  if (story.isEpic) throw badRequest("epic_cannot_have_card");
   const existing = await prisma.card.findUnique({ where: { userStoryId: story.id } });
   if (existing && existing.id !== card.id) throw badRequest("story_has_card");
 
@@ -424,6 +439,8 @@ export async function opUpdateCard(
     if (patch.userStoryId) {
       const story = await prisma.userStory.findUnique({ where: { id: patch.userStoryId } });
       if (!story || story.projectId !== projectId) throw badRequest("story_mismatch");
+      // D2 (PEM-57): mismo motivo que opCreateCard/opLinkStoryToCard.
+      if (story.isEpic) throw badRequest("epic_cannot_have_card");
       const existing = await prisma.card.findUnique({ where: { userStoryId: patch.userStoryId } });
       if (existing && existing.id !== card.id) throw badRequest("story_has_card");
       data.userStory = { connect: { id: patch.userStoryId } };

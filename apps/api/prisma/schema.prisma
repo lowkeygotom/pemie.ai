@@ -146,7 +146,6 @@ model Project {
   objectiveLog ObjectiveHistory[]
   reports      Report[]
   notes        Note[]
-  epics        Epic[]
   userStories  UserStory[]
   boards       Board[]
   agents              Agent[]
@@ -370,19 +369,6 @@ model SkillDownload {
 
 // ─── Historias de Usuario ─────────────────────────────────────────────
 
-model Epic {
-  id          String      @id @default(cuid())
-  projectId   String
-  title       String
-  description String?
-  createdAt   DateTime    @default(now())
-  project     Project     @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  stories     UserStory[]
-
-  @@index([projectId])
-  @@map("epics")
-}
-
 model UserStory {
   id                 String   @id @default(cuid())
   projectId          String
@@ -393,6 +379,10 @@ model UserStory {
   priority           String   @default("medium") // low | medium | high | critical
   storyPoints        Int?
   status             String   @default("backlog")
+  // PEM-57: una épica es una UserStory más (isEpic=true), no un modelo aparte.
+  // epicId es una auto-relación a un solo nivel: una épica no puede colgar de
+  // otra épica (assertLinkableEpic en services/stories.ts lo garantiza).
+  isEpic             Boolean  @default(false)
   epicId             String?
   assigneeId         String?
   createdById        String?
@@ -400,13 +390,16 @@ model UserStory {
   createdAt          DateTime @default(now())
   updatedAt          DateTime @updatedAt
   project            Project      @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  epic               Epic?        @relation(fields: [epicId], references: [id])
+  epic               UserStory?   @relation("StoryEpic", fields: [epicId], references: [id], onDelete: Restrict)
+  children           UserStory[]  @relation("StoryEpic")
   assignee           Contributor? @relation(fields: [assigneeId], references: [id])
   card               Card?
 
   @@unique([projectId, key])
   @@index([projectId, status])
   @@index([assigneeId])
+  @@index([projectId, isEpic])
+  @@index([epicId])
   @@map("user_stories")
 }
 

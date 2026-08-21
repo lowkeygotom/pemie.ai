@@ -47,6 +47,11 @@ export default {
         // `red-700` expone el token --text-danger: el rojo legible para texto sobre
         // superficies claras (el 600 es el acento, sin contraste suficiente para leer).
         red: { 700: "var(--text-danger)", 600: "var(--red-600)", 100: "var(--red-100)" },
+        // Épicas (PEM-57): acento propio del design system, no un semantic de estado
+        // (success/warning/danger) — mismo patrón de 3 shades que "blue" (700 texto,
+        // 600 acento/dot, 100 fondo del chip), calibrado a la misma luminosidad/croma
+        // relativa que green/amber/red (oklch ~L0.62 C0.14-0.16, hue ~300).
+        violet: { 700: "var(--violet-700)", 600: "var(--violet-600)", 100: "var(--violet-100)" },
 
         accent: "var(--accent)",
         "accent-hover": "var(--accent-hover)",

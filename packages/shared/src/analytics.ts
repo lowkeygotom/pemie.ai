@@ -34,15 +34,19 @@ export const ANALYTICS_EVENTS = {
   project_created_failed: ["reason"],
 
   // ─── Historias de usuario ────────────────────────────────────────────
-  story_created: [],
+  // `is_epic` distingue una épica de una HU normal (PEM-57): mide cuánto se
+  // usa el nuevo agrupador sin exponer su contenido.
+  story_created: ["is_epic"],
   story_created_failed: ["reason"],
   // Nunca el texto de la HU, solo el tránsito de estado.
   story_status_changed: ["from_status", "to_status"],
-  story_updated: [],
+  // `epic_changed` mide conversiones HU↔épica (PEM-57), no el contenido del patch.
+  story_updated: ["epic_changed"],
   story_update_failed: ["reason"],
   // `card_deleted` mide si el equipo acepta el default de arrastrar la tarjeta
-  // con la HU o lo desmarca: es lo que valida la decisión de PEM-19.
-  story_deleted: ["card_deleted"],
+  // con la HU o lo desmarca: es lo que valida la decisión de PEM-19. `is_epic`
+  // distingue borrar una épica (nunca tuvo tarjeta) de una HU normal.
+  story_deleted: ["card_deleted", "is_epic"],
   story_delete_failed: ["reason"],
 
   // ─── Tablero (Kanban) ────────────────────────────────────────────────

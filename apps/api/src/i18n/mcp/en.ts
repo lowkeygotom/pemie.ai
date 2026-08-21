@@ -38,9 +38,17 @@ export const en: Record<keyof typeof es, string | ((params?: McpDescParams) => s
   tool_answer_note: "Answers a note and optionally links it to a report.",
   tool_get_objective: "Current project objective.",
   tool_update_objective: "Sets or updates the project objective (keeps history).",
-  tool_list_user_stories: "Lists the project's User Stories (filterable by status/epic).",
-  tool_create_user_story: "Creates a User Story (role/want/benefit narrative + acceptance criteria).",
-  tool_update_user_story: "Updates a User Story (title, status, priority, narrative…).",
+  tool_list_user_stories:
+    "Lists the project's User Stories (filterable by status/epic; type=story|epic filters by isEpic).",
+  tool_list_user_stories_type: "Filters by isEpic: 'story' for regular stories only, 'epic' for epics only. Omit to get both.",
+  tool_create_user_story:
+    "Creates a User Story (role/want/benefit narrative + acceptance criteria). With isEpic=true, creates an epic instead of a regular story: no Kanban card, no storyPoints allowed.",
+  tool_create_user_story_is_epic:
+    "true to create an epic instead of a regular story. An epic can't have epicId or storyPoints.",
+  tool_update_user_story:
+    "Updates a User Story (title, status, priority, narrative…). isEpic converts story↔epic: story→epic only without its own epicId; epic→story only without child stories.",
+  tool_update_user_story_is_epic:
+    "Converts the story into an epic (true) or the epic back into a regular story (false). Rejects if it already has its own epic (going to epic) or has children (going back to story).",
   tool_assign_user_story:
     "Assigns (or unassigns, with assigneeId null) a story to a candidate from list_assignees (contributor or workspace member); syncs the linked Card.",
   tool_list_contributors: "Lists project contributors (candidates for assigning stories/cards).",
@@ -58,9 +66,10 @@ export const en: Record<keyof typeof es, string | ((params?: McpDescParams) => s
   tool_search_types: "Limits the search to these types; defaults to all allowed types.",
   tool_search_limit: "Maximum number of results (20 by default, 50 cap).",
   tool_create_note: "Leaves a note or question on the project.",
-  tool_get_user_story: "Detail for a single story by id, without listing all of the project's stories.",
+  tool_get_user_story:
+    "Detail for a single story by id, without listing all of the project's stories. If it's an epic, includes its children; otherwise, includes its parent epic.",
   tool_delete_user_story:
-    "Deletes a story and its Kanban card. With keepCard=true the card is kept unlinked, with its activity intact.",
+    "Deletes a story and its Kanban card. With keepCard=true the card is kept unlinked, with its activity intact. An epic with child stories can't be deleted.",
   tool_update_card:
     "Updates a card's title, description, type, assignee, or linked story. Omitting a field leaves it unchanged; sending null unlinks it.",
   tool_delete_card:

@@ -18,6 +18,7 @@ import {
   Skeleton,
   Switch,
   TrashIcon,
+  UnlinkIcon,
 } from "../../components/ui.js";
 import { AssigneeNotice, AssigneeSelect } from "./AssigneeField.js";
 
@@ -67,6 +68,7 @@ export default function StoryDetailModal({
   onClose,
   onSaved,
   onLinkStory,
+  onUnlinkStory,
   canManage,
 }: {
   story: UserStory;
@@ -84,6 +86,8 @@ export default function StoryDetailModal({
   onSaved: (story: UserStory, notification?: AssignmentNotification) => void;
   /** Vincula una HU existente a `story` (que es una épica) sin pasar por el form de esa HU. */
   onLinkStory: (childId: string) => Promise<void>;
+  /** Desvincula una hija de `story` (que es una épica) sin pasar por el form de esa hija. */
+  onUnlinkStory: (childId: string) => void;
   canManage: boolean;
 }) {
   const { t } = useTranslation("project");
@@ -378,22 +382,39 @@ export default function StoryDetailModal({
                 {childrenOpen && (
                   <div className="divide-y divide-line-100">
                     {childStories.map((child) => (
-                      <button
+                      <ListRow
                         key={child.id}
-                        type="button"
-                        className="block w-full rounded-md text-left focus-visible:outline-none focus-visible:shadow-focus"
-                        aria-label={t("openChildStory", { key: child.key, title: child.title })}
-                        onClick={() => onOpenStory(child)}
+                        actions={
+                          <>
+                            <Badge tone={CHILD_STATUS_TONE[child.status] ?? "neutral"} dot>
+                              {child.status}
+                            </Badge>
+                            <button
+                              type="button"
+                              className="grid h-8 w-8 shrink-0 place-items-center rounded-md text-ink-400 transition-colors hover:bg-surface-100 hover:text-ink-900"
+                              aria-label={t("unlinkFromEpicAria", { key: child.key, title: child.title })}
+                              title={t("unlinkFromEpic")}
+                              onClick={() => onUnlinkStory(child.id)}
+                            >
+                              <UnlinkIcon />
+                            </button>
+                          </>
+                        }
                       >
-                        <ListRow actions={<Badge tone={CHILD_STATUS_TONE[child.status] ?? "neutral"} dot>{child.status}</Badge>}>
+                        <button
+                          type="button"
+                          className="block w-full min-w-0 rounded-md text-left focus-visible:outline-none focus-visible:shadow-focus"
+                          aria-label={t("openChildStory", { key: child.key, title: child.title })}
+                          onClick={() => onOpenStory(child)}
+                        >
                           <div className="flex min-w-0 flex-wrap items-center gap-2">
                             <Badge tone="brand" mono>
                               {child.key}
                             </Badge>
                             <span className="min-w-0 truncate text-body font-medium text-ink-900">{child.title}</span>
                           </div>
-                        </ListRow>
-                      </button>
+                        </button>
+                      </ListRow>
                     ))}
                   </div>
                 )}

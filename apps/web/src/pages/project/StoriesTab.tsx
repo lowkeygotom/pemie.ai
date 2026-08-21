@@ -25,6 +25,7 @@ import {
   Select,
   Switch,
   TrashIcon,
+  UnlinkIcon,
   Notice,
 } from "../../components/ui.js";
 import StoryDetailModal from "./StoryDetailModal.js";
@@ -328,6 +329,17 @@ export default function StoriesTab({ ws, proj, canManage }: { ws: string; proj: 
                 </Select>
               </div>
             )}
+            {opts.indent && (
+              <button
+                type="button"
+                className="grid h-8 w-8 shrink-0 place-items-center rounded-md text-ink-400 transition-colors hover:bg-surface-100 hover:text-ink-900"
+                aria-label={t("unlinkFromEpicAria", { key: s.key, title: s.title })}
+                title={t("unlinkFromEpic")}
+                onClick={() => setEpic(s.id, null)}
+              >
+                <UnlinkIcon />
+              </button>
+            )}
             <button
               type="button"
               className="grid h-8 w-8 shrink-0 place-items-center rounded-md text-ink-400 transition-colors hover:bg-surface-100 hover:text-ink-900"
@@ -543,6 +555,7 @@ export default function StoriesTab({ ws, proj, canManage }: { ws: string; proj: 
             await api.stories.update(ws, proj, childId, { epicId: editingStory.id });
             invalidateAfterStoryChange();
           }}
+          onUnlinkStory={(childId) => setEpic(childId, null)}
         />
       )}
 

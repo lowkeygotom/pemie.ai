@@ -296,7 +296,7 @@ export default function StoriesTab({ ws, proj, canManage }: { ws: string; proj: 
             <Badge tone={STATUS_TONE[s.status] ?? "neutral"} dot>
               {s.status}
             </Badge>
-            <div className="w-32 shrink-0">
+            <div className="w-full shrink-0 sm:w-32">
               <Select
                 value={s.status}
                 onChange={(e) => setStatus(s.id, e.target.value)}
@@ -313,7 +313,7 @@ export default function StoriesTab({ ws, proj, canManage }: { ws: string; proj: 
             {/* Asignar/reasignar/desvincular ("Sin épica") directo desde la fila,
                 sin abrir el detalle — mismo control que ya existía para status. */}
             {!s.isEpic && (
-              <div className="w-40 shrink-0">
+              <div className="w-full shrink-0 sm:w-40">
                 <Select
                   value={s.epicId ?? ""}
                   onChange={(e) => setEpic(s.id, e.target.value || null)}
@@ -380,7 +380,7 @@ export default function StoriesTab({ ws, proj, canManage }: { ws: string; proj: 
                 >
                   ▸
                 </span>
-                {t("epicBadge", { count, suffix: count === 1 ? "" : "s" })}
+                {t("epicBadge", { count })}
               </Badge>
             </button>
           )}

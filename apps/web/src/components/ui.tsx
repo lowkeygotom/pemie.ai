@@ -249,12 +249,14 @@ export function ListRow({
 }) {
   return (
     <div
-      className={`flex items-start justify-between gap-3 -mx-6 px-6 py-3 hover:bg-surface-50 ${
+      className={`flex flex-col items-stretch justify-between gap-3 -mx-6 px-6 py-3 hover:bg-surface-50 sm:flex-row sm:items-start ${
         indent ? "pl-12" : ""
       } ${className}`}
     >
       <div className="min-w-0 flex-1">{children}</div>
-      {actions ? <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">{actions}</div> : null}
+      {actions ? (
+        <div className="flex flex-wrap items-center gap-2 sm:shrink-0 sm:justify-end">{actions}</div>
+      ) : null}
     </div>
   );
 }

@@ -42,20 +42,18 @@ export default function LeaderboardTab({ ws, proj }: { ws: string; proj: string 
               {entries.map((entry) => (
                 <div
                   key={`${entry.actorType}:${entry.actorId}`}
-                  className="flex items-center gap-3 -mx-6 px-6 py-3 hover:bg-surface-50"
+                  className="flex flex-wrap items-center gap-x-3 gap-y-1.5 -mx-6 px-6 py-3 hover:bg-surface-50"
                 >
                   <Avatar label={entry.actorName} size="sm" />
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-2">
-                      <span className="truncate text-body font-semibold text-ink-900">
-                        {entry.actorName}
-                      </span>
-                      <Badge tone={entry.actorType === "agent" ? "brand" : "neutral"} dot mono>
-                        {entry.actorType === "agent" ? t("agent") : t("person")}
-                      </Badge>
-                    </div>
+                  <div className="flex min-w-0 flex-1 items-center gap-2">
+                    <span className="min-w-0 truncate text-body font-semibold text-ink-900">
+                      {entry.actorName}
+                    </span>
+                    <Badge tone={entry.actorType === "agent" ? "brand" : "neutral"} dot mono>
+                      {entry.actorType === "agent" ? t("agent") : t("person")}
+                    </Badge>
                   </div>
-                  <div className="flex flex-shrink-0 items-center gap-4 font-mono text-caption text-ink-400">
+                  <div className="flex w-full flex-wrap items-center gap-x-4 gap-y-1 pl-11 font-mono text-caption text-ink-400 sm:w-auto sm:flex-shrink-0 sm:pl-0">
                     <span>{entry.storiesClosed} {entry.storiesClosed === 1 ? t("storiesClosed") : t("storiesClosedPlural")}</span>
                     <span>{entry.pointsDelivered} pts</span>
                     <span>{entry.avgDaysToClose != null ? `${entry.avgDaysToClose}${t("averageDays")}` : "—"}</span>

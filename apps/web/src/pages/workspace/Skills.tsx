@@ -151,18 +151,18 @@ export default function WorkspaceSkills() {
                     key={skill.slug}
                     type="button"
                     onClick={() => setSelected(skill.slug)}
-                    className="flex w-full items-center gap-3 -mx-6 px-6 py-3 text-left hover:bg-surface-50"
+                    className="flex w-full flex-wrap items-center gap-x-3 gap-y-1 -mx-6 px-6 py-3 text-left hover:bg-surface-50"
                   >
                     <div className="min-w-0 flex-1">
-                      <div className="flex items-center gap-2">
-                        <span className="truncate text-body font-semibold text-ink-900">{skill.name}</span>
+                      <div className="flex min-w-0 items-center gap-2">
+                        <span className="min-w-0 truncate text-body font-semibold text-ink-900">{skill.name}</span>
                         <Badge tone="brand" mono>
                           v{skill.version}
                         </Badge>
                       </div>
                       <p className="mt-0.5 truncate text-body-sm text-ink-500">{skill.description}</p>
                     </div>
-                    <div className="flex flex-shrink-0 items-center gap-3 font-mono text-caption text-ink-400">
+                    <div className="flex w-full items-center gap-3 font-mono text-caption text-ink-400 sm:w-auto sm:flex-shrink-0">
                       <Badge tone={skill.publishedByType === "agent" ? "brand" : "neutral"} dot mono>
                         {skill.publishedByType === "agent" ? t("agent") : t("person")}
                       </Badge>

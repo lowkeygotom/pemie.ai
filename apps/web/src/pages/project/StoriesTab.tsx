@@ -506,19 +506,7 @@ export default function StoriesTab({ ws, proj, canManage }: { ws: string; proj: 
                   </Fragment>
                 );
               })}
-              {visibleOrphans.length > 0 && (
-                <>
-                  {/* Solo hace falta distinguir el grupo cuando también hay épicas
-                      visibles arriba (modo "todas"): filtrado a "sin épica" o a
-                      una épica puntual, la lista ya es autoexplicativa. */}
-                  {visibleEpics.length > 0 && (
-                    <div className="px-6 pt-4 pb-1 text-caption font-semibold uppercase tracking-wide text-ink-400">
-                      {t("noEpic")}
-                    </div>
-                  )}
-                  {visibleOrphans.map((s) => renderRow(s))}
-                </>
-              )}
+              {visibleOrphans.map((s) => renderRow(s))}
             </div>
           )}
         </div>

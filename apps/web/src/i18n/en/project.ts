@@ -55,4 +55,6 @@ export default {
   addToEpic: "Add",
   addToEpicAria: "Add {{key}} — {{title}} to this epic",
   linkStoryError: "Couldn't link the User Story. Try again.",
+  toggleChildStories_one: "{{count}} linked story",
+  toggleChildStories_other: "{{count}} linked stories",
 };

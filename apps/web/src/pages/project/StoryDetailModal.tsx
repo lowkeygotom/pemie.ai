@@ -102,6 +102,9 @@ export default function StoryDetailModal({
   const [linkQuery, setLinkQuery] = useState("");
   const [linkingId, setLinkingId] = useState<string | null>(null);
   const [linkError, setLinkError] = useState<string | null>(null);
+  // Plegado por defecto: abrir una épica con varias HUs vinculadas no debe
+  // volcarlas todas de entrada, el usuario las despliega si las necesita.
+  const [childrenOpen, setChildrenOpen] = useState(false);
 
   // D4: normal→épica solo si no tiene ya una épica propia; épica→normal solo
   // si no le cuelga ninguna HU. Se evalúa contra el estado ya guardado
@@ -314,9 +317,12 @@ export default function StoryDetailModal({
             </Field>
             {linkError && <ErrorText>{linkError}</ErrorText>}
             {trimmedLinkQuery && (
-              <div className="-mx-6 mb-3 divide-y divide-line-100 border-b border-line-100">
+              // ListRow ya trae su propio -mx-6 (bleed hasta el borde del modal):
+              // envolverlo en otro -mx-6 duplica el margen negativo y desborda
+              // el ancho del modal — por eso este wrapper NO lo repite.
+              <div className="mb-3 divide-y divide-line-100 border-b border-line-100">
                 {linkMatches.length === 0 ? (
-                  <p className="px-6 py-2 text-body-sm text-ink-400">{t("noMatchingStories")}</p>
+                  <p className="py-2 text-body-sm text-ink-400">{t("noMatchingStories")}</p>
                 ) : (
                   linkMatches.map((candidate) => (
                     <ListRow
@@ -333,11 +339,11 @@ export default function StoryDetailModal({
                         </Button>
                       }
                     >
-                      <div className="flex flex-wrap items-center gap-2">
+                      <div className="flex min-w-0 flex-wrap items-center gap-2">
                         <Badge tone="brand" mono>
                           {candidate.key}
                         </Badge>
-                        <span className="text-body font-medium text-ink-900">{candidate.title}</span>
+                        <span className="min-w-0 truncate text-body font-medium text-ink-900">{candidate.title}</span>
                       </div>
                     </ListRow>
                   ))
@@ -348,26 +354,50 @@ export default function StoryDetailModal({
             {childStories.length === 0 ? (
               <p className="text-body-sm text-ink-400">{t("noChildStories")}</p>
             ) : (
-              <div className="-mx-6 divide-y divide-line-100">
-                {childStories.map((child) => (
-                  <button
-                    key={child.id}
-                    type="button"
-                    className="block w-full rounded-md text-left focus-visible:outline-none focus-visible:shadow-focus"
-                    aria-label={t("openChildStory", { key: child.key, title: child.title })}
-                    onClick={() => onOpenStory(child)}
+              <>
+                <button
+                  type="button"
+                  onClick={() => setChildrenOpen((v) => !v)}
+                  aria-expanded={childrenOpen}
+                  className="flex w-full items-center gap-2 rounded-md py-1.5 text-left hover:bg-surface-50 focus-visible:outline-none focus-visible:shadow-focus"
+                >
+                  <span
+                    aria-hidden
+                    className={`inline-flex h-4 w-4 shrink-0 items-center justify-center text-ink-400 transition-transform duration-150 ${
+                      childrenOpen ? "rotate-90" : ""
+                    }`}
                   >
-                    <ListRow actions={<Badge tone={CHILD_STATUS_TONE[child.status] ?? "neutral"} dot>{child.status}</Badge>}>
-                      <div className="flex flex-wrap items-center gap-2">
-                        <Badge tone="brand" mono>
-                          {child.key}
-                        </Badge>
-                        <span className="text-body font-medium text-ink-900">{child.title}</span>
-                      </div>
-                    </ListRow>
-                  </button>
-                ))}
-              </div>
+                    <svg width="8" height="8" viewBox="0 0 10 10" fill="currentColor">
+                      <path d="M3.2 1.2a.75.75 0 0 1 1.06 0l3.5 3.5a.75.75 0 0 1 0 1.06l-3.5 3.5A.75.75 0 1 1 3.2 8.2L6.05 5.35 3.2 2.5a.75.75 0 0 1 0-1.3Z" />
+                    </svg>
+                  </span>
+                  <span className="text-body-sm font-medium text-ink-700">
+                    {t("toggleChildStories", { count: childStories.length })}
+                  </span>
+                </button>
+                {childrenOpen && (
+                  <div className="divide-y divide-line-100">
+                    {childStories.map((child) => (
+                      <button
+                        key={child.id}
+                        type="button"
+                        className="block w-full rounded-md text-left focus-visible:outline-none focus-visible:shadow-focus"
+                        aria-label={t("openChildStory", { key: child.key, title: child.title })}
+                        onClick={() => onOpenStory(child)}
+                      >
+                        <ListRow actions={<Badge tone={CHILD_STATUS_TONE[child.status] ?? "neutral"} dot>{child.status}</Badge>}>
+                          <div className="flex min-w-0 flex-wrap items-center gap-2">
+                            <Badge tone="brand" mono>
+                              {child.key}
+                            </Badge>
+                            <span className="min-w-0 truncate text-body font-medium text-ink-900">{child.title}</span>
+                          </div>
+                        </ListRow>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </>
             )}
           </div>
         )}

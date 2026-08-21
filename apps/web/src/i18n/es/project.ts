@@ -55,4 +55,6 @@ export default {
   addToEpic: "Agregar",
   addToEpicAria: "Agregar {{key}} — {{title}} a esta épica",
   linkStoryError: "No se pudo vincular la HU. Probá de nuevo.",
+  toggleChildStories_one: "{{count}} HU vinculada",
+  toggleChildStories_other: "{{count}} HUs vinculadas",
 };

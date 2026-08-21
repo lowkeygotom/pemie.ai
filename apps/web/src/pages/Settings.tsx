@@ -3,6 +3,7 @@ import { useTranslation } from "react-i18next";
 import { useAuth } from "../lib/auth.js";
 import { ApiError } from "../lib/api.js";
 import { Card, ErrorText, Field, PageHeader, Select, Switch } from "../components/ui.js";
+import { PersonalKeysCard } from "./account/PersonalKeysCard.js";
 
 export default function Settings() {
   const { user, setAnalyticsPreference, setLocale } = useAuth();
@@ -57,6 +58,8 @@ export default function Settings() {
           </Field>
         </div>
       </Card>
+
+      <PersonalKeysCard />
 
       <Card>
         <h3 className="text-h4 text-ink-900">{t("account:privacyTitle")}</h3>

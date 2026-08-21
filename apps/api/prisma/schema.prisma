@@ -493,7 +493,7 @@ model Agent {
 
 model ApiKey {
   id           String    @id @default(cuid())
-  workspaceId  String
+  workspaceId  String?
   projectId    String?
   agentId      String?
   /// project | workspace | user — alcance MCP. Default project (compat).
@@ -510,7 +510,7 @@ model ApiKey {
   lastUsedAt   DateTime?
   expiresAt    DateTime?
   createdAt    DateTime  @default(now())
-  workspace    Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  workspace    Workspace? @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   project      Project?  @relation(fields: [projectId], references: [id], onDelete: Cascade)
   agent        Agent?    @relation(fields: [agentId], references: [id])
   owner        User?     @relation("ApiKeyOwner", fields: [ownerUserId], references: [id], onDelete: SetNull)
@@ -551,7 +551,7 @@ model AgentPresence {
 
 model AuditLog {
   id          String    @id @default(cuid())
-  workspaceId String
+  workspaceId String?
   actorType   String // user | agent
   actorId     String?
   action      String
@@ -559,7 +559,7 @@ model AuditLog {
   entityId    String?
   meta        Json?
   createdAt   DateTime  @default(now())
-  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  workspace   Workspace? @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
 
   @@index([workspaceId, createdAt])
   @@map("audit_logs")

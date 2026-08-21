@@ -209,38 +209,42 @@ export interface CreateApiKeyInput {
    * inglés, no en el "es" por defecto de la columna.
    */
   locale?: string;
-  /** Si true, no exige admin (p. ej. auto-provisión Telegram). */
-  skipAdminCheck?: boolean;
 }
 
-/**
- * Crea una API key en el workspace. Devuelve la key en claro **una sola vez**
- * (solo se guarda su hash). Niveles: project (default), workspace, user.
- */
-export async function createApiKey(userId: string, workspaceId: string, input: CreateApiKeyInput) {
-  if (!input.skipAdminCheck) {
-    await requireMembership(userId, workspaceId, "admin");
-  } else {
-    await requireMembership(userId, workspaceId, "member");
-  }
+export interface CreatePersonalApiKeyInput {
+  name: string;
+  scopes: string[];
+  locale?: string;
+  expiresAt?: Date;
+}
 
-  const scopeLevel = parseScopeLevel(input.scopeLevel);
+async function validateKeyInput(userId: string, input: CreatePersonalApiKeyInput) {
   const name = input.name.trim();
   if (name.length < 2) throw badRequest("api_key_name_too_short");
 
   const scopes = [...new Set(input.scopes)];
   if (scopes.length === 0) throw badRequest("no_scopes");
-  const invalid = scopes.filter((s) => !API_SCOPES.includes(s as ApiScope));
+  const invalid = scopes.filter((scope) => !API_SCOPES.includes(scope as ApiScope));
   if (invalid.length) throw badRequest("invalid_scopes", { scopes: invalid.join(", ") });
 
-  let locale: string | null;
   if (input.locale !== undefined) {
     if (!(USER_LOCALES as readonly string[]).includes(input.locale)) throw badRequest("invalid_locale");
-    locale = input.locale;
-  } else {
-    const creator = await prisma.user.findUnique({ where: { id: userId }, select: { locale: true } });
-    locale = creator?.locale ?? null;
+    return { name, scopes, locale: input.locale };
   }
+  const creator = await prisma.user.findUnique({ where: { id: userId }, select: { locale: true } });
+  return { name, scopes, locale: creator?.locale ?? null };
+}
+
+/**
+ * Crea una API key en el workspace. Devuelve la key en claro **una sola vez**
+ * (solo se guarda su hash). Niveles: project (default), workspace.
+ */
+export async function createApiKey(userId: string, workspaceId: string, input: CreateApiKeyInput) {
+  await requireMembership(userId, workspaceId, "admin");
+
+  const scopeLevel = parseScopeLevel(input.scopeLevel);
+  if (scopeLevel === "user") throw badRequest("user_key_not_workspace_scoped");
+  const { name, scopes, locale } = await validateKeyInput(userId, input);
 
   let projectId: string | null = null;
   let agentId: string | null = null;
@@ -258,10 +262,6 @@ export async function createApiKey(userId: string, workspaceId: string, input: C
     }
   } else if (scopeLevel === "workspace") {
     if (input.projectId || input.agentId) throw badRequest("scope_mismatch");
-    ownerUserId = userId;
-  } else {
-    // user
-    if (input.projectId || input.agentId) throw badRequest("user_key_scope_mismatch");
     ownerUserId = userId;
   }
 
@@ -295,6 +295,46 @@ export async function createApiKey(userId: string, workspaceId: string, input: C
   return { apiKey: publicApiKey(created), key: raw };
 }
 
+/**
+ * Crea una key MCP personal, válida en todos los workspaces de su dueño.
+ *
+ * No pide membresía ni admin a propósito: la key es de la persona, no de un
+ * equipo. Por eso `workspaceId` queda null y no la alcanza el borrado de un
+ * workspace ni el listado de sus admins.
+ */
+export async function createPersonalApiKey(userId: string, input: CreatePersonalApiKeyInput) {
+  const { name, scopes, locale } = await validateKeyInput(userId, input);
+
+  const raw = KEY_PREFIX + randomBytes(24).toString("hex");
+  const created = await prisma.apiKey.create({
+    data: {
+      workspaceId: null,
+      projectId: null,
+      agentId: null,
+      scopeLevel: "user",
+      ownerUserId: userId,
+      name,
+      hashedKey: hashKey(raw),
+      prefix: raw.slice(0, VISIBLE_PREFIX_LEN),
+      scopes,
+      expiresAt: input.expiresAt ?? null,
+      locale,
+    },
+  });
+
+  await audit({
+    workspaceId: null,
+    actorType: "user",
+    actorId: userId,
+    action: "api_key.create",
+    entity: "ApiKey",
+    entityId: created.id,
+    meta: { name, scopes, scopeLevel: "user" },
+  });
+
+  return { apiKey: publicApiKey(created), key: raw };
+}
+
 /** Vista pública de una API key (nunca incluye el hash). */
 export function publicApiKey(k: ApiKey) {
   return {
@@ -317,19 +357,30 @@ export function publicApiKey(k: ApiKey) {
 export async function listApiKeys(userId: string, workspaceId: string) {
   await requireMembership(userId, workspaceId, "admin");
   const keys = await prisma.apiKey.findMany({
+    // Las personales tienen workspaceId null: nunca pueden aparecer en un equipo ajeno.
     where: { workspaceId },
     orderBy: { createdAt: "desc" },
   });
   return keys.map(publicApiKey);
 }
 
-/** Revoca (borra) una API key. Admin del home WS, o dueño si user key. */
+/** Lista exclusivamente las keys personales del dueño. */
+export async function listPersonalApiKeys(userId: string) {
+  const keys = await prisma.apiKey.findMany({
+    where: { ownerUserId: userId, scopeLevel: "user" },
+    orderBy: { createdAt: "desc" },
+  });
+  return keys.map(publicApiKey);
+}
+
+/** Revoca (borra) una API key: el dueño si es personal, admin del WS si no. */
 export async function revokeApiKey(userId: string, keyId: string) {
   const key = await prisma.apiKey.findUnique({ where: { id: keyId } });
   if (!key) throw notFound("api_key_not_found");
 
-  const isOwner = key.scopeLevel === "user" && key.ownerUserId === userId;
-  if (!isOwner) {
+  if (key.workspaceId === null) {
+    if (key.ownerUserId !== userId) throw forbidden("not_personal_key_owner");
+  } else {
     await requireMembership(userId, key.workspaceId, "admin");
   }
 
@@ -357,8 +408,9 @@ export async function updateApiKeyLocale(userId: string, keyId: string, locale: 
   const key = await prisma.apiKey.findUnique({ where: { id: keyId } });
   if (!key) throw notFound("api_key_not_found");
 
-  const isOwner = key.scopeLevel === "user" && key.ownerUserId === userId;
-  if (!isOwner) {
+  if (key.workspaceId === null) {
+    if (key.ownerUserId !== userId) throw forbidden("not_personal_key_owner");
+  } else {
     await requireMembership(userId, key.workspaceId, "admin");
   }
 
@@ -610,6 +662,7 @@ export async function resolveWorkspaceForKey(
 export async function listWorkspacesForKey(key: ApiKey) {
   const level = key.scopeLevel as ApiKeyScopeLevel;
   if (level === "project") {
+    if (!key.workspaceId) throw forbidden("api_key_no_workspace");
     const ws = await prisma.workspace.findUnique({ where: { id: key.workspaceId } });
     return ws ? [{ id: ws.id, name: ws.name, slug: ws.slug }] : [];
   }
@@ -647,6 +700,7 @@ export async function listProjectsForKey(key: ApiKey, workspaceId?: string) {
 
   let workspaceIds: string[];
   if (level === "workspace") {
+    if (!key.workspaceId) throw forbidden("api_key_no_workspace");
     workspaceIds = [key.workspaceId];
   } else {
     const memberships = await prisma.membership.findMany({
@@ -672,7 +726,7 @@ export async function listProjectsForKey(key: ApiKey, workspaceId?: string) {
 // ─── AuditLog ────────────────────────────────────────────────────────────
 
 export interface AuditInput {
-  workspaceId: string;
+  workspaceId: string | null;
   actorType: ActorType;
   actorId?: string | null;
   action: string;

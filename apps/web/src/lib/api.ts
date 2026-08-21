@@ -656,7 +656,7 @@ export const api = {
       w: string,
       input: {
         name: string;
-        scopeLevel?: "project" | "workspace" | "user";
+        scopeLevel?: "project" | "workspace";
         projectId?: string;
         agentId?: string;
         scopes: string[];
@@ -666,6 +666,14 @@ export const api = {
     updateLocale: (w: string, id: string, locale: "es" | "en") =>
       patch<{ apiKey: ApiKeyPublic }>(`/api/workspaces/${w}/api-keys/${id}/locale`, { locale }),
     revoke: (w: string, id: string) => del<{ ok: true }>(`/api/workspaces/${w}/api-keys/${id}`),
+  },
+  me: {
+    apiKeys: {
+      list: () => get<{ apiKeys: ApiKeyPublic[] }>("/api/me/api-keys"),
+      create: (input: { name: string; scopes: string[]; locale?: "es" | "en"; expiresAt?: string }) => post<{ apiKey: ApiKeyPublic; key: string }>("/api/me/api-keys", input),
+      updateLocale: (id: string, locale: "es" | "en") => patch<{ apiKey: ApiKeyPublic }>(`/api/me/api-keys/${id}/locale`, { locale }),
+      revoke: (id: string) => del<{ ok: true }>(`/api/me/api-keys/${id}`),
+    },
   },
   audit: {
     list: (w: string) => get<{ auditLogs: AuditLog[] }>(`/api/workspaces/${w}/audit`),

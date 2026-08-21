@@ -62,9 +62,11 @@ export default function StoryDetailModal({
   proj,
   epics,
   childStories,
+  unlinkedStories,
   onOpenStory,
   onClose,
   onSaved,
+  onLinkStory,
   canManage,
 }: {
   story: UserStory;
@@ -74,10 +76,14 @@ export default function StoryDetailModal({
   epics: UserStory[];
   /** Hijas de `story` cuando es una épica (ya agrupadas por StoriesTab a partir de la misma lista). */
   childStories: UserStory[];
+  /** HUs normales sin épica del proyecto, para buscar y agregar desde acá cuando `story` es una épica. */
+  unlinkedStories: UserStory[];
   /** Navega al detalle de otra HU (click en una hija) — mismo callback que abre `?story=`. */
   onOpenStory: (story: UserStory) => void;
   onClose: () => void;
   onSaved: (story: UserStory, notification?: AssignmentNotification) => void;
+  /** Vincula una HU existente a `story` (que es una épica) sin pasar por el form de esa HU. */
+  onLinkStory: (childId: string) => Promise<void>;
   canManage: boolean;
 }) {
   const { t } = useTranslation("project");
@@ -93,11 +99,38 @@ export default function StoryDetailModal({
   const [isEpic, setIsEpic] = useState(story.isEpic);
   const [saving, setSaving] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
+  const [linkQuery, setLinkQuery] = useState("");
+  const [linkingId, setLinkingId] = useState<string | null>(null);
+  const [linkError, setLinkError] = useState<string | null>(null);
 
   // D4: normal→épica solo si no tiene ya una épica propia; épica→normal solo
   // si no le cuelga ninguna HU. Se evalúa contra el estado ya guardado
   // (`story`), no contra el toggle pendiente, para permitir revertirlo.
   const conversionAllowed = story.isEpic ? childStories.length === 0 : !story.epicId;
+
+  // Búsqueda cliente-side sobre `unlinkedStories` (ya filtradas a "sin épica"
+  // por StoriesTab a partir de la misma query que trae todo el proyecto —
+  // no dispara una request nueva). Limitado a 8 resultados: es un buscador
+  // de agregado rápido, no un listado completo.
+  const trimmedLinkQuery = linkQuery.trim().toLowerCase();
+  const linkMatches = trimmedLinkQuery
+    ? unlinkedStories
+        .filter((s) => s.key.toLowerCase().includes(trimmedLinkQuery) || s.title.toLowerCase().includes(trimmedLinkQuery))
+        .slice(0, 8)
+    : [];
+
+  async function linkExisting(childId: string) {
+    setLinkingId(childId);
+    setLinkError(null);
+    try {
+      await onLinkStory(childId);
+      setLinkQuery("");
+    } catch (e) {
+      setLinkError(e instanceof ApiError ? e.message : t("linkStoryError"));
+    } finally {
+      setLinkingId(null);
+    }
+  }
 
   // Candidatos asignables no viajan con la lista de HUs (StoriesTab no los
   // necesita para otra cosa): se piden acá, con el mismo caché que usa CardDetailModal.
@@ -271,6 +304,47 @@ export default function StoryDetailModal({
         {isEpic && (
           <div className="min-w-0 border-t border-line-100 pt-4">
             <h4 className="mb-2 text-body-sm font-semibold text-ink-800">{t("childStories")}</h4>
+
+            <Field label={t("linkExistingStory")}>
+              <Input
+                value={linkQuery}
+                onChange={(e) => setLinkQuery(e.target.value)}
+                placeholder={t("searchStoriesPlaceholder")}
+              />
+            </Field>
+            {linkError && <ErrorText>{linkError}</ErrorText>}
+            {trimmedLinkQuery && (
+              <div className="-mx-6 mb-3 divide-y divide-line-100 border-b border-line-100">
+                {linkMatches.length === 0 ? (
+                  <p className="px-6 py-2 text-body-sm text-ink-400">{t("noMatchingStories")}</p>
+                ) : (
+                  linkMatches.map((candidate) => (
+                    <ListRow
+                      key={candidate.id}
+                      actions={
+                        <Button
+                          size="sm"
+                          variant="secondary"
+                          onClick={() => linkExisting(candidate.id)}
+                          disabled={linkingId !== null}
+                          aria-label={t("addToEpicAria", { key: candidate.key, title: candidate.title })}
+                        >
+                          {linkingId === candidate.id ? t("saving") : t("addToEpic")}
+                        </Button>
+                      }
+                    >
+                      <div className="flex flex-wrap items-center gap-2">
+                        <Badge tone="brand" mono>
+                          {candidate.key}
+                        </Badge>
+                        <span className="text-body font-medium text-ink-900">{candidate.title}</span>
+                      </div>
+                    </ListRow>
+                  ))
+                )}
+              </div>
+            )}
+
             {childStories.length === 0 ? (
               <p className="text-body-sm text-ink-400">{t("noChildStories")}</p>
             ) : (

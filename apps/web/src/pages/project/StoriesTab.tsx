@@ -463,6 +463,7 @@ export default function StoriesTab({ ws, proj, canManage }: { ws: string; proj: 
           proj={proj}
           epics={epics}
           childStories={editingStory.isEpic ? (childrenByEpicId.get(editingStory.id) ?? []) : []}
+          unlinkedStories={editingStory.isEpic ? orphanStories : []}
           onOpenStory={openStory}
           onClose={closeStory}
           canManage={canManage}
@@ -470,6 +471,10 @@ export default function StoriesTab({ ws, proj, canManage }: { ws: string; proj: 
             if (notification && notification.reason !== "self_assignment" && notification.reason !== "unassigned")
               setAssignmentNotice({ story: updated, notification });
             closeStory();
+            invalidateAfterStoryChange();
+          }}
+          onLinkStory={async (childId) => {
+            await api.stories.update(ws, proj, childId, { epicId: editingStory.id });
             invalidateAfterStoryChange();
           }}
         />

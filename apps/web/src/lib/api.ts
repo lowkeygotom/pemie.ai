@@ -285,12 +285,18 @@ export interface Note {
   author?: { id: string; name: string | null; email: string } | null;
 }
 
-// ─── F5: historias de usuario ────────────────────────────────────────
-export interface Epic {
+// ─── F5: historias de usuario (incluye épicas: PEM-57) ────────────────
+// El modelo `Epic` separado y `/epics` fueron eliminados del backend: una
+// épica es una `UserStory` más con `isEpic: true` que agrupa HUs normales por
+// `epicId` (auto-relación, un solo nivel — una épica nunca cuelga de otra).
+/** Resumen de una HU hija tal como la trae `opGetStoryDetail` para una épica. */
+export interface StoryChildSummary {
   id: string;
+  key: string;
   title: string;
-  description: string | null;
-  _count: { stories: number };
+  status: string;
+  priority: string;
+  assignee?: Contributor | null;
 }
 export interface UserStory {
   id: string;
@@ -301,12 +307,19 @@ export interface UserStory {
   priority: string;
   storyPoints: number | null;
   status: string;
+  isEpic: boolean;
   epicId: string | null;
-  epic?: { id: string; title: string } | null;
+  // `opListStories` solo trae {id,title}; `opGetStoryDetail` de una HU normal
+  // trae además la `key` de su épica. Se declara opcional para cubrir ambas.
+  epic?: { id: string; key?: string; title: string } | null;
   assigneeId: string | null;
   assignee?: Contributor | null;
   createdAt: string;
   assignmentNotification?: AssignmentNotification;
+  /** Conteo de hijas (solo en épicas); lo trae `opListStories` sin cargar la lista completa. */
+  _count?: { children: number };
+  /** Hijas de la épica; solo lo trae `opGetStoryDetail` cuando `isEpic` es true. */
+  children?: StoryChildSummary[];
 }
 
 export interface AssignmentNotification {
@@ -405,7 +418,14 @@ export interface Card {
   title: string;
   description: string | null;
   userStoryId: string | null;
-  userStory?: { id: string; key: string; title: string; status: string; narrative: UserStoryNarrative | null } | null;
+  userStory?: {
+    id: string;
+    key: string;
+    title: string;
+    status: string;
+    narrative: UserStoryNarrative | null;
+    epic: { id: string; key: string } | null;
+  } | null;
   assigneeId: string | null;
   assignee?: Contributor | null;
   labels?: unknown;
@@ -582,14 +602,11 @@ export const api = {
       post<{ note: Note }>(`${pp(w, p)}/notes/${id}/answer`, { response }),
   },
 
-  // ─── F5: historias de usuario ──────────────────────────────────────
-  epics: {
-    list: (w: string, p: string) => get<{ epics: Epic[] }>(`${pp(w, p)}/epics`),
-    create: (w: string, p: string, input: { title: string; description?: string }) =>
-      post<{ epic: Epic }>(`${pp(w, p)}/epics`, input),
-  },
+  // ─── F5: historias de usuario (incluye épicas: PEM-57) ─────────────
   stories: {
-    list: (w: string, p: string, q?: { status?: string }) =>
+    // `type=epic|story` es la forma pública de filtrar por `isEpic`; el
+    // backend lo traduce (ver rest/workspaces.ts).
+    list: (w: string, p: string, q?: { status?: string; epicId?: string; type?: "epic" | "story" }) =>
       get<{ userStories: UserStory[] }>(`${pp(w, p)}/user-stories${qs(q)}`),
     create: (w: string, p: string, input: Partial<UserStory> & { title: string }) =>
       post<{ userStory: UserStory }>(`${pp(w, p)}/user-stories`, input),

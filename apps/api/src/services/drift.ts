@@ -162,6 +162,10 @@ export async function opDetectDrift(
       ON c."projectId" = s."projectId"
       AND ${commitSubjectMatchesKey(Prisma.sql`c."message"`, Prisma.sql`s."key"`)}
     WHERE s."projectId" = ${projectId}
+      -- PEM-57: una épica no tiene tarjeta ni commits propios (agrupa HUs,
+      -- no es un ítem de trabajo) — compararla contra evidencia de commits
+      -- la marcaría como drift falso.
+      AND s."isEpic" = false
   `;
   if (rows.length === 0) return emptyReport(staleDays, coverageThreshold);
 

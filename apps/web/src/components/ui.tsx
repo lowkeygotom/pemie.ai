@@ -125,18 +125,24 @@ export function Switch({
   checked,
   onChange,
   label,
+  disabled = false,
 }: {
   checked: boolean;
   onChange: (next: boolean) => void;
   label?: string;
+  disabled?: boolean;
 }) {
   return (
     <button
       type="button"
       role="switch"
       aria-checked={checked}
+      aria-disabled={disabled}
+      disabled={disabled}
       onClick={() => onChange(!checked)}
-      className="inline-flex items-center gap-2.5 text-body-sm text-ink-800"
+      className={`inline-flex items-center gap-2.5 text-body-sm text-ink-800 focus-visible:outline-none focus-visible:shadow-focus ${
+        disabled ? "cursor-not-allowed opacity-50" : ""
+      }`}
     >
       <span
         className={`relative h-[22px] w-[38px] rounded-pill transition-colors duration-150 ${
@@ -223,6 +229,36 @@ export function Checkbox({
 
 /* --------------------------------- display -------------------------------- */
 
+/**
+ * Fila de una lista dentro de una `Card` con padding `md`: contenido a la
+ * izquierda (crece), acciones a la derecha (ancho fijo), hover sutil e
+ * indentación opcional para agrupar hijos bajo una fila padre (ej. HUs de una
+ * épica en `StoriesTab`). Reemplaza el div a mano que se repetía por cada fila.
+ */
+export function ListRow({
+  children,
+  actions,
+  indent = false,
+  className = "",
+}: {
+  children: ReactNode;
+  actions?: ReactNode;
+  /** Sangría para mostrar esta fila como hija de la fila anterior. */
+  indent?: boolean;
+  className?: string;
+}) {
+  return (
+    <div
+      className={`flex items-start justify-between gap-3 -mx-6 px-6 py-3 hover:bg-surface-50 ${
+        indent ? "pl-12" : ""
+      } ${className}`}
+    >
+      <div className="min-w-0 flex-1">{children}</div>
+      {actions ? <div className="flex shrink-0 items-center gap-2">{actions}</div> : null}
+    </div>
+  );
+}
+
 const CARD_PADDING = { sm: "p-3", md: "p-6", none: "" };
 
 // `forwardRef` + spread de `rest` para que primitivas como drag-and-drop (dnd-kit)
@@ -303,7 +339,7 @@ export function Notice({
   );
 }
 
-export type BadgeTone = "neutral" | "brand" | "success" | "warning" | "danger";
+export type BadgeTone = "neutral" | "brand" | "success" | "warning" | "danger" | "epic";
 
 const BADGE_TONES: Record<BadgeTone, { chip: string; dot: string }> = {
   neutral: { chip: "bg-surface-100 text-ink-700", dot: "bg-ink-400" },
@@ -311,6 +347,8 @@ const BADGE_TONES: Record<BadgeTone, { chip: string; dot: string }> = {
   success: { chip: "bg-green-100 text-green-700", dot: "bg-green-600" },
   warning: { chip: "bg-amber-100 text-amber-700", dot: "bg-amber-600" },
   danger: { chip: "bg-red-100 text-red-700", dot: "bg-red-600" },
+  // PEM-57: distingue el chip de key de una épica del resto (tone "brand").
+  epic: { chip: "bg-violet-100 text-violet-700", dot: "bg-violet-600" },
 };
 
 export function Badge({

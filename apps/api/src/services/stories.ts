@@ -11,7 +11,7 @@ import type {
 } from "@pemie/shared";
 import { prisma } from "../db.js";
 import { commitSubjectMatchesKey } from "./commit-keys.js";
-import { badRequest, notFound } from "./errors.js";
+import { badRequest, conflict, notFound } from "./errors.js";
 import { projectWithAccess } from "./ingest.js";
 import { normalizeEmail, requireMembership } from "./tenancy.js";
 import * as board from "./board.js";
@@ -21,37 +21,6 @@ import { resolveAssigneeId } from "./assignees.js";
 
 const PRIORITIES = ["low", "medium", "high", "critical"] as const;
 const STATUSES: UserStoryStatus[] = ["backlog", "ready", "in_progress", "review", "done"];
-
-// ─── Épicas ─────────────────────────────────────────────────────────────
-
-/** Crea una épica en el proyecto (member+). */
-export async function createEpic(
-  userId: string,
-  projectId: string,
-  input: { title: string; description?: string }
-) {
-  await projectWithAccess(userId, projectId, "member");
-  const title = input.title.trim();
-  if (title.length < 2) throw badRequest("invalid_title");
-  return prisma.epic.create({
-    data: { projectId, title, description: input.description?.trim() || null },
-  });
-}
-
-/** Lista las épicas de un proyecto con su conteo de HUs (viewer+). */
-export async function listEpics(userId: string, projectId: string) {
-  await projectWithAccess(userId, projectId);
-  return opListEpics(projectId);
-}
-
-/** Operación (ya autorizada): lista las épicas de un proyecto. */
-export function opListEpics(projectId: string) {
-  return prisma.epic.findMany({
-    where: { projectId },
-    orderBy: { createdAt: "asc" },
-    include: { _count: { select: { stories: true } } },
-  });
-}
 
 // ─── Historias de Usuario ───────────────────────────────────────────────
 
@@ -64,6 +33,7 @@ export interface CreateStoryInput {
   epicId?: string;
   assigneeId?: string;
   status?: string;
+  isEpic?: boolean;
 }
 
 export interface UpdateStoryInput {
@@ -75,6 +45,7 @@ export interface UpdateStoryInput {
   status?: string;
   epicId?: string | null;
   assigneeId?: string | null;
+  isEpic?: boolean;
 }
 
 /** Actor que crea una HU: un usuario o un agente (F4 vía MCP). */
@@ -132,6 +103,25 @@ async function nextStoryKey(projectId: string, prefix: string): Promise<string> 
   return `${prefix}-${storySeq}`;
 }
 
+/**
+ * Valida que `epicId` sea una épica vinculable dentro de `projectId`, en el
+ * mismo orden que espera quien la llama: self-vínculo, épica-dentro-de-épica,
+ * épica de otro proyecto (o inexistente) y, por último, que el target sea de
+ * verdad una épica. PEM-57: epicId es una auto-relación a un solo nivel — una
+ * épica nunca puede colgar de otra épica.
+ */
+async function assertLinkableEpic(
+  projectId: string,
+  epicId: string,
+  self?: { id: string; isEpic: boolean }
+): Promise<void> {
+  if (self?.isEpic) throw badRequest("epic_cannot_have_epic");
+  if (self?.id === epicId) throw badRequest("epic_mismatch");
+  const epic = await prisma.userStory.findUnique({ where: { id: epicId } });
+  if (!epic || epic.projectId !== projectId) throw badRequest("epic_mismatch");
+  if (!epic.isEpic) throw badRequest("not_an_epic");
+}
+
 /** Crea una HU (member+). */
 export async function createStory(userId: string, projectId: string, input: CreateStoryInput) {
   await projectWithAccess(userId, projectId, "member");
@@ -157,10 +147,12 @@ export async function opCreateStory(
   if (title.length < 2) throw badRequest("story_title_too_short");
   const priority = validatePriority(input.priority);
   const status = validateStatus(input.status);
-  if (input.epicId) {
-    const epic = await prisma.epic.findUnique({ where: { id: input.epicId } });
-    if (!epic || epic.projectId !== projectId) throw badRequest("epic_mismatch");
-  }
+  const isEpic = input.isEpic ?? false;
+  // Rechazado antes de tocar la DB: una épica agrupa HUs, no puede pertenecer
+  // a otra (D1/D4 del diseño de PEM-57).
+  if (isEpic && input.epicId) throw badRequest("epic_cannot_have_epic");
+  if (isEpic && input.storyPoints != null) throw badRequest("epic_has_no_points");
+  if (input.epicId) await assertLinkableEpic(projectId, input.epicId);
   const resolvedAssigneeId = input.assigneeId ? await resolveAssigneeId(projectId, input.assigneeId) : null;
 
   let story: Awaited<ReturnType<typeof prisma.userStory.create>> | undefined;
@@ -176,7 +168,8 @@ export async function opCreateStory(
           acceptanceCriteria: asJson(input.acceptanceCriteria),
           priority,
           status,
-          storyPoints: input.storyPoints ?? null,
+          storyPoints: isEpic ? null : (input.storyPoints ?? null),
+          isEpic,
           epicId: input.epicId ?? null,
           assigneeId: resolvedAssigneeId,
           createdById: actor.createdById ?? null,
@@ -194,15 +187,19 @@ export async function opCreateStory(
   const cardActor: CardActor = actor.createdById
     ? { actorType: "user", actorId: actor.createdById }
     : { actorType: "agent", actorId: actor.createdByAgentId ?? null };
-  // «PEM-13 · Título» es el formato que ya usaban las tarjetas creadas a mano:
-  // la tarjeta se lee igual en el tablero venga de donde venga. `storyStatus`
-  // decide la columna inicial: una HU que nace "in_progress" no puede aparecer
-  // en Backlog.
-  await board.opCreateCard(
-    projectId,
-    { title: `${story.key} · ${story.title}`, type: "story", userStoryId: story.id, storyStatus: status },
-    cardActor
-  );
+  // Una épica no es un ítem de trabajo del tablero: no crea tarjeta (D2). El
+  // resto de la HU (assignee, notificación) sí aplica igual que a una normal.
+  if (!isEpic) {
+    // «PEM-13 · Título» es el formato que ya usaban las tarjetas creadas a mano:
+    // la tarjeta se lee igual en el tablero venga de donde venga. `storyStatus`
+    // decide la columna inicial: una HU que nace "in_progress" no puede aparecer
+    // en Backlog.
+    await board.opCreateCard(
+      projectId,
+      { title: `${story.key} · ${story.title}`, type: "story", userStoryId: story.id, storyStatus: status },
+      cardActor
+    );
+  }
 
   if (story.assigneeId) await notifyStoryAssigned({ storyId: story.id, assigneeId: story.assigneeId, actor: cardActor });
 
@@ -212,6 +209,7 @@ export async function opCreateStory(
 export interface ListStoriesFilter {
   status?: string;
   epicId?: string;
+  isEpic?: boolean;
 }
 
 /** Lista HUs de un proyecto (viewer+). */
@@ -227,11 +225,15 @@ export function opListStories(projectId: string, filter: ListStoriesFilter = {})
       projectId,
       ...(filter.status ? { status: filter.status } : {}),
       ...(filter.epicId ? { epicId: filter.epicId } : {}),
+      ...(filter.isEpic !== undefined ? { isEpic: filter.isEpic } : {}),
     },
     orderBy: { createdAt: "desc" },
     include: {
       epic: { select: { id: true, title: true } },
       assignee: { select: { id: true, githubLogin: true, name: true, avatarUrl: true } },
+      // Conteo de hijas: la UI lo necesita para una épica sin cargar la lista
+      // completa (que ya trae opGetStoryDetail cuando hace falta el detalle).
+      _count: { select: { children: true } },
     },
   });
 }
@@ -241,12 +243,33 @@ export function getStoryById(storyId: string) {
   return prisma.userStory.findUnique({ where: { id: storyId } });
 }
 
+/**
+ * Detalle enriquecido de una HU ya cargada: si es una épica, trae sus hijas
+ * (para mostrarlas sin una segunda llamada a list_user_stories?epicId=); si
+ * es una HU normal, trae la épica padre (id/key/title, no su lista de hijas).
+ * Las dos formas son mutuamente excluyentes: una HU normal nunca tiene hijas.
+ */
+export async function opGetStoryDetail(story: { id: string; epicId: string | null; isEpic: boolean }) {
+  if (story.isEpic) {
+    const children = await prisma.userStory.findMany({
+      where: { epicId: story.id },
+      orderBy: { createdAt: "asc" },
+      select: { id: true, key: true, title: true, status: true, priority: true, assignee: { select: { id: true, githubLogin: true, name: true, avatarUrl: true } } },
+    });
+    return { ...story, children };
+  }
+  const epic = story.epicId
+    ? await prisma.userStory.findUnique({ where: { id: story.epicId }, select: { id: true, key: true, title: true } })
+    : null;
+  return { ...story, epic };
+}
+
 /** Detalle de una HU (viewer+). */
 export async function getStory(userId: string, storyId: string) {
   const story = await getStoryById(storyId);
   if (!story) throw notFound("story_not_found");
   await projectWithAccess(userId, story.projectId);
-  return story;
+  return opGetStoryDetail(story);
 }
 
 /** Actualiza una HU (member+). */
@@ -266,7 +289,7 @@ export async function updateStory(userId: string, storyId: string, patch: Update
  * `wasLastMovedByUser`, que congelaría la tarjeta frente al auto-move.
  */
 export async function opUpdateStory(
-  story: { id: string; projectId: string; status: string },
+  story: { id: string; projectId: string; status: string; isEpic: boolean; epicId: string | null },
   patch: UpdateStoryInput,
   actor: CardActor = { actorType: "agent", actorId: null }
 ) {
@@ -279,13 +302,40 @@ export async function opUpdateStory(
   if (patch.priority !== undefined) data.priority = validatePriority(patch.priority);
   const nextStatus = patch.status !== undefined ? validateStatus(patch.status) : undefined;
   if (nextStatus !== undefined) data.status = nextStatus;
-  if (patch.storyPoints !== undefined) data.storyPoints = patch.storyPoints;
+
+  // Resueltos antes de escribir nada: una épica no puede pertenecer a otra
+  // épica (D1/D4), sea porque ya lo era o porque este mismo patch la convierte.
+  const nextIsEpic = patch.isEpic !== undefined ? patch.isEpic : story.isEpic;
+  const nextEpicId = patch.epicId !== undefined ? patch.epicId : story.epicId;
+  if (nextIsEpic && nextEpicId) throw badRequest("epic_cannot_have_epic");
+
+  if (patch.storyPoints !== undefined) {
+    if (nextIsEpic && patch.storyPoints != null) throw badRequest("epic_has_no_points");
+    data.storyPoints = patch.storyPoints;
+  } else if (patch.isEpic === true && !story.isEpic) {
+    // Conversión normal→épica sin tocar storyPoints explícitamente: se limpia
+    // igual, para no dejar puntos huérfanos en una fila que D3 dice que no
+    // puede tenerlos.
+    data.storyPoints = null;
+  }
+
   if (patch.narrative !== undefined) data.narrative = asJson(patch.narrative);
   if (patch.acceptanceCriteria !== undefined) data.acceptanceCriteria = asJson(patch.acceptanceCriteria);
+
+  // D4: normal→épica solo si no tiene ya una épica propia (epicId === null,
+  // ya garantizado arriba); épica→normal solo si no le cuelga ninguna HU —
+  // convertirla dejaría hijas apuntando a una fila que dejó de agrupar nada.
+  if (patch.isEpic !== undefined && patch.isEpic !== story.isEpic) {
+    if (!patch.isEpic) {
+      const childCount = await prisma.userStory.count({ where: { epicId: story.id } });
+      if (childCount > 0) throw conflict("epic_has_children", { count: childCount });
+    }
+    data.isEpic = patch.isEpic;
+  }
+
   if (patch.epicId !== undefined) {
     if (patch.epicId) {
-      const epic = await prisma.epic.findUnique({ where: { id: patch.epicId } });
-      if (!epic || epic.projectId !== story.projectId) throw badRequest("epic_mismatch");
+      await assertLinkableEpic(story.projectId, patch.epicId, { id: story.id, isEpic: nextIsEpic });
       data.epic = { connect: { id: patch.epicId } };
     } else {
       data.epic = { disconnect: true };
@@ -341,7 +391,7 @@ export interface DeleteStoryOptions {
  * quedarse con la tarjeta y su actividad.
  */
 export async function opDeleteStory(
-  story: { id: string },
+  story: { id: string; isEpic: boolean },
   { deleteCard = true }: DeleteStoryOptions = {}
 ) {
   try {
@@ -351,6 +401,13 @@ export async function opDeleteStory(
     // entre medio, la HU se borra igual y el 404 de abajo sigue significando lo
     // que dice — que la HU no está, no que faltaba su tarjeta.
     return await prisma.$transaction(async (tx) => {
+      // Chequeado ANTES del delete: la FK epicId→user_stories es ON DELETE
+      // RESTRICT, así que sin este paso Postgres igual lo impediría, pero con
+      // un P2003 crudo en vez de un conflict legible con el conteo de hijas.
+      if (story.isEpic) {
+        const childCount = await tx.userStory.count({ where: { epicId: story.id } });
+        if (childCount > 0) throw conflict("epic_has_children", { count: childCount });
+      }
       const removed = deleteCard
         ? await tx.card.deleteMany({ where: { userStoryId: story.id } })
         : { count: 0 };

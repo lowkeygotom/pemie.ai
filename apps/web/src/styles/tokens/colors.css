@@ -36,6 +36,12 @@
   --red-600:   #e0484d; /* danger */
   --red-100:   #fdecec;
 
+  /* ---- Épicas (PEM-57): acento propio, mismo tratamiento que blue-700/600/100
+     (700 = texto legible del chip, 600 = acento/dot, 100 = fondo del chip) ---- */
+  --violet-700: #724aab;
+  --violet-600: #966cd7;
+  --violet-100: #f4eeff;
+
   /* ============ Semantic aliases ============ */
   --text-primary:   var(--ink-900);
   --text-secondary: var(--ink-600);
@@ -120,6 +126,12 @@
   --amber-100: #2a2110;
   --red-600:   #ff6b70; /* danger */
   --red-100:   #2a1418;
+
+  /* ---- Épicas (PEM-57): igual patrón que blue en dark — el 700/600 se aclaran,
+     el 100 se oscurece. ---- */
+  --violet-700: #a789db;
+  --violet-600: #b58bf9;
+  --violet-100: #221b2d;
 
   /* ============ Semantic aliases ============ */
   --text-primary:   var(--ink-900);

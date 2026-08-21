@@ -47,9 +47,17 @@ export const es = {
   tool_answer_note: "Responde una nota y opcionalmente la asocia a un informe.",
   tool_get_objective: "Objetivo actual del proyecto.",
   tool_update_objective: "Fija o actualiza el objetivo del proyecto (guarda historial).",
-  tool_list_user_stories: "Lista las Historias de Usuario del proyecto (filtrable por estado/épica).",
-  tool_create_user_story: "Crea una Historia de Usuario (narrativa role/want/benefit + criterios).",
-  tool_update_user_story: "Actualiza una Historia de Usuario (título, estado, prioridad, narrativa…).",
+  tool_list_user_stories:
+    "Lista las Historias de Usuario del proyecto (filtrable por estado/épica; type=story|epic filtra por isEpic).",
+  tool_list_user_stories_type: "Filtra por isEpic: 'story' solo HUs normales, 'epic' solo épicas. Omitido, trae ambas.",
+  tool_create_user_story:
+    "Crea una Historia de Usuario (narrativa role/want/benefit + criterios). Con isEpic=true crea una épica en vez de una HU normal: no genera tarjeta Kanban ni admite storyPoints.",
+  tool_create_user_story_is_epic:
+    "true para crear una épica en vez de una HU normal. Una épica no puede tener epicId ni storyPoints.",
+  tool_update_user_story:
+    "Actualiza una Historia de Usuario (título, estado, prioridad, narrativa…). isEpic convierte HU↔épica: normal→épica solo sin epicId propio; épica→normal solo sin HUs hijas.",
+  tool_update_user_story_is_epic:
+    "Convierte la HU en épica (true) o la épica en HU normal (false). Rechaza si ya tiene una épica propia (al pasar a épica) o si tiene hijas (al volver a normal).",
   tool_assign_user_story:
     "Asigna (o desasigna, con assigneeId null) una HU a un candidato de list_assignees (contributor o miembro del workspace); sincroniza la Card vinculada.",
   tool_list_contributors: "Lista los contribuidores del proyecto (candidatos a asignar HUs/tarjetas).",
@@ -67,9 +75,10 @@ export const es = {
   tool_search_types: "Limita la búsqueda a estos tipos; por defecto, todos los permitidos.",
   tool_search_limit: "Máximo de resultados (20 por defecto, tope 50).",
   tool_create_note: "Deja una nota o pregunta en el proyecto.",
-  tool_get_user_story: "Detalle de una sola HU por id, sin listar todas las del proyecto.",
+  tool_get_user_story:
+    "Detalle de una sola HU por id, sin listar todas las del proyecto. Si es una épica, incluye sus hijas; si no, incluye su épica padre.",
   tool_delete_user_story:
-    "Elimina una HU y su tarjeta del Kanban. Con keepCard=true la tarjeta se conserva desvinculada, con su actividad intacta.",
+    "Elimina una HU y su tarjeta del Kanban. Con keepCard=true la tarjeta se conserva desvinculada, con su actividad intacta. Una épica con HUs hijas no se puede eliminar.",
   tool_update_card:
     "Actualiza título, descripción, tipo, asignado o HU vinculada de una tarjeta. Omitir un campo lo deja igual; enviarlo en null lo desvincula.",
   tool_delete_card:

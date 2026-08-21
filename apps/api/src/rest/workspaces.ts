@@ -71,10 +71,6 @@ const createApiKeySchema = z.object({
   locale: z.enum(["es", "en"]).optional(),
 });
 const updateApiKeyLocaleSchema = z.object({ locale: z.enum(["es", "en"]) });
-const createEpicSchema = z.object({
-  title: z.string().min(2),
-  description: z.string().optional(),
-});
 const narrativeSchema = z.object({
   role: z.string(),
   want: z.string(),
@@ -94,6 +90,7 @@ const createStorySchema = z.object({
   epicId: z.string().optional(),
   assigneeId: z.string().optional(),
   status: z.string().optional(),
+  isEpic: z.boolean().optional(),
 });
 const updateStorySchema = z.object({
   title: z.string().min(2).optional(),
@@ -104,6 +101,7 @@ const updateStorySchema = z.object({
   status: z.string().optional(),
   epicId: z.string().nullable().optional(),
   assigneeId: z.string().nullable().optional(),
+  isEpic: z.boolean().optional(),
 });
 const updateContributorSchema = z.object({ email: z.string().nullable() });
 const createCardSchema = z.object({
@@ -550,26 +548,17 @@ export function workspaceRoutes() {
     return c.json({ auditLogs: await agentsSvc.listAuditLogs(user.id, ws.id, limit) });
   });
 
-  // ─── F5: Épicas e Historias de Usuario ─────────────────────────────
-  app.get("/:slug/projects/:projectSlug/epics", async (c) => {
-    const project = await resolveProject(c);
-    return c.json({ epics: await stories.opListEpics(project.id) });
-  });
-
-  app.post("/:slug/projects/:projectSlug/epics", async (c) => {
-    const user = requireUser(c);
-    const project = await resolveProject(c);
-    const body = createEpicSchema.safeParse(await c.req.json().catch(() => null));
-    if (!body.success) throw badRequest("invalid_epic_body");
-    return c.json({ epic: await stories.createEpic(user.id, project.id, body.data) }, 201);
-  });
-
+  // ─── F5: Historias de Usuario (incluye épicas: PEM-57) ─────────────
   app.get("/:slug/projects/:projectSlug/user-stories", async (c) => {
     const project = await resolveProject(c);
+    // `?type=epic|story` es la forma pública de filtrar por isEpic: el
+    // transporte traduce, el servicio no conoce la palabra "type".
+    const type = c.req.query("type");
     return c.json({
       userStories: await stories.opListStories(project.id, {
         status: c.req.query("status"),
         epicId: c.req.query("epicId"),
+        isEpic: type === "epic" ? true : type === "story" ? false : undefined,
       }),
     });
   });

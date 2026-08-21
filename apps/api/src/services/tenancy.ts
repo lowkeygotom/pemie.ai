@@ -322,7 +322,9 @@ export async function listProjects(userId: string, workspaceId: string) {
       description: true,
       key: true,
       createdAt: true,
-      _count: { select: { repos: true, userStories: true } },
+      // PEM-57: una épica no es una HU de trabajo — no cuenta en este total
+      // (mismo criterio que drift.ts y opListStories con isEpic:false).
+      _count: { select: { repos: true, userStories: { where: { isEpic: false } } } },
     },
   });
 }

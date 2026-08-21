@@ -35,4 +35,18 @@ export default {
   narrativeAs: "As…",
   driftUnreportedLabel: "Unreported work",
   driftStalledLabel: "Stalled",
+  // PEM-57: epic unified into user_stories (isEpic).
+  epic: "Epic",
+  isEpicToggle: "This is an epic",
+  epicHint: "Epics have no story points or Kanban card, and cannot belong to another epic.",
+  childStories: "Linked stories",
+  noChildStories: "No User Stories linked to this epic yet.",
+  filterByEpic: "Filter by epic",
+  allEpics: "All",
+  epicHasChildrenWarning: "This epic has {{count}} linked User Story(-ies). Delete or unlink them before deleting the epic.",
+  openChildStory: "Open {{key}} — {{title}}",
+  epicBadge: "{{count}} story{{suffix}}",
+  convertToEpic: "Convert to epic",
+  convertToStory: "Convert to User Story",
+  cannotConvertHasChildren: "Cannot convert: it has {{count}} linked User Story(-ies).",
 };

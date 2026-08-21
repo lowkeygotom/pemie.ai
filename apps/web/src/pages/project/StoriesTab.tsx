@@ -295,28 +295,38 @@ export default function StoriesTab({ ws, proj, canManage }: { ws: string; proj: 
             <Badge tone={STATUS_TONE[s.status] ?? "neutral"} dot>
               {s.status}
             </Badge>
-            <Select value={s.status} onChange={(e) => setStatus(s.id, e.target.value)} aria-label={t("status")}>
-              {STATUSES.map((st) => (
-                <option key={st} value={st}>
-                  {st}
-                </option>
-              ))}
-            </Select>
-            {/* Asignar/reasignar/desvincular ("Sin épica") directo desde la fila,
-                sin abrir el detalle — mismo control que ya existía para status. */}
-            {!s.isEpic && (
+            <div className="w-32 shrink-0">
               <Select
-                value={s.epicId ?? ""}
-                onChange={(e) => setEpic(s.id, e.target.value || null)}
-                aria-label={t("epic")}
+                value={s.status}
+                onChange={(e) => setStatus(s.id, e.target.value)}
+                aria-label={t("status")}
+                className="truncate"
               >
-                <option value="">{t("noEpic")}</option>
-                {epics.map((ep) => (
-                  <option key={ep.id} value={ep.id}>
-                    {ep.key} · {ep.title}
+                {STATUSES.map((st) => (
+                  <option key={st} value={st}>
+                    {st}
                   </option>
                 ))}
               </Select>
+            </div>
+            {/* Asignar/reasignar/desvincular ("Sin épica") directo desde la fila,
+                sin abrir el detalle — mismo control que ya existía para status. */}
+            {!s.isEpic && (
+              <div className="w-40 shrink-0">
+                <Select
+                  value={s.epicId ?? ""}
+                  onChange={(e) => setEpic(s.id, e.target.value || null)}
+                  aria-label={t("epic")}
+                  className="truncate"
+                >
+                  <option value="">{t("noEpic")}</option>
+                  {epics.map((ep) => (
+                    <option key={ep.id} value={ep.id}>
+                      {ep.key} · {ep.title}
+                    </option>
+                  ))}
+                </Select>
+              </div>
             )}
             <button
               type="button"

@@ -51,12 +51,13 @@ function stubActivity(
       rows.push(created);
       return created;
     },
-    update: async ({ where, data }: { where: { id: string }; data: { lastSeenAt: Date; beats: { increment: number }; paths: string[]; ownerUserId?: string } }) => {
+    update: async ({ where, data }: { where: { id: string }; data: Partial<{ lastSeenAt: Date; beats: { increment: number }; paths: string[]; ownerUserId: string; state: Row["state"] }> }) => {
       const current = rows.find((item) => item.id === where.id)!;
-      current.lastSeenAt = data.lastSeenAt;
-      current.beats += data.beats.increment;
-      current.paths = data.paths;
+      if (data.lastSeenAt) current.lastSeenAt = data.lastSeenAt;
+      if (data.beats) current.beats += data.beats.increment;
+      if (data.paths) current.paths = data.paths;
       if (data.ownerUserId) current.ownerUserId = data.ownerUserId;
+      if (data.state) current.state = data.state;
       return current;
     },
   });
@@ -82,15 +83,30 @@ test("coalescing: un path nuevo amplía el tramo y acumula paths sin crear una f
   assert.deepEqual(second.activity.paths, ["apps/api/src/a.ts", "apps/api/src/b.ts"]);
 });
 
-test("coalescing: cambiar el resumen abre un tramo nuevo", async (t) => {
+test("coalescing: cambiar el resumen abre un tramo nuevo y cierra el anterior", async (t) => {
   const rows: Row[] = [];
   stubActivity(t, rows);
   const actor = { apiKeyId: "key-1", agentId: "agent-1", ownerUserId: "user-1" };
 
   await activityService.opReportActivity("project-1", { summary: "Implementa servicio", paths: ["a.ts"] }, actor);
+  const second = await activityService.opReportActivity("project-1", { summary: "Ajusta interfaz", paths: ["b.ts"] }, actor);
+
+  assert.equal(rows.length, 2);
+  assert.equal(rows[0]!.state, "done");
+  assert.equal(rows[1]!.state, "working");
+  assert.equal(second.activity?.summary, "Ajusta interfaz");
+});
+
+test("coalescing: cambiar el resumen no toca un tramo ya cerrado", async (t) => {
+  const rows = [row({ state: "done", lastSeenAt: new Date(Date.now() - 10_000) })];
+  stubActivity(t, rows);
+  const actor = { apiKeyId: "key-1", agentId: "agent-1", ownerUserId: "user-1" };
+
   await activityService.opReportActivity("project-1", { summary: "Ajusta interfaz", paths: ["b.ts"] }, actor);
 
   assert.equal(rows.length, 2);
+  assert.equal(rows[0]!.summary, "Implementa PEM-56");
+  assert.equal(rows[0]!.state, "done");
 });
 
 test("hook: sin summary extiende el tramo abierto y acumula paths", async (t) => {

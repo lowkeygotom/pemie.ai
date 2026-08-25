@@ -171,40 +171,50 @@ export async function opReportActivity(projectId: string, input: ReportActivityI
   const last = persistedLast ? activityFromRow(persistedLast) : null;
   const now = new Date();
   const openLast = last && activityStatus(last, now) !== "closed" ? last : null;
-  const activity = data.summary === null && openLast
-    ? activityFromRow(await prisma.agentActivity.update({
-        where: { id: openLast.id },
-        data: {
-          lastSeenAt: now,
-          beats: { increment: 1 },
-          paths: unionPaths(openLast.paths, data.paths),
-          ...(!openLast.ownerUserId && ownerUserId ? { ownerUserId } : {}),
-        },
-      }))
-    : last && data.summary !== null && isSameSegment(last, data)
-    ? activityFromRow(await prisma.agentActivity.update({
-        where: { id: last.id },
-        data: {
-          lastSeenAt: now,
-          beats: { increment: 1 },
-          paths: unionPaths(last.paths, data.paths),
-          // Un latido idéntico también repara tramos abiertos creados antes
-          // de que las keys de proyecto heredaran la persona desde Agent.
-          ...(!last.ownerUserId && ownerUserId ? { ownerUserId } : {}),
-        },
-      }))
-    : activityFromRow(await prisma.agentActivity.create({
-        data: {
-          projectId,
-          apiKeyId: actor.apiKeyId,
-          agentId: actor.agentId ?? null,
-          ownerUserId,
-          ...data,
-          // Sin un tramo abierto no hay narrativa que extender. Este fallback
-          // honesto es el único caso en que un reporte automático la inventa.
-          summary: data.summary ?? DEFAULT_UNDECLARED_SUMMARY,
-        },
-      }));
+
+  let activity: ActivityRow;
+  if (data.summary === null && openLast) {
+    activity = activityFromRow(await prisma.agentActivity.update({
+      where: { id: openLast.id },
+      data: {
+        lastSeenAt: now,
+        beats: { increment: 1 },
+        paths: unionPaths(openLast.paths, data.paths),
+        ...(!openLast.ownerUserId && ownerUserId ? { ownerUserId } : {}),
+      },
+    }));
+  } else if (last && data.summary !== null && isSameSegment(last, data)) {
+    activity = activityFromRow(await prisma.agentActivity.update({
+      where: { id: last.id },
+      data: {
+        lastSeenAt: now,
+        beats: { increment: 1 },
+        paths: unionPaths(last.paths, data.paths),
+        // Un latido idéntico también repara tramos abiertos creados antes
+        // de que las keys de proyecto heredaran la persona desde Agent.
+        ...(!last.ownerUserId && ownerUserId ? { ownerUserId } : {}),
+      },
+    }));
+  } else {
+    // Un tramo abierto que no coincide es tarea abandonada, no tarea en curso:
+    // cerrarlo es lo que evita que la franja muestre dos filas "en vivo" para
+    // el mismo actor mientras el idle viejo espera su techo de 8 h.
+    if (openLast) {
+      await prisma.agentActivity.update({ where: { id: openLast.id }, data: { state: "done" } });
+    }
+    activity = activityFromRow(await prisma.agentActivity.create({
+      data: {
+        projectId,
+        apiKeyId: actor.apiKeyId,
+        agentId: actor.agentId ?? null,
+        ownerUserId,
+        ...data,
+        // Sin un tramo abierto no hay narrativa que extender. Este fallback
+        // honesto es el único caso en que un reporte automático la inventa.
+        summary: data.summary ?? DEFAULT_UNDECLARED_SUMMARY,
+      },
+    }));
+  }
 
   return { activity, conflicts: await detectConflicts(projectId, activity) };
 }

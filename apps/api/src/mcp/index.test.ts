@@ -23,6 +23,16 @@ test("el mapa compartido es total y search exige uno de sus cuatro scopes", () =
   assert.equal(isToolAvailable(MCP_TOOLS.search.access, ["stories:read"]), true);
 });
 
+test("las tools de actividad reutilizan board:read y board:write", () => {
+  const readable = listMcpToolDefs(key(["board:read"])).map((tool) => tool.name);
+  const writable = listMcpToolDefs(key(["board:write"])).map((tool) => tool.name);
+
+  assert.ok(readable.includes("list_agent_activity"));
+  assert.ok(!readable.includes("report_activity"));
+  assert.ok(writable.includes("report_activity"));
+  assert.ok(!writable.includes("list_agent_activity"));
+});
+
 test("prompt y catálogo MCP comparten exactamente el filtro de scopes", () => {
   const scopes: ApiScope[] = ["reports:read", "stories:read"];
   const prompt = buildAgentPrompt({
@@ -38,10 +48,12 @@ test("prompt y catálogo MCP comparten exactamente el filtro de scopes", () => {
 test("una key solo reports no recibe ni puede invocar search", async () => {
   const reportsOnly = key(["reports:read"]);
   assert.equal(listMcpToolDefs(reportsOnly).some((tool) => tool.name === "search"), false);
-  await assert.rejects(
-    () => invokeMcpTool(reportsOnly, "search", { query: "hola" }),
-    /uno de: stories:read, commits:read, notes:read, board:read/
-  );
+  await assert.rejects(() => invokeMcpTool(reportsOnly, "search", { query: "hola" }), (err) => {
+    // El servicio expone códigos, no texto localizado: el borde lo renderiza.
+    assert.ok(err instanceof ServiceError);
+    assert.equal(err.code, "api_key_missing_permission");
+    return true;
+  });
 });
 
 test("el catálogo de resources también respeta los scopes de la key", () => {

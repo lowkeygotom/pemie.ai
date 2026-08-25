@@ -13,6 +13,11 @@ import {
   Stat,
 } from "../../components/ui.js";
 import { formatDateTime } from "../../lib/dates.js";
+import type { AgentActivity } from "@pemie/shared";
+
+function activityIdentity(activity: AgentActivity): string {
+  return activity.owner?.name ?? activity.agent?.name ?? activity.ownerUserId ?? activity.agentId ?? activity.apiKeyId;
+}
 
 /** Actividad de alcance proyecto; la conexión y los agentes viven ahora en Equipo. */
 export default function AgentTab({ ws, proj }: { ws: string; proj: string }) {
@@ -25,6 +30,11 @@ export default function AgentTab({ ws, proj }: { ws: string; proj: string }) {
   const auditQuery = useQuery({
     queryKey: queryKeys.projectAudit(ws, proj),
     queryFn: () => api.audit.listForProject(ws, proj).then((r) => r.auditLogs),
+    staleTime: STALE_TIME.moderate,
+  });
+  const activityQuery = useQuery({
+    queryKey: queryKeys.agentActivity(ws, proj),
+    queryFn: () => api.projects.activity(ws, proj),
     staleTime: STALE_TIME.moderate,
   });
 
@@ -41,6 +51,12 @@ export default function AgentTab({ ws, proj }: { ws: string; proj: string }) {
       ? auditQuery.error.message
       : auditQuery.error
         ? t("activityLoadFailed")
+        : null;
+  const activityError =
+    activityQuery.error instanceof ApiError
+      ? activityQuery.error.message
+      : activityQuery.error
+        ? t("agentActivityLoadFailed")
         : null;
 
   return (
@@ -80,6 +96,51 @@ export default function AgentTab({ ws, proj }: { ws: string; proj: string }) {
                 <Stat value={`${reliability.windowDays}d`} label={t("window")} />
               </Card>
             </div>
+          ) : null}
+        </div>
+      </section>
+
+      <section>
+        <h3 className="text-h4 text-ink-900">{t("agentActivity")}</h3>
+        <p className="mt-1 text-body-sm text-ink-500">{t("agentActivityDescription")}</p>
+        <div className="mt-4">
+          <ErrorText>{activityError}</ErrorText>
+          {activityQuery.isLoading ? (
+            <Card>
+              <Skeleton className="mb-4 h-5 w-40" />
+              <SkeletonList rows={4} />
+            </Card>
+          ) : activityQuery.data ? (
+            <Card>
+              {activityQuery.data.history.length === 0 ? (
+                <EmptyState title={t("noAgentActivity")} description={t("noAgentActivityDescription")} />
+              ) : (
+                <>
+                  <div className="divide-y divide-line-100">
+                    {activityQuery.data.history.slice(0, 50).map((activity) => (
+                      <div key={activity.id} className="flex items-center justify-between -mx-6 px-6 py-2.5 hover:bg-surface-50">
+                        <span className="flex min-w-0 items-center gap-2">
+                          <Badge tone="brand" dot>{activityIdentity(activity)}</Badge>
+                          <span className="truncate text-body-sm text-ink-700">{activity.summary}</span>
+                          {activity.userStory ? <Badge tone="neutral" mono>{activity.userStory.key}</Badge> : null}
+                          <Badge tone={activity.state === "blocked" ? "warning" : activity.state === "done" ? "success" : "neutral"}>
+                            {t(`activityState.${activity.state}`)}
+                          </Badge>
+                        </span>
+                        <span className="shrink-0 font-mono text-caption text-ink-400">
+                          {formatDateTime(activity.lastSeenAt)}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                  {activityQuery.data.history.length > 50 ? (
+                    <p className="mt-3 text-caption text-ink-400">
+                      {t("showing", { count: activityQuery.data.history.length })}
+                    </p>
+                  ) : null}
+                </>
+              )}
+            </Card>
           ) : null}
         </div>
       </section>

@@ -171,4 +171,8 @@ export const en: Record<keyof typeof es, string | ((params?: ErrorParams) => str
   invalid_webhook_signature: "Invalid signature",
   invalid_webhook_payload: "Invalid payload",
   invalid_telegram_secret: "Invalid secret",
+  invalid_activity_summary: "Activity summary must be between 1 and 280 characters",
+  invalid_activity_state: "Invalid activity state",
+  invalid_activity_interval: "Activity interval must be a positive number of seconds",
+  invalid_activity_path: "Invalid activity path",
 };

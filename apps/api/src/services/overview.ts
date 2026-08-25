@@ -8,6 +8,7 @@ import * as board from "./board.js";
 import * as drift from "./drift.js";
 import * as reports from "./reports.js";
 import * as stats from "./stats.js";
+import * as agentActivity from "./agent-activity.js";
 import { projectWithAccess } from "./ingest.js";
 
 export interface ProjectOverview {
@@ -17,6 +18,8 @@ export interface ProjectOverview {
   latestReport: Awaited<ReturnType<typeof reports.opListReports>>[number] | null;
   wip: WipColumn[];
   drift: DriftReport<Date>;
+  /** Tramos que aún no vencieron: contexto preventivo antes de que otro agente edite. */
+  liveActivity: Awaited<ReturnType<typeof agentActivity.opListActivity>>["live"];
 }
 
 /** Vista de estado del proyecto (viewer+). */
@@ -27,12 +30,13 @@ export async function projectOverview(userId: string, projectId: string): Promis
 
 /** Operación (ya autorizada): compone el resumen a partir de los servicios ya existentes. */
 export async function opProjectOverview(projectId: string): Promise<ProjectOverview> {
-  const [objective, projectStats, latestReports, projectBoard, driftReport] = await Promise.all([
+  const [objective, projectStats, latestReports, projectBoard, driftReport, activity] = await Promise.all([
     reports.opGetObjective(projectId),
     stats.opProjectStats(projectId),
     reports.opListReports(projectId, { limit: 1 }),
     board.opListBoard(projectId),
     drift.opDetectDrift(projectId),
+    agentActivity.opListActivity(projectId),
   ]);
 
   const wip: WipColumn[] = (projectBoard?.columns ?? []).map((col) => ({
@@ -48,5 +52,6 @@ export async function opProjectOverview(projectId: string): Promise<ProjectOverv
     latestReport: latestReports[0] ?? null,
     wip,
     drift: driftReport,
+    liveActivity: activity.live,
   };
 }

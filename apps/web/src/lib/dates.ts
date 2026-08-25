@@ -34,3 +34,16 @@ export function formatDateShort(iso: string): string {
 export function formatDateOrDash(iso: string | null | undefined): string {
   return iso ? formatDate(iso) : "—";
 }
+
+/** Tiempo relativo compacto para estados que cambian en vivo, respetando el idioma de Pemie. */
+export function formatRelativeTime(iso: string): string {
+  const seconds = Math.round((new Date(iso).getTime() - Date.now()) / 1_000);
+  const [value, unit]: [number, Intl.RelativeTimeFormatUnit] = Math.abs(seconds) < 60
+    ? [seconds, "second"]
+    : Math.abs(seconds) < 3_600
+      ? [Math.round(seconds / 60), "minute"]
+      : Math.abs(seconds) < 86_400
+        ? [Math.round(seconds / 3_600), "hour"]
+        : [Math.round(seconds / 86_400), "day"];
+  return new Intl.RelativeTimeFormat(i18n.language, { numeric: "auto" }).format(value, unit);
+}

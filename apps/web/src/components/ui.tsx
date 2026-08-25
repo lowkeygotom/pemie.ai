@@ -389,10 +389,16 @@ const AVATAR_SIZES = {
 export function Avatar({
   label,
   size = "md",
+  imageUrl,
 }: {
   label: string;
   size?: keyof typeof AVATAR_SIZES;
+  /** Las fotos llegan solo cuando la fuente las conoce; las iniciales son el fallback estable. */
+  imageUrl?: string | null;
 }) {
+  if (imageUrl) {
+    return <img src={imageUrl} alt={label} className={`flex-shrink-0 object-cover ${AVATAR_SIZES[size]}`} />;
+  }
   return (
     <span
       aria-hidden="true"

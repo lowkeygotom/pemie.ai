@@ -45,6 +45,7 @@ model User {
   channelMessages ChannelMessage[]
   channelLlmCredentials ChannelLlmCredential[]
   blockedAgentPresences AgentPresence[]     @relation("AgentPresenceBlocker")
+  ownedAgentActivities  AgentActivity[]        @relation("AgentActivityOwner")
 
   @@map("users")
 }
@@ -152,6 +153,7 @@ model Project {
   apiKeys             ApiKey[]
   channelDefaultsFor  UserChannelConfig[]
   agentPresences      AgentPresence[]
+  agentActivities    AgentActivity[]
 
   @@unique([workspaceId, slug])
   @@index([workspaceId])
@@ -394,6 +396,7 @@ model UserStory {
   children           UserStory[]  @relation("StoryEpic")
   assignee           Contributor? @relation(fields: [assigneeId], references: [id])
   card               Card?
+  activities         AgentActivity[]
 
   @@unique([projectId, key])
   @@index([projectId, status])
@@ -449,6 +452,7 @@ model Card {
   userStory   UserStory?     @relation(fields: [userStoryId], references: [id])
   assignee    Contributor?   @relation(fields: [assigneeId], references: [id])
   activities  CardActivity[]
+  agentActivities AgentActivity[]
 
   @@index([boardId, columnId])
   @@index([assigneeId])
@@ -486,6 +490,7 @@ model Agent {
   owner     User?    @relation("AgentOwner", fields: [ownerId], references: [id], onDelete: SetNull)
   apiKeys   ApiKey[]
   reports   Report[]
+  agentActivities AgentActivity[]
 
   @@index([projectId])
   @@map("agents")
@@ -516,6 +521,7 @@ model ApiKey {
   owner        User?     @relation("ApiKeyOwner", fields: [ownerUserId], references: [id], onDelete: SetNull)
   channelConfig UserChannelConfig?
   presences    AgentPresence[]
+  activities    AgentActivity[]
 
   @@index([workspaceId])
   @@index([projectId])
@@ -547,6 +553,47 @@ model AgentPresence {
   @@unique([apiKeyId, workspaceId])
   @@index([workspaceId])
   @@map("agent_presences")
+}
+
+/// Tramos de trabajo declarados por agentes. Un tramo se prolonga con latidos
+/// iguales para que la traza explique trabajo real y no replique cada polling.
+model AgentActivity {
+  id              String     @id @default(cuid())
+  projectId       String
+  apiKeyId        String
+  agentId         String?
+  /// Se guarda junto al tramo para mostrar a la persona responsable sin dos
+  /// joins y conservar esa atribución aunque la key cambie después.
+  ownerUserId     String?
+  summary         String
+  state           String     @default("working") // working | blocked | done
+  userStoryId     String?
+  cardId          String?
+  paths           String[]
+  intervalSeconds Int        @default(60)
+  model           String?
+  startedAt       DateTime   @default(now())
+  lastSeenAt      DateTime   @default(now())
+  beats           Int        @default(1)
+  /// Al borrar el proyecto, sus tramos no tienen contexto ni utilidad.
+  project         Project    @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  /// La key es la identidad irremplazable del latido; sin ella el tramo deja de
+  /// poder explicar quién lo reportó.
+  apiKey          ApiKey     @relation(fields: [apiKeyId], references: [id], onDelete: Cascade)
+  /// El agente es opcional para keys de workspace o personales; borrarlo no
+  /// debe eliminar una traza que todavía identifica su key.
+  agent           Agent?     @relation(fields: [agentId], references: [id], onDelete: SetNull)
+  /// La autoría es informativa, por lo que borrar a la persona conserva el
+  /// tramo y solo pierde ese dato desnormalizado.
+  owner           User?      @relation("AgentActivityOwner", fields: [ownerUserId], references: [id], onDelete: SetNull)
+  /// Una HU puede cerrarse o borrarse sin invalidar el historial del agente.
+  userStory       UserStory? @relation(fields: [userStoryId], references: [id], onDelete: SetNull)
+  /// Igual que la HU, la tarjeta contextualiza pero no posee el tramo.
+  card            Card?      @relation(fields: [cardId], references: [id], onDelete: SetNull)
+
+  @@index([projectId, lastSeenAt])
+  @@index([projectId, apiKeyId, lastSeenAt])
+  @@map("agent_activities")
 }
 
 model AuditLog {

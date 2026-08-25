@@ -131,6 +131,45 @@ export interface AgentReliabilityReport {
   byAction: Record<"moved" | "assigned", { actions: number; reverted: number }>;
 }
 
+/** Estado declarado por un agente para un tramo de trabajo (PEM-56). */
+export const AGENT_ACTIVITY_STATES = ["working", "blocked", "done"] as const;
+export type AgentActivityState = (typeof AGENT_ACTIVITY_STATES)[number];
+
+/** Tramo persistido; las fechas son ISO para que el DTO sirva también al cliente web. */
+export interface AgentActivity<TDate = string> {
+  id: string;
+  projectId: string;
+  apiKeyId: string;
+  agentId: string | null;
+  ownerUserId: string | null;
+  summary: string;
+  state: AgentActivityState;
+  userStoryId: string | null;
+  cardId: string | null;
+  paths: string[];
+  intervalSeconds: number;
+  model: string | null;
+  startedAt: TDate;
+  lastSeenAt: TDate;
+  beats: number;
+  /** Identidad resuelta para la UI; el historial conserva los ids si fue borrada. */
+  owner?: { id: string; name: string | null; avatarUrl: string | null } | null;
+  agent?: { id: string; name: string } | null;
+  userStory?: { id: string; key: string; title: string } | null;
+}
+
+/** Dos tramos vivos que se pisan; el aviso se entrega en el propio latido. */
+export interface AgentActivityConflict<TDate = string> {
+  activity: AgentActivity<TDate>;
+  reasons: Array<"userStory" | "card" | "path">;
+  overlappingPaths: string[];
+}
+
+export interface AgentActivityList<TDate = string> {
+  live: AgentActivity<TDate>[];
+  history: AgentActivity<TDate>[];
+}
+
 /** Columna del Kanban con su carga actual (WIP del overview). */
 export interface WipColumn {
   name: string;

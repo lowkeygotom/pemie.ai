@@ -173,4 +173,8 @@ export const es: Record<ErrorCode, string | ((params?: ErrorParams) => string)> 
   invalid_webhook_signature: "Firma inválida",
   invalid_webhook_payload: "Payload inválido",
   invalid_telegram_secret: "Secret inválido",
+  invalid_activity_summary: "El resumen de actividad debe tener entre 1 y 280 caracteres",
+  invalid_activity_state: "Estado de actividad inválido",
+  invalid_activity_interval: "El intervalo de actividad debe ser un número positivo de segundos",
+  invalid_activity_path: "Path de actividad inválido",
 };

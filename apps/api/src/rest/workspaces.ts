@@ -14,6 +14,7 @@ import * as assignees from "../services/assignees.js";
 import * as leaderboard from "../services/leaderboard.js";
 import * as overview from "../services/overview.js";
 import * as agentReliability from "../services/agent-reliability.js";
+import * as agentActivity from "../services/agent-activity.js";
 import * as searchSvc from "../services/search.js";
 import * as skills from "../services/skills.js";
 import { badRequest } from "../services/errors.js";
@@ -350,6 +351,21 @@ export function workspaceRoutes() {
             : undefined,
       })
     );
+  });
+
+  app.get("/:slug/projects/:projectSlug/activity", async (c) => {
+    const project = await resolveProject(c);
+    const parseDate = (value: string | undefined) => {
+      if (!value) return undefined;
+      const date = new Date(value);
+      return Number.isNaN(date.getTime()) ? undefined : date;
+    };
+    return c.json(await agentActivity.opListActivity(project.id, {
+      agentId: c.req.query("agentId") ?? undefined,
+      userStoryId: c.req.query("storyId") ?? undefined,
+      from: parseDate(c.req.query("from")),
+      to: parseDate(c.req.query("to")),
+    }));
   });
 
   app.get("/:slug/projects/:projectSlug/search", async (c) => {

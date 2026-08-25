@@ -3,6 +3,7 @@
 
 import type {
   AgentReliabilityReport,
+  AgentActivity,
   DayMetrics,
   DomainConfig,
   DriftReport,
@@ -465,6 +466,13 @@ export interface ProjectOverview {
   latestReport: Report | null;
   wip: WipColumn[];
   drift: DriftReport;
+  liveActivity: AgentActivity[];
+}
+
+/** Actividad de agentes: estado vivo separado de la traza para cada superficie. */
+export interface ProjectActivityResponse {
+  live: AgentActivity[];
+  history: AgentActivity[];
 }
 
 // ─── Catálogo de skills (docs/skills-catalog.md) ──────────────────────
@@ -541,6 +549,11 @@ export const api = {
       projectSlug: string,
       q?: { windowDays?: number; settleHours?: number }
     ) => get<AgentReliabilityReport>(`${pp(wsSlug, projectSlug)}/agent-reliability${qs(q)}`),
+    activity: (
+      wsSlug: string,
+      projectSlug: string,
+      q?: { agentId?: string; storyId?: string; from?: string; to?: string }
+    ) => get<ProjectActivityResponse>(`${pp(wsSlug, projectSlug)}/activity${qs(q)}`),
   },
 
   // Base de rutas por proyecto.

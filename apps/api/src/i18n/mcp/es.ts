@@ -36,6 +36,20 @@ export const es = {
     "Días hacia atrás de acciones de agente que entran al cálculo (default 30).",
   tool_get_agent_reliability_settle_hours:
     "Horas de asentamiento: excluye acciones demasiado recientes para no inflar el score (default 2).",
+  tool_report_activity:
+    "Declara el tramo de trabajo actual del agente. Repite el mismo estado mientras siga trabajando para prolongar el tramo sin llenar el historial.",
+  tool_report_activity_summary: "Resumen concreto de la tarea actual (máximo 280 caracteres).",
+  tool_report_activity_state: "working, blocked o done (default working).",
+  tool_report_activity_story_id: "ID de la HU sobre la que trabajas (opcional). Debe pertenecer al proyecto.",
+  tool_report_activity_card_id: "ID de la tarjeta sobre la que trabajas (opcional). Debe pertenecer al proyecto.",
+  tool_report_activity_paths: "Paths de archivos o directorios que tocarás (opcional). Un directorio solapa sus archivos hijos.",
+  tool_report_activity_interval_seconds: "Segundos entre latidos previstos (default 60); el tramo vence tras tres intervalos, entre 60 s y 30 min.",
+  tool_report_activity_model: "Modelo LLM que reporta el trabajo (opcional).",
+  tool_list_agent_activity: "Lista tramos vivos e históricos de agentes del proyecto.",
+  tool_list_agent_activity_agent_id: "Filtra por ID de agente (opcional).",
+  tool_list_agent_activity_story_id: "Filtra por ID de HU (opcional).",
+  tool_list_agent_activity_from: "ISO 8601: tramos vistos desde este instante (inclusive).",
+  tool_list_agent_activity_to: "ISO 8601: tramos vistos hasta este instante (inclusive).",
   tool_list_commits: "Lista commits del proyecto (filtrable por dominio, contribuidor y rango de fecha).",
   tool_list_commits_since: "ISO 8601 — commits desde esta fecha (inclusive).",
   tool_list_commits_until:

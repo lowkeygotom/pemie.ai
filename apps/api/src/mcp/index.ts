@@ -38,6 +38,7 @@ import * as drift from "../services/drift.js";
 import * as agentReliability from "../services/agent-reliability.js";
 import * as overview from "../services/overview.js";
 import * as skills from "../services/skills.js";
+import * as agentActivity from "../services/agent-activity.js";
 
 const PROTOCOL_VERSION = "2024-11-05";
 const SERVER_INFO = { name: "pemie.ai", version: "0.1.0" };
@@ -239,6 +240,73 @@ const TOOLS: McpTool[] = [
       return agentReliability.opAgentReliability(projectId, {
         windowDays: typeof args.windowDays === "number" ? args.windowDays : undefined,
         settleHours: typeof args.settleHours === "number" ? args.settleHours : undefined,
+      });
+    },
+  },
+  // Reusamos board:* deliberadamente: los scopes son una foto de la key al
+  // crearla y un activity:* nuevo dejaría fuera todas las credenciales vigentes.
+  // get_agent_reliability y get_project_leaderboard ya siguen este precedente.
+  {
+    name: "report_activity",
+    descriptionKey: "tool_report_activity",
+    inputSchema: withProjectId(
+      {
+        summary: { type: "string", description: "tool_report_activity_summary" },
+        state: { type: "string", enum: ["working", "blocked", "done"], description: "tool_report_activity_state" },
+        storyId: { type: "string", description: "tool_report_activity_story_id" },
+        cardId: { type: "string", description: "tool_report_activity_card_id" },
+        paths: { type: "array", items: { type: "string" }, description: "tool_report_activity_paths" },
+        intervalSeconds: { type: "number", description: "tool_report_activity_interval_seconds" },
+        model: { type: "string", description: "tool_report_activity_model" },
+      },
+      ["summary"]
+    ),
+    handler: async (ctx, args) => {
+      const projectId = await requireProject(ctx, args, "board:write");
+      if (typeof args.storyId === "string") {
+        const story = await stories.getStoryById(args.storyId);
+        if (!story || story.projectId !== projectId) throw forbidden("story_not_in_project");
+      }
+      if (typeof args.cardId === "string") {
+        const card = await board.getCardWithProject(args.cardId);
+        if (!card || card.board.projectId !== projectId) throw forbidden("card_not_in_project");
+      }
+      return agentActivity.opReportActivity(projectId, {
+        summary: String(args.summary),
+        state: args.state as agentActivity.ReportActivityInput["state"],
+        userStoryId: typeof args.storyId === "string" ? args.storyId : undefined,
+        cardId: typeof args.cardId === "string" ? args.cardId : undefined,
+        paths: Array.isArray(args.paths) ? args.paths.filter((path): path is string => typeof path === "string") : undefined,
+        intervalSeconds: typeof args.intervalSeconds === "number" ? args.intervalSeconds : undefined,
+        model: typeof args.model === "string" ? args.model : undefined,
+      }, {
+        apiKeyId: ctx.key.id,
+        agentId: ctx.key.agentId,
+        ownerUserId: ctx.key.ownerUserId,
+      });
+    },
+  },
+  {
+    name: "list_agent_activity",
+    descriptionKey: "tool_list_agent_activity",
+    inputSchema: withProjectId({
+      agentId: { type: "string", description: "tool_list_agent_activity_agent_id" },
+      storyId: { type: "string", description: "tool_list_agent_activity_story_id" },
+      from: { type: "string", description: "tool_list_agent_activity_from" },
+      to: { type: "string", description: "tool_list_agent_activity_to" },
+    }),
+    handler: async (ctx, args) => {
+      const projectId = await requireProject(ctx, args, "board:read");
+      const parseDate = (value: unknown) => {
+        if (typeof value !== "string") return undefined;
+        const date = new Date(value);
+        return Number.isNaN(date.getTime()) ? undefined : date;
+      };
+      return agentActivity.opListActivity(projectId, {
+        agentId: typeof args.agentId === "string" ? args.agentId : undefined,
+        userStoryId: typeof args.storyId === "string" ? args.storyId : undefined,
+        from: parseDate(args.from),
+        to: parseDate(args.to),
       });
     },
   },

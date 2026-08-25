@@ -177,6 +177,12 @@ export const ERROR_CODES = [
   "invalid_webhook_signature",
   "invalid_webhook_payload",
   "invalid_telegram_secret",
+  // PEM-56 — los límites sostienen que la actividad sea legible y que el TTL
+  // siga siendo una señal útil, no un mecanismo de presencia permanente.
+  "invalid_activity_summary",
+  "invalid_activity_state",
+  "invalid_activity_interval",
+  "invalid_activity_path",
 ] as const;
 
 export type ErrorCode = (typeof ERROR_CODES)[number];

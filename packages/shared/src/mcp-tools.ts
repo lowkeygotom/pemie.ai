@@ -10,6 +10,7 @@ export const MCP_TOOL_NAMES = [
   "get_story_commit_progress", "search", "create_note", "get_user_story", "delete_user_story",
   "update_card", "list_card_activities", "delete_card", "get_project_leaderboard",
   "get_agent_reliability",
+  "report_activity", "list_agent_activity",
   "list_skills", "get_skill", "publish_skill", "delete_skill",
 ] as const;
 export type McpToolName = (typeof MCP_TOOL_NAMES)[number];
@@ -38,6 +39,7 @@ export type ToolGroup =
   | "Notas"
   | "Historias de Usuario"
   | "Kanban"
+  | "Actividad de agentes"
   | "Skills del workspace";
 
 export interface McpToolMeta {
@@ -82,6 +84,8 @@ export const MCP_TOOLS: Record<McpToolName, McpToolMeta> = {
   delete_card: { access: { kind: "scope", scope: "board:write" }, summary: "elimina una tarjeta del tablero sin borrar su HU.", group: "Kanban" },
   get_project_leaderboard: { access: { kind: "scope", scope: "board:read" }, summary: "ranking de HUs cerradas por actor (persona o agente).", group: "Kanban" },
   get_agent_reliability: { access: { kind: "scope", scope: "board:read" }, summary: "proporción de movimientos y asignaciones de agente que una persona no deshizo.", group: "Kanban" },
+  report_activity: { access: { kind: "scope", scope: "board:write" }, summary: "declara el tramo de trabajo actual y avisa si pisa HU, tarjeta o paths de otro agente.", group: "Actividad de agentes" },
+  list_agent_activity: { access: { kind: "scope", scope: "board:read" }, summary: "actividad viva e histórica de agentes, filtrable por agente, HU y rango.", group: "Actividad de agentes" },
   list_skills: { access: { kind: "scope", scope: "skills:read" }, summary: "skills publicadas en el workspace.", group: "Skills del workspace" },
   get_skill: { access: { kind: "scope", scope: "skills:read" }, summary: "paquete instalable de una skill (inline o downloadUrl según tamaño).", group: "Skills del workspace" },
   publish_skill: { access: { kind: "scope", scope: "skills:write" }, summary: "crea un ticket de upload; el contenido viaja por tar|curl, no en el tool call.", group: "Skills del workspace" },
@@ -121,6 +125,8 @@ const MCP_TOOL_SUMMARIES_EN: Record<McpToolName, string> = {
   delete_card: "deletes a board card without deleting its User Story.",
   get_project_leaderboard: "ranking of closed User Stories by actor (person or agent).",
   get_agent_reliability: "share of agent moves and assignments that a person did not undo.",
+  report_activity: "reports the current work segment and warns about overlapping stories, cards, or paths.",
+  list_agent_activity: "live and historical agent activity, filterable by agent, story, and range.",
   list_skills: "skills published in the workspace.",
   get_skill: "an installable skill package (inline or downloadUrl depending on size).",
   publish_skill: "creates an upload ticket; content travels through tar|curl, not in the tool call.",
@@ -192,7 +198,7 @@ export function buildAgentPrompt(input: {
   const groupName = (group: ToolGroup) => locale === "en" ? ({
     "Descubrimiento": "Discovery", "Contexto y commits": "Context and commits",
     "Objetivo e informes": "Objective and reports", "Notas": "Notes",
-    "Historias de Usuario": "User stories", "Kanban": "Kanban", "Skills del workspace": "Workspace skills",
+    "Historias de Usuario": "User stories", "Kanban": "Kanban", "Actividad de agentes": "Agent activity", "Skills del workspace": "Workspace skills",
   } as const)[group] : group;
   const toolsSection = [...byGroup]
     .map(([group, tools]) => `${groupName(group)}:\n${tools.map((tool) => `- ${tool} — ${locale === "en" ? MCP_TOOL_SUMMARIES_EN[tool] : MCP_TOOLS[tool].summary}`).join("\n")}`)

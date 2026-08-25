@@ -12,6 +12,7 @@ import type {
   HTMLAttributes,
   InputHTMLAttributes,
   ReactNode,
+  RefObject,
   SelectHTMLAttributes,
   TextareaHTMLAttributes,
 } from "react";
@@ -871,6 +872,59 @@ export function Modal({
           <div className="min-w-0">{children}</div>
         </div>
       </div>
+    </div>
+  );
+}
+
+/**
+ * Panel flotante anclado a un trigger (no `Modal`: sin backdrop de página completa).
+ * El caller pone `relative` en el wrapper del trigger y pasa su ref para que un
+ * click en el propio trigger no cuente como "afuera" y lo vuelva a abrir.
+ */
+export function Popover({
+  open,
+  onClose,
+  triggerRef,
+  align = "start",
+  children,
+}: {
+  open: boolean;
+  onClose: () => void;
+  triggerRef: RefObject<HTMLElement | null>;
+  /** Borde del trigger al que se pega el panel (siempre cuelga hacia abajo). */
+  align?: "start" | "end";
+  children: ReactNode;
+}) {
+  const panelRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    function onPointerDown(e: PointerEvent) {
+      const target = e.target as Node;
+      if (panelRef.current?.contains(target) || triggerRef.current?.contains(target)) return;
+      onClose();
+    }
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") onClose();
+    }
+    document.addEventListener("pointerdown", onPointerDown);
+    window.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("pointerdown", onPointerDown);
+      window.removeEventListener("keydown", onKey);
+    };
+  }, [open, onClose, triggerRef]);
+
+  if (!open) return null;
+  return (
+    <div
+      ref={panelRef}
+      role="dialog"
+      className={`absolute top-full z-20 mt-2 w-72 max-w-[calc(100vw-2rem)] rounded-lg border border-line-200 bg-surface-0 p-4 shadow-md ${
+        align === "end" ? "right-0" : "left-0"
+      }`}
+    >
+      {children}
     </div>
   );
 }

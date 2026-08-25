@@ -4,6 +4,7 @@ import { Link, useParams, useSearchParams } from "react-router-dom";
 import { api, ApiError, type Project as Prj } from "../lib/api.js";
 import { Badge, Card, PageHeader, Spinner, Tabs } from "../components/ui.js";
 import OverviewTab from "./project/OverviewTab.js";
+import LiveActivityStrip from "./project/LiveActivityStrip.js";
 import CommitsTab from "./project/CommitsTab.js";
 import ReportsTab from "./project/ReportsTab.js";
 import StoriesTab from "./project/StoriesTab.js";
@@ -92,6 +93,7 @@ export default function Project() {
         actions={
           <>
             <ProjectSearch ws={slug} proj={projectSlug} onNavigateToTab={selectTab} />
+            <LiveActivityStrip ws={slug} proj={projectSlug} />
             <Badge tone="neutral" mono>{project.key}</Badge>
           </>
         }

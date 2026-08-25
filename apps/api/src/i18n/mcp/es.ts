@@ -37,13 +37,13 @@ export const es = {
   tool_get_agent_reliability_settle_hours:
     "Horas de asentamiento: excluye acciones demasiado recientes para no inflar el score (default 2).",
   tool_report_activity:
-    "Declara el tramo de trabajo actual del agente. Repite el mismo estado mientras siga trabajando para prolongar el tramo sin llenar el historial.",
-  tool_report_activity_summary: "Resumen concreto de la tarea actual (máximo 280 caracteres).",
+    "Declara el tramo de trabajo actual del agente o agrega archivos al tramo abierto si omites summary.",
+  tool_report_activity_summary: "Resumen concreto de la tarea actual (máximo 280 caracteres). Omítelo para seguir en lo mismo y solo agregar paths.",
   tool_report_activity_state: "working, blocked o done (default working).",
   tool_report_activity_story_id: "ID de la HU sobre la que trabajas (opcional). Debe pertenecer al proyecto.",
   tool_report_activity_card_id: "ID de la tarjeta sobre la que trabajas (opcional). Debe pertenecer al proyecto.",
   tool_report_activity_paths: "Paths de archivos o directorios que tocarás (opcional). Un directorio solapa sus archivos hijos.",
-  tool_report_activity_interval_seconds: "Segundos entre latidos previstos (default 60); el tramo vence tras tres intervalos, entre 60 s y 30 min.",
+  tool_report_activity_interval_seconds: "Segundos entre latidos previstos (default 300); el tramo queda activo tres intervalos y luego idle hasta el techo de 8 horas.",
   tool_report_activity_model: "Modelo LLM que reporta el trabajo (opcional).",
   tool_list_agent_activity: "Lista tramos vivos e históricos de agentes del proyecto.",
   tool_list_agent_activity_agent_id: "Filtra por ID de agente (opcional).",

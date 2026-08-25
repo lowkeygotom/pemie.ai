@@ -258,8 +258,7 @@ const TOOLS: McpTool[] = [
         paths: { type: "array", items: { type: "string" }, description: "tool_report_activity_paths" },
         intervalSeconds: { type: "number", description: "tool_report_activity_interval_seconds" },
         model: { type: "string", description: "tool_report_activity_model" },
-      },
-      ["summary"]
+      }
     ),
     handler: async (ctx, args) => {
       const projectId = await requireProject(ctx, args, "board:write");
@@ -272,7 +271,7 @@ const TOOLS: McpTool[] = [
         if (!card || card.board.projectId !== projectId) throw forbidden("card_not_in_project");
       }
       return agentActivity.opReportActivity(projectId, {
-        summary: String(args.summary),
+        summary: typeof args.summary === "string" ? args.summary : undefined,
         state: args.state as agentActivity.ReportActivityInput["state"],
         userStoryId: typeof args.storyId === "string" ? args.storyId : undefined,
         cardId: typeof args.cardId === "string" ? args.cardId : undefined,

@@ -51,10 +51,11 @@ function stubActivity(
       rows.push(created);
       return created;
     },
-    update: async ({ where, data }: { where: { id: string }; data: { lastSeenAt: Date; beats: { increment: number }; ownerUserId?: string } }) => {
+    update: async ({ where, data }: { where: { id: string }; data: { lastSeenAt: Date; beats: { increment: number }; paths: string[]; ownerUserId?: string } }) => {
       const current = rows.find((item) => item.id === where.id)!;
       current.lastSeenAt = data.lastSeenAt;
       current.beats += data.beats.increment;
+      current.paths = data.paths;
       if (data.ownerUserId) current.ownerUserId = data.ownerUserId;
       return current;
     },
@@ -67,27 +68,91 @@ function stubActivity(
   });
 }
 
-test("coalescing: dos latidos idénticos quedan en un tramo con beats 2", async (t) => {
+test("coalescing: un path nuevo amplía el tramo y acumula paths sin crear una fila", async (t) => {
   const rows: Row[] = [];
   stubActivity(t, rows);
   const actor = { apiKeyId: "key-1", agentId: "agent-1", ownerUserId: "user-1" };
-  const input = { summary: "Implementa PEM-56", paths: ["apps/api/src/"] };
-
-  await activityService.opReportActivity("project-1", input, actor);
-  const second = await activityService.opReportActivity("project-1", input, actor);
+  await activityService.opReportActivity("project-1", { summary: "Implementa PEM-56", paths: ["apps/api/src/a.ts"] }, actor);
+  const second = await activityService.opReportActivity("project-1", { summary: "Implementa PEM-56", paths: ["apps/api/src/b.ts", "apps/api/src/a.ts"] }, actor);
 
   assert.equal(rows.length, 1);
+  assert.ok(second.activity);
   assert.equal(second.activity.beats, 2);
+  assert.equal(second.activity.intervalSeconds, 300);
+  assert.deepEqual(second.activity.paths, ["apps/api/src/a.ts", "apps/api/src/b.ts"]);
 });
 
-test("expiración: un tramo fuera de su TTL desaparece de live pero sigue en history", async (t) => {
-  const rows = [row({ lastSeenAt: new Date(Date.now() - 181_000), intervalSeconds: 60 })];
+test("coalescing: cambiar el resumen abre un tramo nuevo", async (t) => {
+  const rows: Row[] = [];
+  stubActivity(t, rows);
+  const actor = { apiKeyId: "key-1", agentId: "agent-1", ownerUserId: "user-1" };
+
+  await activityService.opReportActivity("project-1", { summary: "Implementa servicio", paths: ["a.ts"] }, actor);
+  await activityService.opReportActivity("project-1", { summary: "Ajusta interfaz", paths: ["b.ts"] }, actor);
+
+  assert.equal(rows.length, 2);
+});
+
+test("hook: sin summary extiende el tramo abierto y acumula paths", async (t) => {
+  const rows = [row({ paths: ["apps/api/src/a.ts"] })];
+  stubActivity(t, rows);
+
+  const result = await activityService.opReportActivity(
+    "project-1",
+    { paths: ["apps/api/src/b.ts"] },
+    { apiKeyId: "key-1", agentId: "agent-1", ownerUserId: "user-1" }
+  );
+
+  assert.equal(rows.length, 1);
+  assert.equal(result.activity?.summary, "Implementa PEM-56");
+  assert.equal(result.activity?.beats, 2);
+  assert.deepEqual(result.activity?.paths, ["apps/api/src/a.ts", "apps/api/src/b.ts"]);
+});
+
+test("hook: sin summary ni tramo abierto crea un fallback honesto", async (t) => {
+  const rows: Row[] = [];
+  stubActivity(t, rows);
+
+  const result = await activityService.opReportActivity(
+    "project-1",
+    { paths: ["apps/api/src/a.ts"] },
+    { apiKeyId: "key-1", agentId: "agent-1", ownerUserId: "user-1" }
+  );
+
+  assert.equal(rows.length, 1);
+  assert.equal(result.activity?.summary, "Edición de archivos sin tarea declarada");
+  assert.deepEqual(result.activity?.paths, ["apps/api/src/a.ts"]);
+});
+
+test("hook: sin summary ni paths no escribe actividad", async (t) => {
+  const rows: Row[] = [];
+  stubActivity(t, rows);
+
+  const result = await activityService.opReportActivity(
+    "project-1",
+    {},
+    { apiKeyId: "key-1", agentId: "agent-1", ownerUserId: "user-1" }
+  );
+
+  assert.equal(rows.length, 0);
+  assert.equal(result.activity, null);
+  assert.deepEqual(result.conflicts, []);
+});
+
+test("vigencia: resuelve active, idle y closed según estado y antigüedad", async (t) => {
+  const now = Date.now();
+  const rows = [
+    row({ id: "active", lastSeenAt: new Date(now - 10_000), intervalSeconds: 60 }),
+    row({ id: "idle", apiKeyId: "key-2", lastSeenAt: new Date(now - 181_000), intervalSeconds: 60 }),
+    row({ id: "closed-done", apiKeyId: "key-3", state: "done", lastSeenAt: new Date(now - 10_000) }),
+    row({ id: "closed-old", apiKeyId: "key-4", lastSeenAt: new Date(now - 8 * 60 * 60_000 - 1) }),
+  ];
   stubActivity(t, rows);
 
   const result = await activityService.opListActivity("project-1");
 
-  assert.equal(result.live.length, 0);
-  assert.equal(result.history.length, 1);
+  assert.deepEqual(result.history.map((activity) => activity.status), ["active", "idle", "closed", "closed"]);
+  assert.deepEqual(result.live.map((activity) => activity.id), ["active", "idle"]);
 });
 
 test("solape: un prefijo de directorio choca con un archivo bajo ese directorio", async (t) => {
@@ -106,6 +171,51 @@ test("solape: un prefijo de directorio choca con un archivo bajo ese directorio"
   assert.deepEqual(result.conflicts[0]!.overlappingPaths, ["apps/api/src"]);
 });
 
+test("conflictos: excluye tramos de la misma key pero conserva los de otra key", async (t) => {
+  const rows = [
+    row({ id: "same-actor", paths: ["apps/api/src/shared.ts"] }),
+    row({ id: "other-actor", apiKeyId: "key-2", agentId: "agent-2", paths: ["apps/api/src/shared.ts"] }),
+  ];
+  stubActivity(t, rows);
+
+  const result = await activityService.opReportActivity(
+    "project-1",
+    { summary: "Nuevo tramo", paths: ["apps/api/src/shared.ts"] },
+    { apiKeyId: "key-1", agentId: "agent-1", ownerUserId: "user-1" }
+  );
+
+  assert.deepEqual(result.conflicts.map((conflict) => conflict.activity.apiKeyId), ["key-2"]);
+});
+
+test("conflictos: un tramo idle sigue avisando e incluye vigencia, antigüedad e identidad", async (t) => {
+  const seenAt = new Date(Date.now() - 20 * 60_000);
+  const other = row({
+    id: "activity-other",
+    apiKeyId: "key-2",
+    agentId: "agent-2",
+    ownerUserId: "user-2",
+    paths: ["apps/api/src/mcp/index.ts"],
+    intervalSeconds: 300,
+    lastSeenAt: seenAt,
+    owner: { id: "user-2", name: "Julián", avatarUrl: null },
+  });
+  const rows = [other];
+  stubActivity(t, rows, {
+    findContributors: async () => [{ id: "contributor-2", githubLogin: "julian", name: "Julián", avatarUrl: "avatar-2", userId: "user-2" }],
+  });
+
+  const result = await activityService.opReportActivity(
+    "project-1",
+    { summary: "Edita servicios", paths: ["apps/api/src/"] },
+    { apiKeyId: "key-1", agentId: "agent-1" }
+  );
+
+  assert.equal(result.conflicts.length, 1);
+  assert.equal(result.conflicts[0]!.status, "idle");
+  assert.ok(result.conflicts[0]!.ageSeconds >= 20 * 60);
+  assert.equal(result.conflicts[0]!.activity.contributor?.githubLogin, "julian");
+});
+
 test("escritura: una key de proyecto hereda la persona dueña del Agent", async (t) => {
   const rows: Row[] = [];
   stubActivity(t, rows, { agentOwnerId: "user-owner" });
@@ -116,6 +226,7 @@ test("escritura: una key de proyecto hereda la persona dueña del Agent", async 
     { apiKeyId: "key-1", agentId: "agent-1", ownerUserId: null }
   );
 
+  assert.ok(result.activity);
   assert.equal(result.activity.ownerUserId, "user-owner");
   assert.equal(rows[0]!.ownerUserId, "user-owner");
 });

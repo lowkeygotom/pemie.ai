@@ -28,13 +28,13 @@ export const en: Record<keyof typeof es, string | ((params?: McpDescParams) => s
   tool_get_agent_reliability_settle_hours:
     "Settling hours: excludes actions too recent to avoid inflating the score (default 2).",
   tool_report_activity:
-    "Declares the agent's current work segment. Repeat the same state while working to extend the segment without filling the history.",
-  tool_report_activity_summary: "Concrete summary of the current task (maximum 280 characters).",
+    "Declares the agent's current work segment, or adds files to the open segment when summary is omitted.",
+  tool_report_activity_summary: "Concrete summary of the current task (maximum 280 characters). Omit it to keep doing the same work and only add paths.",
   tool_report_activity_state: "working, blocked, or done (default working).",
   tool_report_activity_story_id: "ID of the User Story being worked on (optional). It must belong to the project.",
   tool_report_activity_card_id: "ID of the card being worked on (optional). It must belong to the project.",
   tool_report_activity_paths: "Paths of files or directories to edit (optional). A directory overlaps its child files.",
-  tool_report_activity_interval_seconds: "Expected seconds between heartbeats (default 60); the segment expires after three intervals, between 60 s and 30 min.",
+  tool_report_activity_interval_seconds: "Expected seconds between heartbeats (default 300); the segment stays active for three intervals, then idle up to the 8-hour ceiling.",
   tool_report_activity_model: "LLM model reporting the work (optional).",
   tool_list_agent_activity: "Lists live and historical agent work segments for the project.",
   tool_list_agent_activity_agent_id: "Filters by agent ID (optional).",

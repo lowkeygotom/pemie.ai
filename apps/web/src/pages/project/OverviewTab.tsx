@@ -89,19 +89,23 @@ function LiveActivityCard({ activities }: { activities: AgentActivity[] }) {
             {activities.map((activity) => {
               const overlap = activities.some((other) => other.id !== activity.id && activitiesOverlap(activity, other));
               const identity = activityIdentity(activity);
+              const isIdle = activity.status === "idle";
               return (
-                <div key={activity.id} className="flex items-start gap-3 py-3.5">
+                <div key={activity.id} className={isIdle ? "flex items-start gap-3 bg-surface-50 py-3.5 text-ink-500" : "flex items-start gap-3 py-3.5"}>
                   <Avatar label={identity} imageUrl={activity.contributor?.avatarUrl ?? activity.owner?.avatarUrl} size="sm" />
                   <div className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-center gap-2">
-                      <Badge tone={activity.state === "blocked" ? "warning" : "brand"} dot>
-                        {activity.state === "blocked" ? t("blocked") : t("working")}
+                      <Badge tone={isIdle ? "neutral" : activity.state === "blocked" ? "warning" : "brand"} dot={!isIdle}>
+                        {t(`activityStatus.${activity.status}`)}
                       </Badge>
-                      <span className="truncate text-body-sm font-medium text-ink-900">{identity}</span>
+                      {activity.state === "blocked" ? <Badge tone="warning">{t("blocked")}</Badge> : null}
+                      <span className={isIdle ? "truncate text-body-sm font-medium text-ink-500" : "truncate text-body-sm font-medium text-ink-900"}>{identity}</span>
                       {activity.userStory ? <Badge tone="neutral" mono>{activity.userStory.key}</Badge> : null}
                     </div>
-                    <p className="mt-1 text-body-sm text-ink-500">{activity.summary}</p>
-                    <p className="mt-1 font-mono text-caption text-ink-400">{formatRelativeTime(activity.lastSeenAt)}</p>
+                    <p className={isIdle ? "mt-1 text-body-sm text-ink-400" : "mt-1 text-body-sm text-ink-500"}>{activity.summary}</p>
+                    <p className="mt-1 font-mono text-caption text-ink-400">
+                      {isIdle ? t("seenAgo", { time: formatRelativeTime(activity.lastSeenAt) }) : formatRelativeTime(activity.lastSeenAt)}
+                    </p>
                     {overlap ? (
                       <div className="mt-2">
                         <Notice tone="warning">{t("overlapWarning")}</Notice>

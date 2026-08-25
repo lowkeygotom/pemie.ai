@@ -13,7 +13,7 @@ import {
   SkeletonStats,
   Stat,
 } from "../../components/ui.js";
-import { formatDateTime } from "../../lib/dates.js";
+import { formatDateTime, formatRelativeTime } from "../../lib/dates.js";
 import type { AgentActivity } from "@pemie/shared";
 
 function activityIdentity(activity: AgentActivity): string {
@@ -120,19 +120,23 @@ export default function AgentTab({ ws, proj }: { ws: string; proj: string }) {
                   <div className="divide-y divide-line-100">
                     {activityQuery.data.history.slice(0, 50).map((activity) => {
                       const identity = activityIdentity(activity);
+                      const isIdle = activity.status === "idle";
                       return (
-                        <div key={activity.id} className="flex items-center justify-between -mx-6 px-6 py-2.5 hover:bg-surface-50">
+                        <div key={activity.id} className={isIdle ? "flex items-center justify-between -mx-6 bg-surface-50 px-6 py-2.5 text-ink-500" : "flex items-center justify-between -mx-6 px-6 py-2.5 hover:bg-surface-50"}>
                           <span className="flex min-w-0 items-center gap-2">
                             <Avatar label={identity} imageUrl={activity.contributor?.avatarUrl ?? activity.owner?.avatarUrl} size="sm" />
-                            <Badge tone="brand" dot>{identity}</Badge>
-                            <span className="truncate text-body-sm text-ink-700">{activity.summary}</span>
+                            <Badge tone={isIdle ? "neutral" : "brand"} dot={!isIdle}>{identity}</Badge>
+                            <span className={isIdle ? "truncate text-body-sm text-ink-500" : "truncate text-body-sm text-ink-700"}>{activity.summary}</span>
                             {activity.userStory ? <Badge tone="neutral" mono>{activity.userStory.key}</Badge> : null}
                             <Badge tone={activity.state === "blocked" ? "warning" : activity.state === "done" ? "success" : "neutral"}>
                               {t(`activityState.${activity.state}`)}
                             </Badge>
+                            <Badge tone={activity.status === "active" ? "brand" : "neutral"} dot={activity.status === "active"}>
+                              {t(`activityStatus.${activity.status}`)}
+                            </Badge>
                           </span>
                           <span className="shrink-0 font-mono text-caption text-ink-400">
-                            {formatDateTime(activity.lastSeenAt)}
+                            {isIdle ? t("seenAgo", { time: formatRelativeTime(activity.lastSeenAt) }) : formatDateTime(activity.lastSeenAt)}
                           </span>
                         </div>
                       );

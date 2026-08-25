@@ -134,6 +134,8 @@ export interface AgentReliabilityReport {
 /** Estado declarado por un agente para un tramo de trabajo (PEM-56). */
 export const AGENT_ACTIVITY_STATES = ["working", "blocked", "done"] as const;
 export type AgentActivityState = (typeof AGENT_ACTIVITY_STATES)[number];
+export const AGENT_ACTIVITY_STATUSES = ["active", "idle", "closed"] as const;
+export type AgentActivityStatus = (typeof AGENT_ACTIVITY_STATUSES)[number];
 
 /** Tramo persistido; las fechas son ISO para que el DTO sirva también al cliente web. */
 export interface AgentActivity<TDate = string> {
@@ -144,6 +146,8 @@ export interface AgentActivity<TDate = string> {
   ownerUserId: string | null;
   summary: string;
   state: AgentActivityState;
+  /** Vigencia resuelta por el servicio; los bordes no recalculan ventanas temporales. */
+  status: AgentActivityStatus;
   userStoryId: string | null;
   cardId: string | null;
   paths: string[];
@@ -165,6 +169,9 @@ export interface AgentActivity<TDate = string> {
 /** Dos tramos vivos que se pisan; el aviso se entrega en el propio latido. */
 export interface AgentActivityConflict<TDate = string> {
   activity: AgentActivity<TDate>;
+  status: AgentActivityStatus;
+  /** Segundos desde el último hecho observado, para ponderar un tramo idle. */
+  ageSeconds: number;
   reasons: Array<"userStory" | "card" | "path">;
   overlappingPaths: string[];
 }

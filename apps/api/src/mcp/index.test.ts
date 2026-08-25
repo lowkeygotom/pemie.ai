@@ -25,12 +25,15 @@ test("el mapa compartido es total y search exige uno de sus cuatro scopes", () =
 
 test("las tools de actividad reutilizan board:read y board:write", () => {
   const readable = listMcpToolDefs(key(["board:read"])).map((tool) => tool.name);
-  const writable = listMcpToolDefs(key(["board:write"])).map((tool) => tool.name);
+  const writableTools = listMcpToolDefs(key(["board:write"]));
+  const writable = writableTools.map((tool) => tool.name);
+  const reportActivity = writableTools.find((tool) => tool.name === "report_activity");
 
   assert.ok(readable.includes("list_agent_activity"));
   assert.ok(!readable.includes("report_activity"));
   assert.ok(writable.includes("report_activity"));
   assert.ok(!writable.includes("list_agent_activity"));
+  assert.ok(!((reportActivity?.inputSchema.required as string[] | undefined) ?? []).includes("summary"));
 });
 
 test("prompt y catálogo MCP comparten exactamente el filtro de scopes", () => {

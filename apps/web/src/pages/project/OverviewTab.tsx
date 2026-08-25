@@ -60,7 +60,7 @@ function SkeletonOverview() {
 }
 
 function activityIdentity(activity: AgentActivity): string {
-  return activity.owner?.name ?? activity.agent?.name ?? activity.ownerUserId ?? activity.agentId ?? activity.apiKeyId;
+  return activity.contributor?.name || activity.contributor?.githubLogin || activity.owner?.name || activity.agent?.name || activity.ownerUserId || activity.agentId || activity.apiKeyId;
 }
 
 function activitiesOverlap(left: AgentActivity, right: AgentActivity): boolean {
@@ -91,7 +91,7 @@ function LiveActivityCard({ activities }: { activities: AgentActivity[] }) {
               const identity = activityIdentity(activity);
               return (
                 <div key={activity.id} className="flex items-start gap-3 py-3.5">
-                  <Avatar label={identity} imageUrl={activity.owner?.avatarUrl} size="sm" />
+                  <Avatar label={identity} imageUrl={activity.contributor?.avatarUrl ?? activity.owner?.avatarUrl} size="sm" />
                   <div className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-center gap-2">
                       <Badge tone={activity.state === "blocked" ? "warning" : "brand"} dot>

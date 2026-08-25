@@ -154,6 +154,10 @@ export interface AgentActivity<TDate = string> {
   beats: number;
   /** Identidad resuelta para la UI; el historial conserva los ids si fue borrada. */
   owner?: { id: string; name: string | null; avatarUrl: string | null } | null;
+  /// `User.avatarUrl` solo se llena al entrar por OAuth; la identidad real de
+  /// GitHub observada en los commits vive en `Contributor` y puede existir
+  /// aunque `owner` no tenga foto.
+  contributor?: { id: string; githubLogin: string; name: string | null; avatarUrl: string | null } | null;
   agent?: { id: string; name: string } | null;
   userStory?: { id: string; key: string; title: string } | null;
 }

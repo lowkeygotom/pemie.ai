@@ -20,6 +20,13 @@ type Row = {
   id: string; projectId: string; apiKeyId: string; agentId: string | null; ownerUserId: string | null;
   summary: string; state: "working" | "blocked" | "done"; userStoryId: string | null; cardId: string | null;
   paths: string[]; intervalSeconds: number; model: string | null; startedAt: Date; lastSeenAt: Date; beats: number;
+  owner?: { id: string; name: string | null; avatarUrl: string | null } | null;
+  agent?: { id: string; name: string } | null;
+  userStory?: { id: string; key: string; title: string } | null;
+};
+
+type ContributorRow = {
+  id: string; githubLogin: string; name: string | null; avatarUrl: string | null; userId: string | null;
 };
 
 function row(overrides: Partial<Row> = {}): Row {
@@ -27,7 +34,14 @@ function row(overrides: Partial<Row> = {}): Row {
   return { id: "activity-1", projectId: "project-1", apiKeyId: "key-1", agentId: "agent-1", ownerUserId: "user-1", summary: "Implementa PEM-56", state: "working", userStoryId: null, cardId: null, paths: [], intervalSeconds: 60, model: null, startedAt: now, lastSeenAt: now, beats: 1, ...overrides };
 }
 
-function stubActivity(t: TestContext, rows: Row[]) {
+function stubActivity(
+  t: TestContext,
+  rows: Row[],
+  options: {
+    agentOwnerId?: string | null;
+    findContributors?: (args: { where: { projectId: string; userId: { in: string[] } } }) => Promise<ContributorRow[]>;
+  } = {}
+) {
   stubClientMember(t, "agentActivity", {
     findFirst: async ({ where }: { where: { apiKeyId: string } }) =>
       [...rows].filter((item) => item.apiKeyId === where.apiKeyId).sort((a, b) => b.lastSeenAt.getTime() - a.lastSeenAt.getTime())[0] ?? null,
@@ -37,12 +51,19 @@ function stubActivity(t: TestContext, rows: Row[]) {
       rows.push(created);
       return created;
     },
-    update: async ({ where, data }: { where: { id: string }; data: { lastSeenAt: Date; beats: { increment: number } } }) => {
+    update: async ({ where, data }: { where: { id: string }; data: { lastSeenAt: Date; beats: { increment: number }; ownerUserId?: string } }) => {
       const current = rows.find((item) => item.id === where.id)!;
       current.lastSeenAt = data.lastSeenAt;
       current.beats += data.beats.increment;
+      if (data.ownerUserId) current.ownerUserId = data.ownerUserId;
       return current;
     },
+  });
+  stubClientMember(t, "agent", {
+    findUnique: async () => options.agentOwnerId === undefined ? null : { ownerId: options.agentOwnerId },
+  });
+  stubClientMember(t, "contributor", {
+    findMany: options.findContributors ?? (async () => []),
   });
 }
 
@@ -83,4 +104,66 @@ test("solape: un prefijo de directorio choca con un archivo bajo ese directorio"
   assert.equal(result.conflicts.length, 1);
   assert.deepEqual(result.conflicts[0]!.reasons, ["path"]);
   assert.deepEqual(result.conflicts[0]!.overlappingPaths, ["apps/api/src"]);
+});
+
+test("escritura: una key de proyecto hereda la persona dueña del Agent", async (t) => {
+  const rows: Row[] = [];
+  stubActivity(t, rows, { agentOwnerId: "user-owner" });
+
+  const result = await activityService.opReportActivity(
+    "project-1",
+    { summary: "Implementa identidad visual" },
+    { apiKeyId: "key-1", agentId: "agent-1", ownerUserId: null }
+  );
+
+  assert.equal(result.activity.ownerUserId, "user-owner");
+  assert.equal(rows[0]!.ownerUserId, "user-owner");
+});
+
+test("identidad: la foto sale del Contributor vinculado cuando existe", async (t) => {
+  const rows = [row({ owner: { id: "user-1", name: "Bryan", avatarUrl: null } })];
+  stubActivity(t, rows, {
+    findContributors: async () => [{ id: "contributor-1", githubLogin: "bryan", name: "Bryan Riano", avatarUrl: "https://avatars.example/bryan", userId: "user-1" }],
+  });
+
+  const result = await activityService.opListActivity("project-1");
+
+  assert.equal(result.history[0]!.contributor?.avatarUrl, "https://avatars.example/bryan");
+  assert.equal(result.history[0]!.contributor?.githubLogin, "bryan");
+});
+
+test("identidad: conserva owner como fallback cuando no existe Contributor", async (t) => {
+  const owner = { id: "user-1", name: "Bryan", avatarUrl: null };
+  const rows = [row({ owner })];
+  stubActivity(t, rows);
+
+  const result = await activityService.opListActivity("project-1");
+
+  assert.equal(result.history[0]!.contributor, null);
+  assert.deepEqual(result.history[0]!.owner, owner);
+});
+
+test("identidad: resuelve todos los Contributors de la página en una sola consulta", async (t) => {
+  const rows = [
+    row({ id: "activity-1", ownerUserId: "user-1" }),
+    row({ id: "activity-2", apiKeyId: "key-2", ownerUserId: "user-2" }),
+  ];
+  let calls = 0;
+  let requestedUserIds: string[] = [];
+  stubActivity(t, rows, {
+    findContributors: async ({ where }) => {
+      calls += 1;
+      requestedUserIds = where.userId.in;
+      return [
+        { id: "contributor-1", githubLogin: "bryan", name: "Bryan", avatarUrl: "avatar-1", userId: "user-1" },
+        { id: "contributor-2", githubLogin: "julian", name: "Julián", avatarUrl: "avatar-2", userId: "user-2" },
+      ];
+    },
+  });
+
+  const result = await activityService.opListActivity("project-1");
+
+  assert.equal(calls, 1);
+  assert.deepEqual(requestedUserIds, ["user-1", "user-2"]);
+  assert.deepEqual(result.history.map((activity) => activity.contributor?.id), ["contributor-1", "contributor-2"]);
 });

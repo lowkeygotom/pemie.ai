@@ -42,6 +42,7 @@ export interface ListActivityFilters {
 
 type ActivityRow = AgentActivity<Date>;
 type PersistedActivityRow = Omit<ActivityRow, "state"> & { state: string };
+type ActivityContributor = NonNullable<ActivityRow["contributor"]>;
 
 // Prisma representa `state` como string porque el esquema conserva una columna
 // simple para una migración aditiva; solo este servicio la escribe tras validarla.
@@ -134,6 +135,11 @@ export async function reportActivity(userId: string, projectId: string, input: R
 export async function opReportActivity(projectId: string, input: ReportActivityInput, actor: AgentActivityActor) {
   if (!actor.apiKeyId) throw forbidden("invalid_api_key");
   const data = normalizedInput(input);
+  // Las keys de proyecto no tienen dueño propio: la persona sigue siendo la
+  // dueña del Agent al que pertenecen, salvo agentes históricos sin ownerId.
+  const ownerUserId = actor.ownerUserId ?? (actor.agentId
+    ? (await prisma.agent.findUnique({ where: { id: actor.agentId }, select: { ownerId: true } }))?.ownerId ?? null
+    : null);
   const persistedLast = await prisma.agentActivity.findFirst({
     where: { projectId, apiKeyId: actor.apiKeyId },
     orderBy: { lastSeenAt: "desc" },
@@ -142,10 +148,16 @@ export async function opReportActivity(projectId: string, input: ReportActivityI
   const activity = last && isSameSegment(last, data)
     ? activityFromRow(await prisma.agentActivity.update({
         where: { id: last.id },
-        data: { lastSeenAt: new Date(), beats: { increment: 1 } },
+        data: {
+          lastSeenAt: new Date(),
+          beats: { increment: 1 },
+          // Un latido idéntico también repara tramos abiertos creados antes
+          // de que las keys de proyecto heredaran la persona desde Agent.
+          ...(!last.ownerUserId && ownerUserId ? { ownerUserId } : {}),
+        },
       }))
     : activityFromRow(await prisma.agentActivity.create({
-        data: { projectId, apiKeyId: actor.apiKeyId, agentId: actor.agentId ?? null, ownerUserId: actor.ownerUserId ?? null, ...data },
+        data: { projectId, apiKeyId: actor.apiKeyId, agentId: actor.agentId ?? null, ownerUserId, ...data },
       }));
 
   return { activity, conflicts: await detectConflicts(projectId, activity) };
@@ -159,7 +171,7 @@ export async function listActivity(userId: string, projectId: string, filters: L
 
 /** Operación ya autorizada: separa vigencia derivada de la traza persistida. */
 export async function opListActivity(projectId: string, filters: ListActivityFilters = {}): Promise<AgentActivityList<Date>> {
-  const history = (await prisma.agentActivity.findMany({
+  const persistedHistory = (await prisma.agentActivity.findMany({
     where: {
       projectId,
       ...(filters.agentId ? { agentId: filters.agentId } : {}),
@@ -175,6 +187,33 @@ export async function opListActivity(projectId: string, filters: ListActivityFil
       userStory: { select: { id: true, key: true, title: true } },
     },
   })).map(activityFromRow);
+  const ownerUserIds = [...new Set(persistedHistory.flatMap((activity) => activity.ownerUserId ? [activity.ownerUserId] : []))];
+  const contributors = ownerUserIds.length > 0
+    ? await prisma.contributor.findMany({
+        where: { projectId, userId: { in: ownerUserIds } },
+        select: { id: true, githubLogin: true, name: true, avatarUrl: true, userId: true },
+      })
+    : [];
+  const contributorByUserId = new Map<string, ActivityContributor>();
+  for (const contributor of contributors) {
+    if (!contributor.userId) continue;
+    const current = contributorByUserId.get(contributor.userId);
+    const identity = {
+      id: contributor.id,
+      githubLogin: contributor.githubLogin,
+      name: contributor.name,
+      avatarUrl: contributor.avatarUrl,
+    };
+    // Un usuario puede conservar aliases históricos; para la franja importa
+    // el Contributor que sí trae la identidad observada desde GitHub.
+    if (!current || (!current.avatarUrl && contributor.avatarUrl)) {
+      contributorByUserId.set(contributor.userId, identity);
+    }
+  }
+  const history = persistedHistory.map((activity) => ({
+    ...activity,
+    contributor: activity.ownerUserId ? contributorByUserId.get(activity.ownerUserId) ?? null : null,
+  }));
   const now = new Date();
   return { live: history.filter((activity) => isLive(activity, now)), history };
 }

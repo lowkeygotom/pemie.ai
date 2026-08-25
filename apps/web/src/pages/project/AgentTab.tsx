@@ -3,6 +3,7 @@ import { api, ApiError } from "../../lib/api.js";
 import { queryKeys, STALE_TIME } from "../../lib/queryClient.js";
 import { useTranslation } from "react-i18next";
 import {
+  Avatar,
   Badge,
   Card,
   EmptyState,
@@ -16,7 +17,7 @@ import { formatDateTime } from "../../lib/dates.js";
 import type { AgentActivity } from "@pemie/shared";
 
 function activityIdentity(activity: AgentActivity): string {
-  return activity.owner?.name ?? activity.agent?.name ?? activity.ownerUserId ?? activity.agentId ?? activity.apiKeyId;
+  return activity.contributor?.name || activity.contributor?.githubLogin || activity.owner?.name || activity.agent?.name || activity.ownerUserId || activity.agentId || activity.apiKeyId;
 }
 
 /** Actividad de alcance proyecto; la conexión y los agentes viven ahora en Equipo. */
@@ -117,21 +118,25 @@ export default function AgentTab({ ws, proj }: { ws: string; proj: string }) {
               ) : (
                 <>
                   <div className="divide-y divide-line-100">
-                    {activityQuery.data.history.slice(0, 50).map((activity) => (
-                      <div key={activity.id} className="flex items-center justify-between -mx-6 px-6 py-2.5 hover:bg-surface-50">
-                        <span className="flex min-w-0 items-center gap-2">
-                          <Badge tone="brand" dot>{activityIdentity(activity)}</Badge>
-                          <span className="truncate text-body-sm text-ink-700">{activity.summary}</span>
-                          {activity.userStory ? <Badge tone="neutral" mono>{activity.userStory.key}</Badge> : null}
-                          <Badge tone={activity.state === "blocked" ? "warning" : activity.state === "done" ? "success" : "neutral"}>
-                            {t(`activityState.${activity.state}`)}
-                          </Badge>
-                        </span>
-                        <span className="shrink-0 font-mono text-caption text-ink-400">
-                          {formatDateTime(activity.lastSeenAt)}
-                        </span>
-                      </div>
-                    ))}
+                    {activityQuery.data.history.slice(0, 50).map((activity) => {
+                      const identity = activityIdentity(activity);
+                      return (
+                        <div key={activity.id} className="flex items-center justify-between -mx-6 px-6 py-2.5 hover:bg-surface-50">
+                          <span className="flex min-w-0 items-center gap-2">
+                            <Avatar label={identity} imageUrl={activity.contributor?.avatarUrl ?? activity.owner?.avatarUrl} size="sm" />
+                            <Badge tone="brand" dot>{identity}</Badge>
+                            <span className="truncate text-body-sm text-ink-700">{activity.summary}</span>
+                            {activity.userStory ? <Badge tone="neutral" mono>{activity.userStory.key}</Badge> : null}
+                            <Badge tone={activity.state === "blocked" ? "warning" : activity.state === "done" ? "success" : "neutral"}>
+                              {t(`activityState.${activity.state}`)}
+                            </Badge>
+                          </span>
+                          <span className="shrink-0 font-mono text-caption text-ink-400">
+                            {formatDateTime(activity.lastSeenAt)}
+                          </span>
+                        </div>
+                      );
+                    })}
                   </div>
                   {activityQuery.data.history.length > 50 ? (
                     <p className="mt-3 text-caption text-ink-400">

@@ -5,6 +5,8 @@ build/
 .env.local
 *.local
 CLAUDE.local.md
+# Lleva la API key del hook de actividad: `*.local` no la cubre (no termina en .local).
+.claude/settings.local.json
 .DS_Store
 coverage/
 *.tsbuildinfo

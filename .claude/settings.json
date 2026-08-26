@@ -1,0 +1,16 @@
+{
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$CLAUDE_PROJECT_DIR/scripts/pemie-activity-hook.mjs\" >/dev/null 2>&1 || true",
+            "timeout": 3
+          }
+        ]
+      }
+    ]
+  }
+}

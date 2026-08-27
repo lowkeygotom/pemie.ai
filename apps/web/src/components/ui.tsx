@@ -1056,12 +1056,9 @@ export function MoonIcon({ className = "" }: { className?: string }) {
 }
 
 export function Spinner() {
-  const { t } = useTranslation("common");
   return (
-    <div role="status" aria-label={t("loading")} className="grid min-h-[40vh] place-items-center">
-      <div className="animate-pulse">
-        <LogoMark size={32} />
-      </div>
+    <div className="grid min-h-[40vh] place-items-center">
+      <span className="eyebrow animate-pulse">cargando</span>
     </div>
   );
 }

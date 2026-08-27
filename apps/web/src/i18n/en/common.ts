@@ -1,6 +1,5 @@
 export default {
   language: "Language",
-  loading: "Loading",
   saving: "Saving…",
   saveFailed: "Could not save your preference",
   settings: "Settings",

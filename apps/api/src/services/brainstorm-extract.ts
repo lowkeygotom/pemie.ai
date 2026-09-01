@@ -11,6 +11,7 @@ export const MIN_SEGMENTS_TO_RUN = 3;
 export const OVERLAP_SEGMENTS = 10;
 export const EXTRACT_BUDGET_MS = 20_000;
 export const PROVIDER_TIMEOUT_MS = 15_000;
+export const NEAR_DUPLICATE_THRESHOLD = 0.6;
 const LEASE_MS = 35_000;
 const MAX_OPS_PER_RUN = 40;
 
@@ -72,6 +73,36 @@ function normalized(value: string) {
   return value.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/\s+/g, " ").trim();
 }
 
+export function trigramJaccardSimilarity(left: string, right: string) {
+  const trigrams = (value: string) => {
+    const text = normalized(value);
+    if (!text) return new Set<string>();
+    if (text.length < 3) return new Set([text]);
+    return new Set(Array.from({ length: text.length - 2 }, (_, index) => text.slice(index, index + 3)));
+  };
+  const leftTrigrams = trigrams(left);
+  const rightTrigrams = trigrams(right);
+  if (!leftTrigrams.size && !rightTrigrams.size) return 1;
+  let intersection = 0;
+  for (const trigram of leftTrigrams) if (rightTrigrams.has(trigram)) intersection += 1;
+  return intersection / (leftTrigrams.size + rightTrigrams.size - intersection);
+}
+
+export function resolveNearDuplicateAdds(ops: GraphOp[], nodes: ExistingNode[]) {
+  const rejected: Record<string, number> = {};
+  const temporaryKeys = new Map<string, string>();
+  const resolved = ops.map((op): GraphOp => {
+    if (op.kind !== "add") return op;
+    const duplicate = nodes.find((node) => node.type === op.type && trigramJaccardSimilarity(node.title, op.title) >= NEAR_DUPLICATE_THRESHOLD);
+    if (!duplicate) return op;
+    // Conserva el alias temporal: los links del batch pueden referirse al add original.
+    temporaryKeys.set(op.tempId, duplicate.key);
+    rejected.near_duplicate = (rejected.near_duplicate ?? 0) + 1;
+    return { kind: "update", key: duplicate.key, citations: op.citations };
+  });
+  return { ops: resolved, rejected, temporaryKeys };
+}
+
 function prompt(nodes: ExistingNode[], segments: Segment[]) {
   const digest = nodes.map((node) => `[${node.key}|${node.type}|${node.status}] ${node.title.slice(0, 120)}`).join("\n") || "(sin nodos)";
   const transcript = segments.map((segment) => `[s${segment.seq}${segment.speakerTag == null ? "" : `|H${segment.speakerTag}`}] ${segment.text}`).join("\n");
@@ -118,20 +149,22 @@ export async function opRunExtraction(sessionId: string, options: { final?: bool
       return { ok: false, status: "skipped", reason: error instanceof Error ? error.message : "provider_failed" };
     }
     const validated = validateOps(completion.json, { nodes, segments });
+    const deduplicated = resolveNearDuplicateAdds(validated.ops, nodes);
     const consumedThrough = segments.at(-1)!.seq;
     const applied = await prisma.$transaction(async (tx) => {
       const owner = await tx.brainstormSession.updateMany({ where: { id: sessionId, extractLockId: lockId }, data: { extractLockUntil: new Date(Date.now() + LEASE_MS) } });
       if (!owner.count) throw conflict("brainstorm_lease_lost");
       const keyToId = new Map(nodes.map((node) => [node.key, node.id]));
+      for (const [tempId, key] of deduplicated.temporaryKeys) keyToId.set(tempId, keyToId.get(key)!);
       let nodeSeq = before.nodeSeq;
       let count = 0;
-      for (const op of validated.ops) if (op.kind === "add") {
+      for (const op of deduplicated.ops) if (op.kind === "add") {
         nodeSeq += 1;
         const node = await tx.brainstormNode.create({ data: { sessionId, key: `n${nodeSeq}`, type: op.type, title: op.title, detail: op.detail, firstSeq: segments[0].seq, lastSeq: consumedThrough } });
         keyToId.set(op.tempId, node.id); count += 1;
         for (const citation of op.citations) await tx.brainstormCitation.upsert({ where: { nodeId_segmentSeq_quote: { nodeId: node.id, segmentSeq: citation.segmentSeq, quote: citation.quote } }, create: { nodeId: node.id, segmentSeq: citation.segmentSeq, quote: citation.quote, verbatim: citation.verbatim }, update: {} });
       }
-      for (const op of validated.ops) {
+      for (const op of deduplicated.ops) {
         if (op.kind === "update" || op.kind === "close") {
           const nodeId = keyToId.get(op.key)!;
           await tx.brainstormNode.update({ where: { id: nodeId }, data: op.kind === "close" ? { status: "resolved", lastSeq: consumedThrough } : { title: op.title, detail: op.detail, type: op.type, lastSeq: consumedThrough } }); count += 1;
@@ -143,7 +176,7 @@ export async function opRunExtraction(sessionId: string, options: { final?: bool
       }
       const advanced = await tx.brainstormSession.updateMany({ where: { id: sessionId, extractLockId: lockId, extractCursor: before.extractCursor }, data: { extractCursor: consumedThrough, nodeSeq, extractLockId: null, extractLockUntil: null, lastExtractAt: new Date(), extractRuns: { increment: 1 }, extractFailures: 0 } });
       if (!advanced.count) throw conflict("brainstorm_lease_lost");
-      await tx.brainstormRun.upsert({ where: { sessionId_runIndex: { sessionId, runIndex: before.extractRuns + 1 } }, create: { sessionId, runIndex: before.extractRuns + 1, fromSeq: segments[0].seq, toSeq: consumedThrough, status: "ok", model: completion.model, latencyMs: EXTRACT_BUDGET_MS - Math.max(0, deadline - Date.now()), inputTokens: completion.inputTokens, cachedInputTokens: completion.cachedInputTokens, outputTokens: completion.outputTokens, opsApplied: count, opsRejected: validated.rejected }, update: {} });
+      await tx.brainstormRun.upsert({ where: { sessionId_runIndex: { sessionId, runIndex: before.extractRuns + 1 } }, create: { sessionId, runIndex: before.extractRuns + 1, fromSeq: segments[0].seq, toSeq: consumedThrough, status: "ok", model: completion.model, latencyMs: EXTRACT_BUDGET_MS - Math.max(0, deadline - Date.now()), inputTokens: completion.inputTokens, cachedInputTokens: completion.cachedInputTokens, outputTokens: completion.outputTokens, opsApplied: count, opsRejected: { ...validated.rejected, ...Object.fromEntries(Object.entries(deduplicated.rejected).map(([reason, count]) => [reason, (validated.rejected[reason] ?? 0) + count])) } }, update: {} });
       return count;
     });
     return { ok: true, status: "ok", opsApplied: applied, pending: Math.max(0, before.segmentSeq - consumedThrough) };

@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import { api, ApiError } from "../../lib/api.js";
@@ -8,9 +9,10 @@ import { Badge, Button, Card, EmptyState, ErrorText, Input, Skeleton, SkeletonLi
 export default function BrainstormTab({ ws, proj }: { ws: string; proj: string }) {
   const { t, i18n } = useTranslation("project");
   const [title, setTitle] = useState("");
+  const navigate = useNavigate();
   const { data, isLoading, error } = useQuery({
     queryKey: queryKeys.brainstorm(ws, proj),
-    queryFn: () => api.brainstorm.list(ws, proj).then((result) => result.sessions),
+    queryFn: () => api.brainstorm.list(ws, proj),
     staleTime: STALE_TIME.moderate,
   });
   const create = useMutation({
@@ -19,6 +21,7 @@ export default function BrainstormTab({ ws, proj }: { ws: string; proj: string }
       localStorage.setItem(`pemie:brainstorm:${session.id}:recorder-token`, recorderToken);
       setTitle("");
       void queryClient.invalidateQueries({ queryKey: queryKeys.brainstorm(ws, proj) });
+      navigate(`/w/${ws}/p/${proj}/mesa/${session.id}`);
     },
   });
 
@@ -41,14 +44,15 @@ export default function BrainstormTab({ ws, proj }: { ws: string; proj: string }
     </Card>
   );
 
-  const sessions = data ?? [];
+  const sessions = data?.sessions ?? [];
+  const configured = data?.deepgramConfigured ?? false;
   return (
     <div className="space-y-6">
       <ErrorText>{errorMessage}</ErrorText>
       <Card>
         <h3 className="text-h4 text-ink-900">{t("brainstormTitle")}</h3>
         <p className="mt-1 text-body-sm text-ink-500">{t("brainstormDescription")}</p>
-        <form
+        {!configured ? <div className="mt-6"><EmptyState title={t("brainstormUnavailableTitle")} description={t("brainstormUnavailableDescription")} /></div> : <form
           className="mt-4 flex flex-col gap-2 sm:flex-row"
           onSubmit={(event) => { event.preventDefault(); if (title.trim().length >= 2) create.mutate(); }}
         >
@@ -61,7 +65,7 @@ export default function BrainstormTab({ ws, proj }: { ws: string; proj: string }
           <Button type="submit" disabled={title.trim().length < 2 || create.isPending}>
             {create.isPending ? t("brainstormCreating") : t("brainstormStart")}
           </Button>
-        </form>
+        </form>}
 
         <div className="mt-6">
           {sessions.length === 0 ? (

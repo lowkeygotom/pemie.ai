@@ -14,6 +14,7 @@ import WorkspaceSkills from "./pages/workspace/Skills.js";
 import Project from "./pages/Project.js";
 import AcceptInvite from "./pages/AcceptInvite.js";
 import Settings from "./pages/Settings.js";
+import TableMode from "./pages/project/brainstorm/TableMode.js";
 
 export default function App() {
   const { loading, user } = useAuth();
@@ -51,6 +52,7 @@ export default function App() {
       <Route path="/w/:slug/skills" element={<Protected><WorkspaceSkills /></Protected>} />
       <Route path="/w/:slug/agents" element={<Protected><LegacyAgentsRedirect /></Protected>} />
       <Route path="/w/:slug/p/:projectSlug" element={<Protected><Project /></Protected>} />
+      <Route path="/w/:slug/p/:projectSlug/mesa/:sessionId" element={<ProtectedBare><TableMode /></ProtectedBare>} />
 
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
@@ -82,6 +84,14 @@ function Protected({ children }: { children: ReactNode }) {
     return <Navigate to={`/login?next=${next}`} replace />;
   }
   return <Layout>{children}</Layout>;
+}
+
+/** Misma protección y ?next= que Protected; la mesa omite el chrome de Layout intencionalmente. */
+function ProtectedBare({ children }: { children: ReactNode }) {
+  const { user } = useAuth();
+  const location = useLocation();
+  if (!user) return <Navigate to={`/login?next=${encodeURIComponent(location.pathname + location.search)}`} replace />;
+  return <>{children}</>;
 }
 
 /** Rutas solo para invitados (login/register); redirige a la app si ya hay sesión. */

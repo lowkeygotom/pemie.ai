@@ -187,4 +187,6 @@ export const en: Record<keyof typeof es, string | ((params?: ErrorParams) => str
   invalid_brainstorm_body: "Invalid brainstorming data",
   invalid_brainstorm_recorder_token: "Invalid recorder device token",
   brainstorm_lease_lost: "The extraction lost its lock; try again",
+  deepgram_not_configured: "Deepgram is not configured on the server",
+  deepgram_token_unavailable: "Could not obtain a temporary Deepgram token",
 };

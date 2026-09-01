@@ -9,6 +9,7 @@ import {
 import { prisma } from "../db.js";
 import { badRequest, conflict, forbidden, notFound } from "./errors.js";
 import { projectWithAccess } from "./ingest.js";
+import { grantListenToken, isDeepgramConfigured } from "../lib/deepgram.js";
 
 const ABANDONED_AFTER_MS = 10 * 60 * 1000;
 const DEFAULT_SEGMENT_LIMIT = 200;
@@ -91,6 +92,14 @@ export async function getSession(userId: string, sessionId: string, expectedProj
   await reapAbandonedSessions(session.projectId);
   return opGetSession(sessionId);
 }
+
+/** El servicio conserva la autorización; REST nunca entrega tokens por sí solo. */
+export async function grantSttToken(userId: string, sessionId: string, expectedProjectId?: string) {
+  await sessionWithAccess(userId, sessionId, "member", expectedProjectId);
+  return grantListenToken();
+}
+
+export { isDeepgramConfigured };
 
 export async function opGetSession(sessionId: string) {
   const session = await prisma.brainstormSession.findUnique({

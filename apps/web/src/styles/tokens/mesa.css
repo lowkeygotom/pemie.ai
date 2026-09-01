@@ -1,0 +1,2 @@
+/* Mesa se lee de pie: conserva los tokens, solo eleva la escala local. */
+[data-mesa] { --fs-h2: 46px; --fs-h3: 36px; --fs-h4: 30px; --fs-body: 26px; --fs-body-sm: 22px; --fs-caption: 19px; }

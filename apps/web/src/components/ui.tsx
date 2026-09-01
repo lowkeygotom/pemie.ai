@@ -1078,6 +1078,16 @@ export function Skeleton({ className = "" }: { className?: string }) {
   );
 }
 
+/** Señal viva reutilizable: el movimiento comunica captura activa, no decoración. */
+export function LiveDot({ label }: { label?: string }) {
+  return <span className="inline-flex items-center gap-2"><span aria-hidden className="h-3 w-3 animate-pulse rounded-pill bg-red-600 ring-4 ring-red-100 motion-reduce:animate-none" />{label ? <span>{label}</span> : null}</span>;
+}
+
+/** Esqueleto de mesa: conserva las dos columnas y alturas mientras llega el polling. */
+export function SkeletonBrainstorm() {
+  return <div aria-hidden className="grid h-screen grid-cols-2 gap-px overflow-hidden bg-line-200 p-5"><div className="space-y-5 bg-surface-0 p-6"><Skeleton className="h-8 w-2/3" /><Skeleton className="h-40 w-full rounded-lg" /><Skeleton className="h-32 w-5/6 rounded-lg" /></div><div className="space-y-5 bg-surface-0 p-6"><Skeleton className="h-8 w-1/2" /><Skeleton className="h-28 w-full rounded-lg" /><Skeleton className="h-8 w-2/5" /><Skeleton className="h-24 w-full rounded-lg" /></div></div>;
+}
+
 /** Líneas de texto simuladas; la última sale más corta. */
 export function SkeletonText({ lines = 3, className = "" }: { lines?: number; className?: string }) {
   return (

@@ -189,4 +189,6 @@ export const es: Record<ErrorCode, string | ((params?: ErrorParams) => string)> 
   invalid_brainstorm_body: "Datos de brainstorming inválidos",
   invalid_brainstorm_recorder_token: "Token del dispositivo grabador inválido",
   brainstorm_lease_lost: "La extracción perdió su bloqueo; inténtalo de nuevo",
+  deepgram_not_configured: "Deepgram no está configurado en el servidor",
+  deepgram_token_unavailable: "No se pudo obtener un token temporal de Deepgram",
 };

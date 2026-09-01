@@ -368,7 +368,7 @@ export function workspaceRoutes() {
     const project = await resolveProject(c);
     const parsedStatus = brainstormStatusSchema.safeParse(c.req.query("status"));
     const status = parsedStatus.success ? parsedStatus.data : undefined;
-    return c.json({ sessions: await brainstorm.listSessions(user.id, project.id, { status }) });
+    return c.json({ sessions: await brainstorm.listSessions(user.id, project.id, { status }), deepgramConfigured: brainstorm.isDeepgramConfigured() });
   });
 
   app.post("/:slug/projects/:projectSlug/brainstorm", async (c) => {
@@ -412,6 +412,12 @@ export function workspaceRoutes() {
     const project = await resolveProject(c);
     // El servicio encapsula proveedor, lease y cursor; este borde solo traduce HTTP.
     return c.json(await brainstormExtract.runExtraction(user.id, c.req.param("id"), {}, project.id));
+  });
+
+  app.post("/:slug/projects/:projectSlug/brainstorm/:id/stt-token", async (c) => {
+    const user = requireUser(c);
+    const project = await resolveProject(c);
+    return c.json(await brainstorm.grantSttToken(user.id, c.req.param("id"), project.id));
   });
 
   app.patch("/:slug/projects/:projectSlug/brainstorm/:id/speakers/:index", async (c) => {

@@ -593,7 +593,7 @@ export const api = {
 
   brainstorm: {
     list: (w: string, p: string) =>
-      get<{ sessions: BrainstormSessionSummary[] }>(`${pp(w, p)}/brainstorm`),
+      get<{ sessions: BrainstormSessionSummary[]; deepgramConfigured: boolean }>(`${pp(w, p)}/brainstorm`),
     create: (w: string, p: string, title: string) =>
       post<{ session: BrainstormSessionSummary; recorderToken: string }>(`${pp(w, p)}/brainstorm`, { title }),
     get: (w: string, p: string, id: string) =>
@@ -602,6 +602,9 @@ export const api = {
       get<{ segments: BrainstormSegment[] }>(`${pp(w, p)}/brainstorm/${id}/segments${qs(q)}`),
     appendSegments: (w: string, p: string, id: string, recorderToken: string, segments: Array<Omit<BrainstormSegment, "id" | "sessionId">>) =>
       post<{ inserted: number }>(`${pp(w, p)}/brainstorm/${id}/segments`, { recorderToken, segments }),
+    sttToken: (w: string, p: string, id: string) =>
+      post<{ accessToken: string; expiresIn: number }>(`${pp(w, p)}/brainstorm/${id}/stt-token`),
+    extract: (w: string, p: string, id: string) => post(`${pp(w, p)}/brainstorm/${id}/extract`),
     updateNode: (w: string, p: string, sessionId: string, nodeId: string, input: Partial<Pick<BrainstormNode, "title" | "detail" | "type" | "status">>) =>
       patch<{ node: BrainstormNode }>(`${pp(w, p)}/brainstorm/${sessionId}/nodes/${nodeId}`, input),
   },

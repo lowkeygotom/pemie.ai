@@ -196,6 +196,8 @@ export const ERROR_CODES = [
   "invalid_brainstorm_body",
   "invalid_brainstorm_recorder_token",
   "brainstorm_lease_lost",
+  "deepgram_not_configured",
+  "deepgram_token_unavailable",
 ] as const;
 
 export type ErrorCode = (typeof ERROR_CODES)[number];

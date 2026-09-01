@@ -211,6 +211,18 @@ export function opAttachAudio(sessionId: string, input: AttachAudioInput) {
   return prisma.brainstormSession.update({ where: { id: sessionId }, data: { audioUrl: input.url, audioBytes: input.bytes } });
 }
 
+/** La pasada final es best-effort: cerrar la grabación nunca depende de Anthropic. */
+export async function closeSession(userId: string, sessionId: string, expectedProjectId?: string) {
+  const session = await sessionWithAccess(userId, sessionId, "member", expectedProjectId);
+  const { opRunExtraction } = await import("./brainstorm-extract.js");
+  const extraction = await opRunExtraction(session.id, { final: true });
+  await prisma.brainstormSession.updateMany({
+    where: { id: session.id, status: "recording" },
+    data: { status: "closed", closedAt: new Date(), extractLockId: null, extractLockUntil: null },
+  });
+  return extraction;
+}
+
 export async function reapAbandonedSessions(projectId: string, now = new Date()) {
   const cutoff = new Date(now.getTime() - ABANDONED_AFTER_MS);
   return prisma.brainstormSession.updateMany({

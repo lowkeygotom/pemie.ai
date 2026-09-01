@@ -13,6 +13,7 @@ import * as board from "../services/board.js";
 import * as assignees from "../services/assignees.js";
 import * as leaderboard from "../services/leaderboard.js";
 import * as brainstorm from "../services/brainstorm.js";
+import * as brainstormExtract from "../services/brainstorm-extract.js";
 import * as overview from "../services/overview.js";
 import * as agentReliability from "../services/agent-reliability.js";
 import * as agentActivity from "../services/agent-activity.js";
@@ -404,6 +405,13 @@ export function workspaceRoutes() {
     return c.json(await brainstorm.appendSegments(
       user.id, c.req.param("id"), body.data.recorderToken, body.data.segments, project.id
     ));
+  });
+
+  app.post("/:slug/projects/:projectSlug/brainstorm/:id/extract", async (c) => {
+    const user = requireUser(c);
+    const project = await resolveProject(c);
+    // El servicio encapsula proveedor, lease y cursor; este borde solo traduce HTTP.
+    return c.json(await brainstormExtract.runExtraction(user.id, c.req.param("id"), {}, project.id));
   });
 
   app.patch("/:slug/projects/:projectSlug/brainstorm/:id/speakers/:index", async (c) => {

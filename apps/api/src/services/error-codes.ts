@@ -195,6 +195,7 @@ export const ERROR_CODES = [
   "invalid_brainstorm_audio",
   "invalid_brainstorm_body",
   "invalid_brainstorm_recorder_token",
+  "brainstorm_lease_lost",
 ] as const;
 
 export type ErrorCode = (typeof ERROR_CODES)[number];

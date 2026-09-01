@@ -186,4 +186,5 @@ export const en: Record<keyof typeof es, string | ((params?: ErrorParams) => str
   invalid_brainstorm_audio: "Invalid audio reference",
   invalid_brainstorm_body: "Invalid brainstorming data",
   invalid_brainstorm_recorder_token: "Invalid recorder device token",
+  brainstorm_lease_lost: "The extraction lost its lock; try again",
 };

@@ -11,6 +11,7 @@ import StoriesTab from "./project/StoriesTab.js";
 import BoardTab from "./project/BoardTab.js";
 import AgentTab from "./project/AgentTab.js";
 import LeaderboardTab from "./project/LeaderboardTab.js";
+import BrainstormTab from "./project/BrainstormTab.js";
 import ContributorsTab from "./project/ContributorsTab.js";
 import ProjectSearch from "./project/ProjectSearch.js";
 // El `id` viaja en la URL (`?tab=`), así que es parte del contrato de un enlace
@@ -22,6 +23,7 @@ const TAB_IDS = [
   "stories",
   "board",
   "leaderboard",
+  "brainstorm",
   "activity",
   "team",
 ] as const;
@@ -35,6 +37,7 @@ const TAB_LABEL_KEYS: Record<TabId, string> = {
   stories: "tabStories",
   board: "tabBoard",
   leaderboard: "tabLeaderboard",
+  brainstorm: "tabBrainstorm",
   activity: "tabActivity",
   team: "tabTeam",
 };
@@ -112,6 +115,7 @@ export default function Project() {
       {tab === "stories" && <StoriesTab ws={slug} proj={projectSlug} canManage={project.role === "owner" || project.role === "admin"} />}
       {tab === "board" && <BoardTab ws={slug} proj={projectSlug} canManage={project.role === "owner" || project.role === "admin"} />}
       {tab === "leaderboard" && <LeaderboardTab ws={slug} proj={projectSlug} />}
+      {tab === "brainstorm" && <BrainstormTab ws={slug} proj={projectSlug} />}
       {tab === "activity" && <AgentTab ws={slug} proj={projectSlug} />}
       {tab === "team" && <ContributorsTab ws={slug} proj={projectSlug} canManage={project.role === "owner" || project.role === "admin"} />}
     </div>

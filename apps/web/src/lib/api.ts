@@ -4,6 +4,10 @@
 import type {
   AgentReliabilityReport,
   AgentActivity,
+  BrainstormNode,
+  BrainstormSegment,
+  BrainstormSessionDetail,
+  BrainstormSessionSummary,
   DayMetrics,
   DomainConfig,
   DriftReport,
@@ -585,6 +589,21 @@ export const api = {
 
   leaderboard: {
     get: (w: string, p: string) => get<{ leaderboard: LeaderboardEntry[] }>(`${pp(w, p)}/leaderboard`),
+  },
+
+  brainstorm: {
+    list: (w: string, p: string) =>
+      get<{ sessions: BrainstormSessionSummary[] }>(`${pp(w, p)}/brainstorm`),
+    create: (w: string, p: string, title: string) =>
+      post<{ session: BrainstormSessionSummary; recorderToken: string }>(`${pp(w, p)}/brainstorm`, { title }),
+    get: (w: string, p: string, id: string) =>
+      get<{ session: BrainstormSessionDetail }>(`${pp(w, p)}/brainstorm/${id}`),
+    segments: (w: string, p: string, id: string, q?: { after?: number; limit?: number }) =>
+      get<{ segments: BrainstormSegment[] }>(`${pp(w, p)}/brainstorm/${id}/segments${qs(q)}`),
+    appendSegments: (w: string, p: string, id: string, recorderToken: string, segments: Array<Omit<BrainstormSegment, "id" | "sessionId">>) =>
+      post<{ inserted: number }>(`${pp(w, p)}/brainstorm/${id}/segments`, { recorderToken, segments }),
+    updateNode: (w: string, p: string, sessionId: string, nodeId: string, input: Partial<Pick<BrainstormNode, "title" | "detail" | "type" | "status">>) =>
+      patch<{ node: BrainstormNode }>(`${pp(w, p)}/brainstorm/${sessionId}/nodes/${nodeId}`, input),
   },
 
   search: {

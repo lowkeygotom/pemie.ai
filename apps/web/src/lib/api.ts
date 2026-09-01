@@ -486,7 +486,7 @@ export type SkillInstall = SkillInstallPackage;
 
 // ─── Búsqueda global ───────────────────────────────────────────────────
 export interface SearchHit {
-  type: "story" | "commit" | "note" | "card";
+  type: "story" | "commit" | "note" | "card" | "brainstorm";
   id: string;
   ref: string | null;
   title: string;

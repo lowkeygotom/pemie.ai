@@ -75,10 +75,14 @@ export const en: Record<keyof typeof es, string | ((params?: McpDescParams) => s
   tool_get_story_commit_progress:
     "Counts and lists project commits whose message references a story's key (e.g. PRJ-123).",
   tool_search:
-    "Searches text across the project's stories, commits, notes, and cards. Returns the type and id of each result so it can be acted on afterward.",
+    "Searches text across the project's stories, commits, notes, cards, and brainstorming ideas or conclusions. Returns the type and id of each result so it can be acted on afterward.",
   tool_search_query: "Text to search for (minimum 2 characters).",
   tool_search_types: "Limits the search to these types; defaults to all allowed types.",
   tool_search_limit: "Maximum number of results (20 by default, 50 cap).",
+  tool_list_brainstorms: "Lists the project's brainstorming sessions, optionally filtered by status.",
+  tool_list_brainstorms_status: "Filters by session status (optional).",
+  tool_get_brainstorm: "Returns a brainstorming session's details: minutes, speakers, nodes, citations, connections, and User Story proposals.",
+  tool_get_brainstorm_session_id: "Brainstorming session ID.",
   tool_create_note: "Leaves a note or question on the project.",
   tool_get_user_story:
     "Detail for a single story by id, without listing all of the project's stories. If it's an epic, includes its children; otherwise, includes its parent epic.",

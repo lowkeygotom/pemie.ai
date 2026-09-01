@@ -17,10 +17,20 @@ function key(scopes: ApiScope[], scopeLevel: "project" | "workspace" | "user" = 
   return { id: "key-1", scopes, scopeLevel, projectId: "project-1", expiresAt: null } as ApiKey;
 }
 
-test("el mapa compartido es total y search exige uno de sus cuatro scopes", () => {
+test("el mapa compartido es total y search exige uno de sus cinco scopes", () => {
   assert.deepEqual(Object.keys(MCP_TOOLS).sort(), [...MCP_TOOL_NAMES].sort());
   assert.equal(isToolAvailable(MCP_TOOLS.search.access, ["reports:read"]), false);
   assert.equal(isToolAvailable(MCP_TOOLS.search.access, ["stories:read"]), true);
+});
+
+test("las tools de brainstorming se ocultan sin su scope y aparecen con él", () => {
+  const withoutBrainstorm = listMcpToolDefs(key(["stories:read"])).map((tool) => tool.name);
+  const withBrainstorm = listMcpToolDefs(key(["brainstorm:read"])).map((tool) => tool.name);
+
+  assert.ok(!withoutBrainstorm.includes("list_brainstorms"));
+  assert.ok(!withoutBrainstorm.includes("get_brainstorm"));
+  assert.ok(withBrainstorm.includes("list_brainstorms"));
+  assert.ok(withBrainstorm.includes("get_brainstorm"));
 });
 
 test("las tools de actividad reutilizan board:read y board:write", () => {

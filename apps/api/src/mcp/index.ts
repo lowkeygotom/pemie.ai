@@ -20,7 +20,7 @@ import {
   type SkillTarget,
 } from "@pemie/shared";
 import type { AppEnv } from "../rest/http.js";
-import { ServiceError, badRequest, forbidden, renderServiceError } from "../services/errors.js";
+import { ServiceError, badRequest, forbidden, notFound, renderServiceError } from "../services/errors.js";
 import { parseAcceptLanguage } from "../lib/accept-language.js";
 import { translate } from "../i18n/index.js";
 import { es as mcpEs, type McpDescParams } from "../i18n/mcp/es.js";
@@ -39,6 +39,7 @@ import * as agentReliability from "../services/agent-reliability.js";
 import * as overview from "../services/overview.js";
 import * as skills from "../services/skills.js";
 import * as agentActivity from "../services/agent-activity.js";
+import * as brainstorm from "../services/brainstorm.js";
 
 const PROTOCOL_VERSION = "2024-11-05";
 const SERVER_INFO = { name: "pemie.ai", version: "0.1.0" };
@@ -701,6 +702,35 @@ const TOOLS: McpTool[] = [
       const story = await stories.getStoryById(String(args.storyId));
       if (!story || story.projectId !== projectId) throw forbidden("story_not_in_project");
       return stories.opGetStoryDetail(story);
+    },
+  },
+  {
+    name: "list_brainstorms",
+    descriptionKey: "tool_list_brainstorms",
+    inputSchema: withProjectId({
+      status: {
+        type: "string",
+        enum: ["recording", "closing", "closed", "abandoned"],
+        description: "tool_list_brainstorms_status",
+      },
+    }),
+    handler: async (ctx, args) =>
+      brainstorm.opListSessions(await requireProject(ctx, args, "brainstorm:read"), {
+        status: typeof args.status === "string" ? args.status as brainstorm.ListSessionFilters["status"] : undefined,
+      }),
+  },
+  {
+    name: "get_brainstorm",
+    descriptionKey: "tool_get_brainstorm",
+    inputSchema: withProjectId(
+      { sessionId: { type: "string", description: "tool_get_brainstorm_session_id" } },
+      ["sessionId"]
+    ),
+    handler: async (ctx, args) => {
+      const projectId = await requireProject(ctx, args, "brainstorm:read");
+      const session = await brainstorm.opGetSession(String(args.sessionId));
+      if (session.projectId !== projectId) throw notFound("brainstorm_session_not_found");
+      return session;
     },
   },
   {

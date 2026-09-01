@@ -7,15 +7,16 @@ import { Badge, Button, EmptyState, ErrorText, Input, Modal, SkeletonList } from
 import { useTranslation } from "react-i18next";
 
 /** Subconjunto de TabId (Project.tsx) que puede recibir un resultado de búsqueda. */
-type ProjectTabId = "commits" | "reports" | "stories" | "board" | "leaderboard" | "activity";
+type ProjectTabId = "commits" | "reports" | "stories" | "board" | "leaderboard" | "brainstorm" | "activity";
 
-const TYPE_ORDER: SearchHit["type"][] = ["story", "commit", "note", "card"];
+const TYPE_ORDER: SearchHit["type"][] = ["story", "commit", "note", "card", "brainstorm"];
 
 const TAB_BY_TYPE: Record<SearchHit["type"], ProjectTabId> = {
   story: "stories",
   commit: "commits",
   note: "reports",
   card: "board",
+  brainstorm: "brainstorm",
 };
 
 export default function ProjectSearch({

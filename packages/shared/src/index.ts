@@ -259,6 +259,7 @@ export const API_SCOPES = [
   "objective:write",
   "skills:read",
   "skills:write",
+  "brainstorm:read",
 ] as const;
 
 export type ApiScope = (typeof API_SCOPES)[number];

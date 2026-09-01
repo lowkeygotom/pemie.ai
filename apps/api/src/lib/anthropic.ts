@@ -7,6 +7,7 @@ export interface CompleteJsonInput {
   user: string;
   maxTokens: number;
   timeoutMs: number;
+  tool?: { name: string; description: string; inputSchema: Record<string, unknown> };
 }
 
 export interface CompleteJsonResult {
@@ -33,11 +34,11 @@ export async function completeJson(input: CompleteJsonInput): Promise<CompleteJs
       max_tokens: input.maxTokens,
       system: input.system,
       tools: [{
-        name: "emit_graph_ops",
-        description: "Emite las operaciones validadas del grafo.",
-        input_schema: { type: "object", additionalProperties: true },
+        name: input.tool?.name ?? "emit_graph_ops",
+        description: input.tool?.description ?? "Emite las operaciones validadas del grafo.",
+        input_schema: input.tool?.inputSchema ?? { type: "object", additionalProperties: true },
       }],
-      tool_choice: { type: "tool", name: "emit_graph_ops" },
+      tool_choice: { type: "tool", name: input.tool?.name ?? "emit_graph_ops" },
       messages: [{ role: "user", content: input.user }],
     }),
     signal: AbortSignal.timeout(input.timeoutMs),
@@ -50,7 +51,7 @@ export async function completeJson(input: CompleteJsonInput): Promise<CompleteJs
     usage?: { input_tokens?: number; cache_read_input_tokens?: number; output_tokens?: number };
   };
   if (body.stop_reason === "max_tokens") throw new Error("anthropic_truncated");
-  const toolUse = body.content?.find((part) => part.type === "tool_use" && part.name === "emit_graph_ops");
+  const toolUse = body.content?.find((part) => part.type === "tool_use" && part.name === (input.tool?.name ?? "emit_graph_ops"));
   if (!toolUse?.input) throw new Error("anthropic_invalid_json");
   return {
     json: toolUse.input,

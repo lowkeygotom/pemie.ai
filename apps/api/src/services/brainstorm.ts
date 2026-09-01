@@ -10,6 +10,9 @@ import { prisma } from "../db.js";
 import { badRequest, conflict, forbidden, notFound } from "./errors.js";
 import { projectWithAccess } from "./ingest.js";
 import { grantListenToken, isDeepgramConfigured } from "../lib/deepgram.js";
+import { completeJson } from "../lib/anthropic.js";
+import { opCreateStory } from "./stories.js";
+import { z } from "zod";
 
 const ABANDONED_AFTER_MS = 10 * 60 * 1000;
 const DEFAULT_SEGMENT_LIMIT = 200;
@@ -32,6 +35,15 @@ export interface UpdateNodeInput {
   status?: BrainstormNodeStatus;
 }
 export interface AttachAudioInput { url: string; bytes: number }
+
+const proposalSchema = z.object({
+  nodeKey: z.string().regex(/^n\d+$/),
+  title: z.string().min(2).max(300),
+  narrative: z.object({ role: z.string().min(1), want: z.string().min(1), benefit: z.string().min(1) }),
+  acceptanceCriteria: z.array(z.object({ given: z.string().min(1), when: z.string().min(1), then: z.string().min(1) })).min(1).max(12),
+  priority: z.enum(["low", "medium", "high", "critical"]),
+});
+const harvestSchema = z.object({ summary: z.string().min(1).max(8_000), proposals: z.array(proposalSchema).max(20) });
 
 async function sessionWithAccess(userId: string, sessionId: string, minRole: "viewer" | "member" = "viewer", expectedProjectId?: string) {
   const session = await prisma.brainstormSession.findUnique({ where: { id: sessionId } });
@@ -106,7 +118,7 @@ export async function opGetSession(sessionId: string) {
     where: { id: sessionId },
     include: {
       speakers: { orderBy: { speakerTag: "asc" } },
-      nodes: { orderBy: { key: "asc" } },
+      nodes: { orderBy: { key: "asc" }, include: { citations: { orderBy: { segmentSeq: "asc" } } } },
       edges: true,
       proposals: { orderBy: { id: "asc" } },
     },
@@ -220,11 +232,104 @@ export function opAttachAudio(sessionId: string, input: AttachAudioInput) {
   return prisma.brainstormSession.update({ where: { id: sessionId }, data: { audioUrl: input.url, audioBytes: input.bytes } });
 }
 
+/** El webhook de Blob puede llegar después del PATCH del navegador: nunca pisa sus bytes reales. */
+export function opAttachAudioFallback(sessionId: string, url: string) {
+  if (!/^https:\/\//.test(url)) throw badRequest("invalid_brainstorm_audio");
+  return prisma.brainstormSession.updateMany({ where: { id: sessionId, audioUrl: null }, data: { audioUrl: url, audioBytes: 0 } });
+}
+
+/** Genera un acta y propuestas únicamente a partir de nodos y citas persistidos. */
+async function generateHarvest(sessionId: string) {
+  const session = await prisma.brainstormSession.findUnique({
+    where: { id: sessionId },
+    include: { nodes: { orderBy: { key: "asc" }, include: { citations: { orderBy: { segmentSeq: "asc" } } } }, edges: true, proposals: true },
+  });
+  if (!session) throw notFound("brainstorm_session_not_found");
+  if (session.summary || session.proposals.length) return session;
+  const evidence = session.nodes.map((node) => ({
+    key: node.key, type: node.type, title: node.title, detail: node.detail, status: node.status,
+    citations: node.citations.filter((citation) => citation.verbatim).map((citation) => ({ segmentSeq: citation.segmentSeq, quote: citation.quote })),
+  }));
+  if (!evidence.length) {
+    return prisma.brainstormSession.update({ where: { id: sessionId }, data: { summary: "No se extrajeron hallazgos verificables de esta sesión." } });
+  }
+  const fallback = evidence.map((node) => `• ${node.title}${node.citations[0] ? ` — “${node.citations[0].quote}”` : ""}`).join("\n");
+  try {
+    const completion = await completeJson({
+      system: "Eres relator de producto. Escribe en español y usa exclusivamente los nodos y citas entregados. No inventes requisitos, actores, decisiones ni criterios. Solo propone HUs cuando el nodo y sus citas sostengan una necesidad implementable; conserva los términos técnicos literales.",
+      user: `Evidencia del grafo:\n${JSON.stringify({ nodes: evidence, edges: session.edges.map((edge) => ({ fromNodeId: edge.fromNodeId, toNodeId: edge.toNodeId, type: edge.type })) })}`,
+      maxTokens: 2_500,
+      timeoutMs: 15_000,
+      tool: {
+        name: "emit_harvest", description: "Emite el acta y propuestas sustentadas.",
+        inputSchema: { type: "object", additionalProperties: false, required: ["summary", "proposals"], properties: { summary: { type: "string" }, proposals: { type: "array", items: { type: "object" } } } },
+      },
+    });
+    const harvested = harvestSchema.safeParse(completion.json);
+    if (!harvested.success) throw new Error("invalid_harvest");
+    const nodeByKey = new Map(session.nodes.map((node) => [node.key, node]));
+    const proposals = harvested.data.proposals.filter((proposal) => nodeByKey.has(proposal.nodeKey));
+    await prisma.$transaction([
+      prisma.brainstormSession.update({ where: { id: sessionId }, data: { summary: harvested.data.summary } }),
+      ...proposals.map((proposal) => prisma.brainstormStoryProposal.create({ data: {
+        sessionId, nodeId: nodeByKey.get(proposal.nodeKey)!.id, title: proposal.title,
+        narrative: proposal.narrative, acceptanceCriteria: proposal.acceptanceCriteria, priority: proposal.priority,
+      } })),
+    ]);
+  } catch {
+    // El acta sigue siendo auditable sin proveedor: reproduce solamente títulos y citas literales.
+    await prisma.brainstormSession.update({ where: { id: sessionId }, data: { summary: fallback } });
+  }
+  return opGetSession(sessionId);
+}
+
+export async function acceptProposal(userId: string, sessionId: string, proposalId: string, expectedProjectId?: string) {
+  const session = await sessionWithAccess(userId, sessionId, "member", expectedProjectId);
+  return opAcceptProposal(session.projectId, sessionId, proposalId, userId);
+}
+
+type ProposalStoryCreator = typeof opCreateStory;
+
+/** Operación ya autorizada; separada para probar que un reintento no duplica la HU. */
+export async function opAcceptProposal(projectId: string, sessionId: string, proposalId: string, userId: string, createStory: ProposalStoryCreator = opCreateStory) {
+  const proposal = await prisma.brainstormStoryProposal.findFirst({ where: { id: proposalId, sessionId } });
+  if (!proposal) throw notFound("brainstorm_proposal_not_found");
+  if (proposal.status === "accepted") return proposal;
+  if (proposal.status !== "pending") throw conflict("brainstorm_proposal_already_decided");
+  // El candado breve impide que dos clics/reintentos creen dos HUs antes de persistir userStoryId.
+  const claimed = await prisma.brainstormStoryProposal.updateMany({ where: { id: proposalId, status: "pending" }, data: { status: "accepting" } });
+  if (!claimed.count) {
+    const current = await prisma.brainstormStoryProposal.findUnique({ where: { id: proposalId } });
+    if (current?.status === "accepted") return current;
+    throw conflict("brainstorm_proposal_already_decided");
+  }
+  try {
+    const story = await createStory(projectId, {
+      title: proposal.title, narrative: proposal.narrative as { role: string; want: string; benefit: string },
+      acceptanceCriteria: proposal.acceptanceCriteria as Array<{ given: string; when: string; then: string }>, priority: proposal.priority,
+    }, { createdById: userId });
+    return prisma.brainstormStoryProposal.update({ where: { id: proposalId }, data: { status: "accepted", userStoryId: story.id, decidedById: userId, decidedAt: new Date() } });
+  } catch (error) {
+    await prisma.brainstormStoryProposal.updateMany({ where: { id: proposalId, status: "accepting" }, data: { status: "pending" } });
+    throw error;
+  }
+}
+
+export async function rejectProposal(userId: string, sessionId: string, proposalId: string, expectedProjectId?: string) {
+  await sessionWithAccess(userId, sessionId, "member", expectedProjectId);
+  const changed = await prisma.brainstormStoryProposal.updateMany({ where: { id: proposalId, sessionId, status: "pending" }, data: { status: "rejected", decidedById: userId, decidedAt: new Date() } });
+  if (changed.count) return prisma.brainstormStoryProposal.findUniqueOrThrow({ where: { id: proposalId } });
+  const proposal = await prisma.brainstormStoryProposal.findFirst({ where: { id: proposalId, sessionId } });
+  if (!proposal) throw notFound("brainstorm_proposal_not_found");
+  throw conflict("brainstorm_proposal_already_decided");
+}
+
 /** La pasada final es best-effort: cerrar la grabación nunca depende de Anthropic. */
 export async function closeSession(userId: string, sessionId: string, expectedProjectId?: string) {
   const session = await sessionWithAccess(userId, sessionId, "member", expectedProjectId);
   const { opRunExtraction } = await import("./brainstorm-extract.js");
   const extraction = await opRunExtraction(session.id, { final: true });
+  await generateHarvest(session.id);
   await prisma.brainstormSession.updateMany({
     where: { id: session.id, status: "recording" },
     data: { status: "closed", closedAt: new Date(), extractLockId: null, extractLockUntil: null },

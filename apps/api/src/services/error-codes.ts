@@ -196,6 +196,8 @@ export const ERROR_CODES = [
   "invalid_brainstorm_body",
   "invalid_brainstorm_recorder_token",
   "brainstorm_lease_lost",
+  "brainstorm_proposal_not_found",
+  "brainstorm_proposal_already_decided",
   "deepgram_not_configured",
   "deepgram_token_unavailable",
 ] as const;

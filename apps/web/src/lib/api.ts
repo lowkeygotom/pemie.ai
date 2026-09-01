@@ -5,6 +5,7 @@ import type {
   AgentReliabilityReport,
   AgentActivity,
   BrainstormNode,
+  BrainstormStoryProposal,
   BrainstormSegment,
   BrainstormSessionDetail,
   BrainstormSessionSummary,
@@ -605,6 +606,13 @@ export const api = {
     sttToken: (w: string, p: string, id: string) =>
       post<{ accessToken: string; expiresIn: number }>(`${pp(w, p)}/brainstorm/${id}/stt-token`),
     extract: (w: string, p: string, id: string) => post(`${pp(w, p)}/brainstorm/${id}/extract`),
+    close: (w: string, p: string, id: string) => post(`${pp(w, p)}/brainstorm/${id}/close`),
+    attachAudio: (w: string, p: string, id: string, input: { url: string; bytes: number }) =>
+      patch<{ session: BrainstormSessionSummary }>(`${pp(w, p)}/brainstorm/${id}/audio`, input),
+    acceptProposal: (w: string, p: string, sessionId: string, proposalId: string) =>
+      post<{ proposal: BrainstormStoryProposal }>(`${pp(w, p)}/brainstorm/${sessionId}/proposals/${proposalId}/accept`),
+    rejectProposal: (w: string, p: string, sessionId: string, proposalId: string) =>
+      post<{ proposal: BrainstormStoryProposal }>(`${pp(w, p)}/brainstorm/${sessionId}/proposals/${proposalId}/reject`),
     updateNode: (w: string, p: string, sessionId: string, nodeId: string, input: Partial<Pick<BrainstormNode, "title" | "detail" | "type" | "status">>) =>
       patch<{ node: BrainstormNode }>(`${pp(w, p)}/brainstorm/${sessionId}/nodes/${nodeId}`, input),
   },

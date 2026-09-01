@@ -71,3 +71,34 @@ test("reapAbandonedSessions abandona solo grabaciones sin latido por más de die
     data: { status: "abandoned", closedAt: now, extractLockId: null, extractLockUntil: null },
   });
 });
+
+test("aceptar una propuesta crea una sola HU y el reintento es idempotente", async (t) => {
+  const proposal = {
+    id: "proposal-1", sessionId: "session-1", status: "pending", title: "Exportar acta",
+    narrative: { role: "equipo", want: "exportar el acta", benefit: "compartir acuerdos" },
+    acceptanceCriteria: [{ given: "una sesión cerrada", when: "se exporta", then: "se descarga el acta" }],
+    priority: "medium", userStoryId: null as string | null,
+  };
+  stubClientMember(t, "brainstormStoryProposal", {
+    findFirst: async () => proposal,
+    findUnique: async () => proposal,
+    updateMany: async ({ where, data }: { where: { status?: string }; data: { status: string } }) => {
+      if (where.status && proposal.status !== where.status) return { count: 0 };
+      proposal.status = data.status;
+      return { count: 1 };
+    },
+    update: async ({ data }: { data: { status: string; userStoryId: string } }) => {
+      proposal.status = data.status; proposal.userStoryId = data.userStoryId;
+      return proposal;
+    },
+  });
+  let creations = 0;
+  const createStory = async () => ({ id: `story-${++creations}` });
+
+  await brainstorm.opAcceptProposal("project-1", "session-1", "proposal-1", "user-1", createStory as never);
+  const retry = await brainstorm.opAcceptProposal("project-1", "session-1", "proposal-1", "user-1", createStory as never);
+
+  assert.equal(creations, 1);
+  assert.equal(retry.userStoryId, "story-1");
+  assert.equal(retry.status, "accepted");
+});

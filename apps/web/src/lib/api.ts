@@ -607,8 +607,6 @@ export const api = {
       post<{ accessToken: string; expiresIn: number }>(`${pp(w, p)}/brainstorm/${id}/stt-token`),
     extract: (w: string, p: string, id: string) => post(`${pp(w, p)}/brainstorm/${id}/extract`),
     close: (w: string, p: string, id: string) => post(`${pp(w, p)}/brainstorm/${id}/close`),
-    attachAudio: (w: string, p: string, id: string, input: { url: string; bytes: number }) =>
-      patch<{ session: BrainstormSessionSummary }>(`${pp(w, p)}/brainstorm/${id}/audio`, input),
     acceptProposal: (w: string, p: string, sessionId: string, proposalId: string) =>
       post<{ proposal: BrainstormStoryProposal }>(`${pp(w, p)}/brainstorm/${sessionId}/proposals/${proposalId}/accept`),
     rejectProposal: (w: string, p: string, sessionId: string, proposalId: string) =>

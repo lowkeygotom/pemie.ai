@@ -5,7 +5,6 @@ type RecorderOptions = {
   token: () => Promise<Token>;
   appendSegments: (segments: Array<Omit<BrainstormSegment, "id" | "sessionId">>) => Promise<unknown>;
   extract: () => Promise<unknown>;
-  uploadAudio?: (audio: Blob) => Promise<unknown>;
   onError?: (message: string) => void;
 };
 
@@ -54,7 +53,6 @@ export class BrainstormRecorder {
     });
     await this.flushSegments();
     const audio = new Blob(this.chunks, { type: "audio/webm;codecs=opus" });
-    await this.options.uploadAudio?.(audio);
     return audio;
   }
 

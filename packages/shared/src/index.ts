@@ -47,8 +47,6 @@ export interface BrainstormSessionSummary<TDate = string> {
   closedAt: TDate | null;
   lastRecorderBeatAt: TDate;
   summary: string | null;
-  audioUrl: string | null;
-  audioBytes: number | null;
   extractCursor: number;
   extractRuns: number;
   extractFailures: number;

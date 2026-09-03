@@ -6,8 +6,6 @@ import type { BrainstormNode } from "@pemie/shared";
 import { api, ApiError } from "../../../lib/api.js";
 import { queryKeys } from "../../../lib/queryClient.js";
 import { BrainstormRecorder } from "../../../lib/brainstorm/recorder.js";
-import { upload } from "@vercel/blob/client";
-import { API_BASE } from "../../../lib/api.js";
 import { Button, EmptyState, ErrorText, LiveDot, SkeletonBrainstorm } from "../../../components/ui.js";
 
 const nodeTone: Record<BrainstormNode["type"], "brand" | "warning" | "danger" | "neutral"> = {
@@ -71,14 +69,6 @@ export default function TableMode() {
         token: () => api.brainstorm.sttToken(slug, projectSlug, sessionId),
         appendSegments: (segments) => api.brainstorm.appendSegments(slug, projectSlug, sessionId, recorderToken, segments),
         extract: () => api.brainstorm.extract(slug, projectSlug, sessionId),
-        uploadAudio: async (audio) => {
-          const blob = await upload(`brainstorm/${sessionId}/recording.webm`, audio, {
-            access: "private",
-            handleUploadUrl: `${API_BASE}/api/workspaces/${slug}/projects/${projectSlug}/brainstorm/${sessionId}/audio-upload`,
-          });
-          // Es el camino principal: el callback de Blob no llega a localhost y puede reintentarse en producción.
-          await api.brainstorm.attachAudio(slug, projectSlug, sessionId, { url: blob.url, bytes: audio.size });
-        },
         onError: setRecorderError,
       });
       recorder.current = next;

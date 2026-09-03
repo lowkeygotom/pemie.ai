@@ -276,8 +276,6 @@ model BrainstormSession {
   lastRecorderBeatAt DateTime                  @default(now())
   recorderTokenHash  String?                   @unique
   summary            String?                   @db.Text
-  audioUrl           String?
-  audioBytes         Int?
   extractCursor      Int                       @default(0)
   extractLockId      String?
   extractLockUntil   DateTime?

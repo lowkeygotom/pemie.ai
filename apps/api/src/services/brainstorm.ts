@@ -34,7 +34,6 @@ export interface UpdateNodeInput {
   type?: BrainstormNodeType;
   status?: BrainstormNodeStatus;
 }
-export interface AttachAudioInput { url: string; bytes: number }
 
 const proposalSchema = z.object({
   nodeKey: z.string().regex(/^n\d+$/),
@@ -259,22 +258,6 @@ export function opUpdateNode(nodeId: string, input: UpdateNodeInput, actor: { us
     where: { id: nodeId },
     data: { ...input, title, detail: input.detail?.trim() || input.detail, editedByUserId: actor.userId },
   });
-}
-
-export async function attachAudio(userId: string, sessionId: string, input: AttachAudioInput) {
-  await sessionWithAccess(userId, sessionId, "member");
-  return opAttachAudio(sessionId, input);
-}
-
-export function opAttachAudio(sessionId: string, input: AttachAudioInput) {
-  if (!/^https:\/\//.test(input.url) || !Number.isInteger(input.bytes) || input.bytes < 0) throw badRequest("invalid_brainstorm_audio");
-  return prisma.brainstormSession.update({ where: { id: sessionId }, data: { audioUrl: input.url, audioBytes: input.bytes } });
-}
-
-/** El webhook de Blob puede llegar después del PATCH del navegador: nunca pisa sus bytes reales. */
-export function opAttachAudioFallback(sessionId: string, url: string) {
-  if (!/^https:\/\//.test(url)) throw badRequest("invalid_brainstorm_audio");
-  return prisma.brainstormSession.updateMany({ where: { id: sessionId, audioUrl: null }, data: { audioUrl: url, audioBytes: 0 } });
 }
 
 /** Genera un acta y propuestas únicamente a partir de nodos y citas persistidos. */

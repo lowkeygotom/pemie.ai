@@ -29,6 +29,14 @@ export default function TableMode() {
   const { t } = useTranslation("project");
   const navigate = useNavigate();
   const [recording, setRecording] = useState(false);
+  // El consentimiento se pide una vez por sesión y se recuerda: un aviso que reaparece
+  // después de finalizar se lee como algo pendiente y bloquea sin motivo.
+  const consentKey = `pemie:brainstorm:${sessionId}:consent`;
+  const [consented, setConsented] = useState(() => { try { return localStorage.getItem(consentKey) === "1"; } catch { return false; } });
+  function acceptConsent() {
+    try { localStorage.setItem(consentKey, "1"); } catch { /* modo privado: vale por esta vista */ }
+    setConsented(true);
+  }
   const [recorderError, setRecorderError] = useState<string | null>(null);
   const recorder = useRef<BrainstormRecorder | null>(null);
   const previousLastSeq = useRef(new Map<string, number>());
@@ -90,13 +98,13 @@ export default function TableMode() {
   return <main data-theme="dark" data-mesa className="grid h-screen grid-rows-[auto_1fr] overflow-hidden bg-surface-50 text-ink-900">
     <header className="flex flex-wrap items-center justify-between gap-4 border-b border-line-200 bg-surface-0 px-6 py-4">
       <div><p className="font-mono text-caption text-ink-400">{recording ? <LiveDot label={t("brainstormRecording")} /> : t("brainstormTableMode")}</p><h1 className="mt-1 text-h2">{session.title}</h1></div>
-      <div className="flex items-center gap-3">{recording ? <Button variant="danger" onClick={() => void stopRecording()}>{t("brainstormStop")}</Button> : recorderToken ? <Button onClick={() => void startRecording()}>{t("brainstormStartRecording")}</Button> : <span className="font-mono text-caption text-ink-400">{t("brainstormWatching")}</span>}<Button variant="secondary" onClick={() => navigate(`/w/${slug}/p/${projectSlug}?tab=brainstorm`)}>{t("brainstormExit")}</Button></div>
+      <div className="flex items-center gap-3">{recording ? <Button variant="danger" onClick={() => void stopRecording()}>{t("brainstormStop")}</Button> : recorderToken && consented ? <Button onClick={() => void startRecording()}>{t("brainstormStartRecording")}</Button> : recorderToken ? null : <span className="font-mono text-caption text-ink-400">{t("brainstormWatching")}</span>}<Button variant="secondary" onClick={() => navigate(`/w/${slug}/p/${projectSlug}?tab=brainstorm`)}>{t("brainstormExit")}</Button></div>
     </header>
     <div className="grid min-h-0 grid-cols-2 divide-x divide-line-200">
       <section className="min-h-0 overflow-y-auto p-6"><h2 className="text-h3">{t("brainstormSaying")}</h2><p className="mt-2 text-body-sm text-ink-500">{t("brainstormSayingHint")}</p><div className="mt-6 space-y-5">{session.nodes.length ? session.nodes.map((node) => <NodeCard key={node.id} node={node} connections={connectionsFor(node)} updated={updatedIds.has(node.id)} />) : <EmptyState title={t("brainstormWaitingTitle")} description={t("brainstormWaitingDescription")} />}</div></section>
       <aside className="min-h-0 overflow-y-auto bg-surface-0 p-6"><h2 className="text-h3">{t("brainstormConclusions")}</h2><div className="mt-6 space-y-5">{conclusions.length ? conclusions.map((node) => <NodeCard key={node.id} node={node} connections={connectionsFor(node)} updated={updatedIds.has(node.id)} />) : <p className="text-body text-ink-500">{t("brainstormNoConclusions")}</p>}<div className="border-t border-line-200 pt-6"><h2 className="text-h3">{t("brainstormOpen")}</h2><div className="mt-5 space-y-5">{open.map((node) => <NodeCard key={node.id} node={node} connections={connectionsFor(node)} updated={updatedIds.has(node.id)} />)}</div></div></div></aside>
     </div>
-    {recorderToken && !recording ? <div className="absolute bottom-5 left-5 max-w-xl rounded-lg border border-amber-600 bg-surface-0 p-4 text-body-sm shadow-md"><p className="font-semibold text-ink-900">{t("brainstormConsentTitle")}</p><p className="mt-1 text-ink-600">{t("brainstormConsentDescription")}</p></div> : null}
+    {recorderToken && !consented ? <div className="absolute bottom-5 left-5 max-w-xl rounded-lg border border-amber-600 bg-surface-0 p-4 text-body-sm shadow-md"><p className="font-semibold text-ink-900">{t("brainstormConsentTitle")}</p><p className="mt-1 text-ink-600">{t("brainstormConsentDescription")}</p><Button className="mt-3" onClick={acceptConsent}>{t("brainstormConsentAccept")}</Button></div> : null}
     {recorderError ? <div className="absolute bottom-5 right-5"><ErrorText>{recorderError}</ErrorText></div> : null}
   </main>;
 }

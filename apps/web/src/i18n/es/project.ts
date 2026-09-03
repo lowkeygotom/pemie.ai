@@ -54,6 +54,7 @@ export default {
   brainstormWaitingTitle: "Escuchando la conversación",
   brainstormWaitingDescription: "Inicia la grabación y las primeras ideas extraídas aparecerán aquí.",
   brainstormConsentTitle: "Consentimiento requerido antes de grabar",
+  brainstormConsentAccept: "Todas las personas presentes lo saben — continuar",
   brainstormConsentDescription: "Esta sesión graba la voz de personas reales. Asegúrate de que todas las personas presentes lo sepan y acepten antes de iniciar.",
   brainstormRecordingError: "No se pudo iniciar la grabación",
   brainstormHistory: "Historial de sesiones",

@@ -54,6 +54,7 @@ export default {
   brainstormWaitingTitle: "Listening for the conversation",
   brainstormWaitingDescription: "Start the recording and the first extracted ideas will appear here.",
   brainstormConsentTitle: "Consent required before recording",
+  brainstormConsentAccept: "Everyone present has been told — continue",
   brainstormConsentDescription: "This session records the voices of real people. Make sure everyone present knows and agrees before starting.",
   brainstormRecordingError: "Could not start the recording",
   brainstormHistory: "Session history",

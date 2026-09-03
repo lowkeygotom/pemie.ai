@@ -1,4 +1,5 @@
 import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
+import { Prisma } from "@prisma/client";
 import {
   BRAINSTORM_NODE_STATUSES,
   BRAINSTORM_NODE_TYPES,
@@ -357,6 +358,24 @@ export async function closeSession(userId: string, sessionId: string, expectedPr
     data: { status: "closed", closedAt: new Date(), extractLockId: null, extractLockUntil: null },
   });
   return extraction;
+}
+
+/** Elimina una sesión de brainstorming (member+). No hay soft delete: cascadea segments, nodes, edges y propuestas. */
+export async function deleteSession(userId: string, sessionId: string, expectedProjectId?: string) {
+  await sessionWithAccess(userId, sessionId, "member", expectedProjectId);
+  return opDeleteSession(sessionId);
+}
+
+export async function opDeleteSession(sessionId: string) {
+  try {
+    await prisma.brainstormSession.delete({ where: { id: sessionId } });
+  } catch (err) {
+    // Carrera con otro borrado entre la carga y el delete: 404, no 500.
+    if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2025")
+      throw notFound("brainstorm_session_not_found");
+    throw err;
+  }
+  return { ok: true };
 }
 
 export async function reapAbandonedSessions(projectId: string, now = new Date()) {

@@ -607,6 +607,7 @@ export const api = {
       post<{ accessToken: string; expiresIn: number }>(`${pp(w, p)}/brainstorm/${id}/stt-token`),
     extract: (w: string, p: string, id: string) => post(`${pp(w, p)}/brainstorm/${id}/extract`),
     close: (w: string, p: string, id: string) => post(`${pp(w, p)}/brainstorm/${id}/close`),
+    remove: (w: string, p: string, id: string) => del<{ ok: true }>(`${pp(w, p)}/brainstorm/${id}`),
     acceptProposal: (w: string, p: string, sessionId: string, proposalId: string) =>
       post<{ proposal: BrainstormStoryProposal }>(`${pp(w, p)}/brainstorm/${sessionId}/proposals/${proposalId}/accept`),
     rejectProposal: (w: string, p: string, sessionId: string, proposalId: string) =>

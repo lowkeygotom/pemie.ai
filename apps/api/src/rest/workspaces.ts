@@ -422,6 +422,12 @@ export function workspaceRoutes() {
     return c.json({ extraction: await brainstorm.closeSession(user.id, c.req.param("id"), project.id) });
   });
 
+  app.delete("/:slug/projects/:projectSlug/brainstorm/:id", async (c) => {
+    const user = requireUser(c);
+    const project = await resolveProject(c);
+    return c.json(await brainstorm.deleteSession(user.id, c.req.param("id"), project.id));
+  });
+
   app.post("/:slug/projects/:projectSlug/brainstorm/:id/stt-token", async (c) => {
     const user = requireUser(c);
     const project = await resolveProject(c);

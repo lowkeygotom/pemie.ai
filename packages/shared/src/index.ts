@@ -64,10 +64,15 @@ export interface BrainstormSegment {
   id: string; sessionId: string; seq: number; speakerTag: number | null;
   text: string; startMs: number; endMs: number;
 }
+export interface BrainstormCitation {
+  id: string; nodeId: string; segmentSeq: number; quote: string; verbatim: boolean;
+}
 export interface BrainstormNode {
   id: string; sessionId: string; key: string; type: BrainstormNodeType; title: string;
   detail: string | null; status: BrainstormNodeStatus; firstSeq: number; lastSeq: number;
   editedByUserId: string | null;
+  /** El detalle de sesión las incluye: son la evidencia textual de cada idea. */
+  citations?: BrainstormCitation[];
 }
 export interface BrainstormEdge {
   id: string; sessionId: string; fromNodeId: string; toNodeId: string; type: string; rationale: string | null;

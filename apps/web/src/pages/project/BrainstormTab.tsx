@@ -5,7 +5,7 @@ import { useTranslation } from "react-i18next";
 import type { BrainstormSessionDetail } from "@pemie/shared";
 import { api, ApiError } from "../../lib/api.js";
 import { queryClient, queryKeys, STALE_TIME } from "../../lib/queryClient.js";
-import { Badge, Button, Card, EmptyState, ErrorText, Input, Skeleton } from "../../components/ui.js";
+import { Badge, Button, Card, Collapsible, EmptyState, ErrorText, Input, Skeleton, SkeletonText } from "../../components/ui.js";
 
 function GraphMap({ session }: { session: BrainstormSessionDetail }) {
   const layers = ["data", "idea", "question", "risk", "decision", "action", "conclusion"];
@@ -18,6 +18,81 @@ function GraphMap({ session }: { session: BrainstormSessionDetail }) {
   return <div className="overflow-x-auto rounded-md border border-line-200 bg-surface-50 p-3"><svg className="min-w-[900px]" width="1120" height={height} role="img" aria-label="Mapa del grafo de la sesión"><defs><marker id="arrow" markerWidth="7" markerHeight="7" refX="6" refY="3.5" orient="auto"><path d="M0,0 L7,3.5 L0,7z" className="fill-ink-400" /></marker></defs>{session.edges.map((edge) => { const from = positions.get(edge.fromNodeId); const to = positions.get(edge.toNodeId); return from && to ? <line key={edge.id} x1={from.x + 92} y1={from.y + 22} x2={to.x - 8} y2={to.y + 22} className="stroke-line-200" strokeWidth="2" markerEnd="url(#arrow)" /> : null; })}{layers.map((layer, index) => <text key={layer} x={95 + index * 145} y="24" className="fill-ink-400 font-mono text-[11px] uppercase">{layer}</text>)}{session.nodes.map((node) => { const point = positions.get(node.id)!; return <g key={node.id}><rect x={point.x - 8} y={point.y} width="116" height="48" rx="8" className="fill-surface-0 stroke-line-200" /><text x={point.x + 4} y={point.y + 19} className="fill-ink-900 text-[12px] font-semibold">{node.title.slice(0, 16)}</text><text x={point.x + 4} y={point.y + 36} className="fill-ink-400 font-mono text-[10px]">{node.key} · {node.status}</text></g>; })}</svg></div>;
 }
 
+/** mm:ss desde el arranque de la sesión: ubica la frase sin exponer la hora real. */
+function stamp(ms: number) {
+  const total = Math.max(0, Math.round(ms / 1000));
+  return `${String(Math.floor(total / 60)).padStart(2, "0")}:${String(total % 60).padStart(2, "0")}`;
+}
+
+/** Lo que se dijo, tal cual, detrás de cada idea del grafo. */
+function Highlights({ session }: { session: BrainstormSessionDetail }) {
+  const { t } = useTranslation("project");
+  const quoted = session.nodes
+    .map((node) => ({ node, citations: (node.citations ?? []).filter((citation) => citation.verbatim) }))
+    .filter((entry) => entry.citations.length > 0);
+  if (!quoted.length) return <EmptyState title={t("brainstormHighlightsEmpty")} description={t("brainstormHighlightsEmptyDescription")} />;
+  return (
+    <div className="space-y-4">
+      {quoted.map(({ node, citations }) => (
+        <article key={node.id} className="border-l-2 border-line-200 pl-4">
+          <div className="flex flex-wrap items-baseline gap-2">
+            <Badge tone="neutral" mono>{node.key}</Badge>
+            <h4 className="text-body font-semibold text-ink-900">{node.title}</h4>
+          </div>
+          {citations.map((citation) => (
+            <blockquote key={citation.id} className="mt-2 text-body text-ink-700">
+              <span className="mr-2 font-mono text-caption text-ink-400">s{citation.segmentSeq}</span>
+              “{citation.quote}”
+            </blockquote>
+          ))}
+        </article>
+      ))}
+    </div>
+  );
+}
+
+/** Transcripción completa, paginada aparte del detalle para no traer miles de filas en cada poll. */
+function Transcript({ ws, proj, id, session }: { ws: string; proj: string; id: string; session: BrainstormSessionDetail }) {
+  const { t } = useTranslation("project");
+  const [open, setOpen] = useState(false);
+  const query = useQuery({
+    queryKey: [...queryKeys.brainstorm(ws, proj), id, "segments"],
+    queryFn: () => api.brainstorm.segments(ws, proj, id, { limit: 500 }).then((value) => value.segments),
+    enabled: open,
+    staleTime: STALE_TIME.moderate,
+  });
+  const speakerLabel = (tag: number | null) => {
+    if (tag === null) return null;
+    const speaker = session.speakers.find((candidate) => candidate.speakerTag === tag);
+    return speaker?.label ?? t("brainstormSpeakerFallback", { tag: tag + 1 });
+  };
+  return (
+    <Collapsible
+      title={t("brainstormTranscript")}
+      description={t("brainstormTranscriptHint")}
+      badge={<Badge tone="neutral" mono>{session._count?.segments ?? session.segmentSeq}</Badge>}
+      open={open}
+      onOpenChange={setOpen}
+    >
+      {query.isLoading ? <SkeletonText lines={6} /> : null}
+      {query.error ? <ErrorText>{query.error instanceof ApiError ? query.error.message : t("brainstormTranscriptError")}</ErrorText> : null}
+      {query.data ? (
+        query.data.length ? (
+          <div className="max-h-[28rem] space-y-3 overflow-y-auto pr-2">
+            {query.data.map((segment) => (
+              <p key={segment.id} className="text-body leading-relaxed text-ink-700">
+                <span className="mr-2 font-mono text-caption text-ink-400">{stamp(segment.startMs)}</span>
+                {speakerLabel(segment.speakerTag) ? <span className="mr-2 font-semibold text-ink-900">{speakerLabel(segment.speakerTag)}:</span> : null}
+                {segment.text}
+              </p>
+            ))}
+          </div>
+        ) : <EmptyState compact title={t("brainstormTranscriptEmpty")} />
+      ) : null}
+    </Collapsible>
+  );
+}
+
 function HarvestDetail({ ws, proj, id }: { ws: string; proj: string; id: string }) {
   const { t } = useTranslation("project");
   const detail = useQuery({ queryKey: [...queryKeys.brainstorm(ws, proj), id], queryFn: () => api.brainstorm.get(ws, proj, id).then((value) => value.session) });
@@ -27,7 +102,7 @@ function HarvestDetail({ ws, proj, id }: { ws: string; proj: string; id: string 
   if (detail.error || !detail.data) return <ErrorText>{detail.error instanceof ApiError ? detail.error.message : t("brainstormDetailError")}</ErrorText>;
   const session = detail.data;
   if (!session.summary && !session.nodes.length) return <EmptyState title={t("brainstormHarvestEmptyTitle")} description={t("brainstormHarvestEmptyDescription")} />;
-  return <div className="space-y-6"><Card><p className="font-mono text-caption uppercase tracking-wider text-ink-400">{t("brainstormMinutes")}</p><div className="mt-3 whitespace-pre-line text-body leading-relaxed text-ink-700">{session.summary ?? t("brainstormHarvestPending")}</div></Card><Card><div className="mb-5 flex items-baseline justify-between gap-3"><div><h3 className="text-h4 text-ink-900">{t("brainstormGraph")}</h3><p className="mt-1 text-body-sm text-ink-500">{t("brainstormGraphHint")}</p></div><Badge tone="neutral" mono>{session.nodes.length}</Badge></div>{session.nodes.length ? <GraphMap session={session} /> : <EmptyState title={t("brainstormGraphEmpty")} description={t("brainstormGraphEmptyDescription")} />}</Card><Card><h3 className="text-h4 text-ink-900">{t("brainstormProposals")}</h3><p className="mt-1 text-body-sm text-ink-500">{t("brainstormProposalsHint")}</p><div className="mt-5 space-y-3">{session.proposals.length ? session.proposals.map((proposal) => <article key={proposal.id} className="rounded-md border border-line-200 bg-surface-50 p-4"><div className="flex flex-wrap items-start justify-between gap-3"><div><h4 className="text-body font-semibold text-ink-900">{proposal.title}</h4><p className="mt-1 font-mono text-caption text-ink-500">{proposal.priority} · {proposal.status}</p></div>{proposal.status === "pending" ? <div className="flex gap-2"><Button size="sm" disabled={decide.isPending} onClick={() => decide.mutate({ proposalId: proposal.id, decision: "accept" })}>{t("brainstormAccept")}</Button><Button size="sm" variant="secondary" disabled={decide.isPending} onClick={() => decide.mutate({ proposalId: proposal.id, decision: "reject" })}>{t("brainstormReject")}</Button></div> : null}</div></article>) : <EmptyState title={t("brainstormProposalsEmpty")} description={t("brainstormProposalsEmptyDescription")} />}</div></Card>{decide.error ? <ErrorText>{decide.error instanceof ApiError ? decide.error.message : t("brainstormDecisionError")}</ErrorText> : null}</div>;
+  return <div className="space-y-6"><Card><p className="font-mono text-caption uppercase tracking-wider text-ink-400">{t("brainstormMinutes")}</p><div className="mt-3 whitespace-pre-line text-body leading-relaxed text-ink-700">{session.summary ?? t("brainstormHarvestPending")}</div></Card><Card><div className="mb-5 flex items-baseline justify-between gap-3"><div><h3 className="text-h4 text-ink-900">{t("brainstormHighlights")}</h3><p className="mt-1 text-body-sm text-ink-500">{t("brainstormHighlightsHint")}</p></div></div><Highlights session={session} /></Card><Card><Transcript ws={ws} proj={proj} id={id} session={session} /></Card><Card><div className="mb-5 flex items-baseline justify-between gap-3"><div><h3 className="text-h4 text-ink-900">{t("brainstormGraph")}</h3><p className="mt-1 text-body-sm text-ink-500">{t("brainstormGraphHint")}</p></div><Badge tone="neutral" mono>{session.nodes.length}</Badge></div>{session.nodes.length ? <GraphMap session={session} /> : <EmptyState title={t("brainstormGraphEmpty")} description={t("brainstormGraphEmptyDescription")} />}</Card><Card><h3 className="text-h4 text-ink-900">{t("brainstormProposals")}</h3><p className="mt-1 text-body-sm text-ink-500">{t("brainstormProposalsHint")}</p><div className="mt-5 space-y-3">{session.proposals.length ? session.proposals.map((proposal) => <article key={proposal.id} className="rounded-md border border-line-200 bg-surface-50 p-4"><div className="flex flex-wrap items-start justify-between gap-3"><div><h4 className="text-body font-semibold text-ink-900">{proposal.title}</h4><p className="mt-1 font-mono text-caption text-ink-500">{proposal.priority} · {proposal.status}</p></div>{proposal.status === "pending" ? <div className="flex gap-2"><Button size="sm" disabled={decide.isPending} onClick={() => decide.mutate({ proposalId: proposal.id, decision: "accept" })}>{t("brainstormAccept")}</Button><Button size="sm" variant="secondary" disabled={decide.isPending} onClick={() => decide.mutate({ proposalId: proposal.id, decision: "reject" })}>{t("brainstormReject")}</Button></div> : null}</div></article>) : <EmptyState title={t("brainstormProposalsEmpty")} description={t("brainstormProposalsEmptyDescription")} />}</div></Card>{decide.error ? <ErrorText>{decide.error instanceof ApiError ? decide.error.message : t("brainstormDecisionError")}</ErrorText> : null}</div>;
 }
 
 export default function BrainstormTab({ ws, proj }: { ws: string; proj: string }) {

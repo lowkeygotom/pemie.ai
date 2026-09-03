@@ -1,2 +1,10 @@
 /* Mesa se lee de pie: conserva los tokens, solo eleva la escala local. */
 [data-mesa] { --fs-h2: 46px; --fs-h3: 36px; --fs-h4: 30px; --fs-body: 26px; --fs-body-sm: 22px; --fs-caption: 19px; }
+
+/* El Modal (consentimiento, etc.) no se lee de lejos: es un diálogo normal
+   flotando sobre la mesa, y hereda la escala de arriba porque vive en el mismo
+   árbol del DOM. Sin este reset el texto desborda el ancho fijo del diálogo y
+   de sus botones. Estos valores son los de la escala base (typography.css). */
+[data-mesa] [role="dialog"] {
+  --fs-h2: 32px; --fs-h3: 24px; --fs-h4: 19px; --fs-body: 15px; --fs-body-sm: 13px; --fs-caption: 12px;
+}

@@ -20,4 +20,4 @@ packages/shared/dist/
 .env*
 .codegraph/
 .atl/
-.orca/
+.orca/.impeccable/

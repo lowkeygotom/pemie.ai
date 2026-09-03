@@ -1,6 +1,10 @@
 // Cliente deliberadamente pequeño para los trabajos server-side de Anthropic.
 // Telegram conserva su cliente BYOK: unificar ambos sería un refactor distinto.
+import { CHANNEL_LLM_DEFAULT_MODELS } from "@pemie/shared";
 import { env } from "../env.js";
+
+// Un id de modelo con fecha incrustada envejece en silencio: se toma del catálogo compartido.
+const MODEL = CHANNEL_LLM_DEFAULT_MODELS.anthropic;
 
 export interface CompleteJsonInput {
   system: string;
@@ -30,7 +34,7 @@ export async function completeJson(input: CompleteJsonInput): Promise<CompleteJs
       "anthropic-version": "2023-06-01",
     },
     body: JSON.stringify({
-      model: "claude-sonnet-4-5-20250929",
+      model: MODEL,
       max_tokens: input.maxTokens,
       system: input.system,
       tools: [{
@@ -55,7 +59,7 @@ export async function completeJson(input: CompleteJsonInput): Promise<CompleteJs
   if (!toolUse?.input) throw new Error("anthropic_invalid_json");
   return {
     json: toolUse.input,
-    model: "claude-sonnet-4-5-20250929",
+    model: MODEL,
     inputTokens: body.usage?.input_tokens,
     cachedInputTokens: body.usage?.cache_read_input_tokens,
     outputTokens: body.usage?.output_tokens,

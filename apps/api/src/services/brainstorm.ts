@@ -43,6 +43,45 @@ const proposalSchema = z.object({
   acceptanceCriteria: z.array(z.object({ given: z.string().min(1), when: z.string().min(1), then: z.string().min(1) })).min(1).max(12),
   priority: z.enum(["low", "medium", "high", "critical"]),
 });
+// Espejo JSON-Schema de harvestSchema. Debe seguir a proposalSchema: si el modelo no ve la
+// forma de una propuesta, devuelve la lista vacía y la cosecha se pierde en silencio.
+const HARVEST_SCHEMA = {
+  type: "object",
+  required: ["summary", "proposals"],
+  properties: {
+    summary: { type: "string", description: "Acta en español, fundamentada solo en los nodos y citas entregados." },
+    proposals: {
+      type: "array",
+      maxItems: 20,
+      description: "Historias de Usuario propuestas. Vacío si ningún nodo sostiene una necesidad implementable.",
+      items: {
+        type: "object",
+        required: ["nodeKey", "title", "narrative", "acceptanceCriteria", "priority"],
+        properties: {
+          nodeKey: { type: "string", description: "key del nodo que la sustenta, con forma n1, n2, ..." },
+          title: { type: "string" },
+          narrative: {
+            type: "object",
+            required: ["role", "want", "benefit"],
+            properties: { role: { type: "string" }, want: { type: "string" }, benefit: { type: "string" } },
+          },
+          acceptanceCriteria: {
+            type: "array",
+            minItems: 1,
+            maxItems: 12,
+            items: {
+              type: "object",
+              required: ["given", "when", "then"],
+              properties: { given: { type: "string" }, when: { type: "string" }, then: { type: "string" } },
+            },
+          },
+          priority: { type: "string", enum: ["low", "medium", "high", "critical"] },
+        },
+      },
+    },
+  },
+} as const;
+
 const harvestSchema = z.object({ summary: z.string().min(1).max(8_000), proposals: z.array(proposalSchema).max(20) });
 
 async function sessionWithAccess(userId: string, sessionId: string, minRole: "viewer" | "member" = "viewer", expectedProjectId?: string) {
@@ -262,7 +301,7 @@ async function generateHarvest(sessionId: string) {
       timeoutMs: 15_000,
       tool: {
         name: "emit_harvest", description: "Emite el acta y propuestas sustentadas.",
-        inputSchema: { type: "object", additionalProperties: false, required: ["summary", "proposals"], properties: { summary: { type: "string" }, proposals: { type: "array", items: { type: "object" } } } },
+        inputSchema: HARVEST_SCHEMA,
       },
     });
     const harvested = harvestSchema.safeParse(completion.json);

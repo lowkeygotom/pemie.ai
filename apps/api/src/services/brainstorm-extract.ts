@@ -103,10 +103,60 @@ export function resolveNearDuplicateAdds(ops: GraphOp[], nodes: ExistingNode[]) 
   return { ops: resolved, rejected, temporaryKeys };
 }
 
+// El input_schema que ve el modelo debe reflejar EXACTAMENTE lo que acepta validateOps.
+// Con un schema permisivo el modelo inventa su propia forma y se rechaza el 100% de las ops.
+export const GRAPH_OPS_SCHEMA = {
+  type: "object",
+  required: ["ops"],
+  properties: {
+    ops: {
+      type: "array",
+      maxItems: MAX_OPS_PER_RUN,
+      items: {
+        type: "object",
+        required: ["op"],
+        properties: {
+          op: { type: "string", enum: ["add", "update", "close", "link"] },
+          id: { type: "string", description: "solo en add: identificador temporal tmp1, tmp2, ..." },
+          key: { type: "string", description: "solo en update y close: key existente n1, n2, ..." },
+          from: { type: "string", description: "solo en link: nN existente o tmpN de este batch" },
+          to: { type: "string", description: "solo en link: nN existente o tmpN de este batch" },
+          type: { type: "string", enum: [...nodeTypes, ...edgeTypes] },
+          title: { type: "string" },
+          detail: { type: "string" },
+          rationale: { type: "string" },
+          citations: {
+            type: "array",
+            items: {
+              type: "object",
+              required: ["segmentSeq", "quote"],
+              properties: {
+                segmentSeq: { type: "integer", description: "seq de un segmento de la ventana" },
+                quote: { type: "string", description: "texto literal del segmento citado" },
+              },
+            },
+          },
+        },
+      },
+    },
+  },
+} as const;
+
 function prompt(nodes: ExistingNode[], segments: Segment[]) {
   const digest = nodes.map((node) => `[${node.key}|${node.type}|${node.status}] ${node.title.slice(0, 120)}`).join("\n") || "(sin nodos)";
   const transcript = segments.map((segment) => `[s${segment.seq}${segment.speakerTag == null ? "" : `|H${segment.speakerTag}`}] ${segment.text}`).join("\n");
-  return { system: "Eres un extractor de conversación en español. Devuelve únicamente emit_graph_ops con {ops}. Usa nN solo para nodos existentes y tmpN para nodos nuevos. Operaciones: add, update, close y link. Las citas deben usar segmentSeq de la ventana.", user: `Grafo actual:\n${digest}\n\nVentana nueva:\n${transcript}` };
+  return { system: [
+    "Eres un extractor de conversación en español. Construyes un grafo tipado de ideas de una reunión.",
+    "Devuelve SIEMPRE emit_graph_ops con {ops}. Forma exacta de cada operación:",
+    "- add:    {op:'add', id:'tmp1', type:<tipo de nodo>, title:<frase corta>, detail?, citations:[{segmentSeq,quote}]}",
+    "- update: {op:'update', key:'n7', title?, detail?, type?, citations:[...]}",
+    "- close:  {op:'close', key:'n7', citations:[...]}",
+    "- link:   {op:'link', from:<nN|tmpN>, to:<nN|tmpN>, type:<tipo de arista>, rationale?}",
+    `Tipos de nodo: ${nodeTypes.join(", ")}.`,
+    `Tipos de arista: ${edgeTypes.join(", ")}.`,
+    "Usa nN SOLO para nodos que ya existen en el grafo; para nodos nuevos usa siempre tmpN.",
+    "Cada quote debe ser texto literal del segmento que citas.",
+  ].join("\n"), user: `Grafo actual:\n${digest}\n\nVentana nueva:\n${transcript}` };
 }
 
 async function release(sessionId: string, lockId: string) {
@@ -143,7 +193,8 @@ export async function opRunExtraction(sessionId: string, options: { final?: bool
     const deadline = Date.now() + EXTRACT_BUDGET_MS;
     const request = prompt(nodes, segments);
     let completion;
-    try { completion = await completeJson({ ...request, maxTokens: 2_500, timeoutMs: Math.min(PROVIDER_TIMEOUT_MS, Math.max(1, deadline - Date.now())) }); }
+    try { completion = await completeJson({ ...request, maxTokens: 2_500,
+      tool: { name: "emit_graph_ops", description: "Emite las operaciones del grafo de la reunión.", inputSchema: GRAPH_OPS_SCHEMA }, timeoutMs: Math.min(PROVIDER_TIMEOUT_MS, Math.max(1, deadline - Date.now())) }); }
     catch (error) {
       await prisma.brainstormSession.updateMany({ where: { id: sessionId, extractLockId: lockId }, data: { extractFailures: { increment: 1 } } });
       return { ok: false, status: "skipped", reason: error instanceof Error ? error.message : "provider_failed" };

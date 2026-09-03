@@ -4,9 +4,10 @@ import { useTranslation } from "react-i18next";
 import { useNavigate, useParams } from "react-router-dom";
 import type { BrainstormNode } from "@pemie/shared";
 import { api, ApiError } from "../../../lib/api.js";
-import { queryKeys } from "../../../lib/queryClient.js";
+import { queryKeys, STALE_TIME } from "../../../lib/queryClient.js";
 import { BrainstormRecorder } from "../../../lib/brainstorm/recorder.js";
-import { Button, EmptyState, ErrorText, LiveDot, SkeletonBrainstorm } from "../../../components/ui.js";
+import { Badge, Button, EmptyState, ErrorText, LiveDot, Modal, SkeletonBrainstorm } from "../../../components/ui.js";
+import { useTheme } from "../../../lib/theme.js";
 
 const nodeTone: Record<BrainstormNode["type"], "brand" | "warning" | "danger" | "neutral"> = {
   idea: "brand", decision: "brand", question: "warning", risk: "danger", action: "warning", data: "neutral", conclusion: "brand",
@@ -28,6 +29,10 @@ export default function TableMode() {
   const { slug = "", projectSlug = "", sessionId = "" } = useParams();
   const { t } = useTranslation("project");
   const navigate = useNavigate();
+  // La mesa salta el <Layout> (ProtectedBare), así que nadie más aplica el tema acá:
+  // sin este hook, el cleanup de Layout borra data-theme de <html> al desmontarse y
+  // la mesa se ve siempre clara, sin importar lo que el usuario tenía elegido.
+  useTheme();
   const [recording, setRecording] = useState(false);
   // El consentimiento se pide una vez por sesión y se recuerda: un aviso que reaparece
   // después de finalizar se lee como algo pendiente y bloquea sin motivo.
@@ -41,6 +46,14 @@ export default function TableMode() {
   const recorder = useRef<BrainstormRecorder | null>(null);
   const previousLastSeq = useRef(new Map<string, number>());
   const recorderToken = localStorage.getItem(`pemie:brainstorm:${sessionId}:recorder-token`);
+  // Contexto de a qué proyecto pertenece la mesa: sin esto, una persona que entra a
+  // una sesión proyectada en pantalla no tiene forma de saber de qué proyecto es.
+  const projectQuery = useQuery({
+    queryKey: queryKeys.project(slug, projectSlug),
+    queryFn: () => api.projects.get(slug, projectSlug).then((result) => result.project),
+    staleTime: STALE_TIME.slow,
+  });
+  const project = projectQuery.data;
   const sessionQuery = useQuery({
     queryKey: [...queryKeys.brainstorm(slug, projectSlug), sessionId],
     queryFn: () => api.brainstorm.get(slug, projectSlug, sessionId).then((result) => result.session),
@@ -95,16 +108,16 @@ export default function TableMode() {
     setRecording(false);
   }
 
-  return <main data-theme="dark" data-mesa className="grid h-screen grid-rows-[auto_1fr] overflow-hidden bg-surface-50 text-ink-900">
+  return <main data-mesa className="grid h-screen grid-rows-[auto_1fr] overflow-hidden bg-surface-50 text-ink-900">
     <header className="flex flex-wrap items-center justify-between gap-4 border-b border-line-200 bg-surface-0 px-6 py-4">
-      <div><p className="font-mono text-caption text-ink-400">{recording ? <LiveDot label={t("brainstormRecording")} /> : t("brainstormTableMode")}</p><h1 className="mt-1 text-h2">{session.title}</h1></div>
+      <div><div className="flex flex-wrap items-center gap-2"><p className="font-mono text-caption text-ink-400">{recording ? <LiveDot label={t("brainstormRecording")} /> : t("brainstormTableMode")}</p>{project ? <Badge tone="neutral" mono>{project.key}</Badge> : null}{project ? <span className="font-mono text-caption text-ink-400">{project.name}</span> : null}</div><h1 className="mt-1 text-h2">{session.title}</h1></div>
       <div className="flex items-center gap-3">{recording ? <Button variant="danger" onClick={() => void stopRecording()}>{t("brainstormStop")}</Button> : recorderToken && consented ? <Button onClick={() => void startRecording()}>{t("brainstormStartRecording")}</Button> : recorderToken ? null : <span className="font-mono text-caption text-ink-400">{t("brainstormWatching")}</span>}<Button variant="secondary" onClick={() => navigate(`/w/${slug}/p/${projectSlug}?tab=brainstorm`)}>{t("brainstormExit")}</Button></div>
     </header>
     <div className="grid min-h-0 grid-cols-2 divide-x divide-line-200">
       <section className="min-h-0 overflow-y-auto p-6"><h2 className="text-h3">{t("brainstormSaying")}</h2><p className="mt-2 text-body-sm text-ink-500">{t("brainstormSayingHint")}</p><div className="mt-6 space-y-5">{session.nodes.length ? session.nodes.map((node) => <NodeCard key={node.id} node={node} connections={connectionsFor(node)} updated={updatedIds.has(node.id)} />) : <EmptyState title={t("brainstormWaitingTitle")} description={t("brainstormWaitingDescription")} />}</div></section>
-      <aside className="min-h-0 overflow-y-auto bg-surface-0 p-6"><h2 className="text-h3">{t("brainstormConclusions")}</h2><div className="mt-6 space-y-5">{conclusions.length ? conclusions.map((node) => <NodeCard key={node.id} node={node} connections={connectionsFor(node)} updated={updatedIds.has(node.id)} />) : <p className="text-body text-ink-500">{t("brainstormNoConclusions")}</p>}<div className="border-t border-line-200 pt-6"><h2 className="text-h3">{t("brainstormOpen")}</h2><div className="mt-5 space-y-5">{open.map((node) => <NodeCard key={node.id} node={node} connections={connectionsFor(node)} updated={updatedIds.has(node.id)} />)}</div></div></div></aside>
+      <aside className="min-h-0 overflow-y-auto bg-surface-0 p-6"><h2 className="text-h3">{t("brainstormConclusions")}</h2><div className="mt-6 space-y-5">{conclusions.length ? conclusions.map((node) => <NodeCard key={node.id} node={node} connections={connectionsFor(node)} updated={updatedIds.has(node.id)} />) : <EmptyState title={t("brainstormConclusionsEmpty")} description={t("brainstormConclusionsEmptyDescription")} />}<div className="border-t border-line-200 pt-6"><h2 className="text-h3">{t("brainstormOpen")}</h2><div className="mt-5 space-y-5">{open.length ? open.map((node) => <NodeCard key={node.id} node={node} connections={connectionsFor(node)} updated={updatedIds.has(node.id)} />) : <EmptyState title={t("brainstormOpenEmpty")} description={t("brainstormOpenEmptyDescription")} />}</div></div></div></aside>
     </div>
-    {recorderToken && !consented ? <div className="absolute bottom-5 left-5 max-w-xl rounded-lg border border-amber-600 bg-surface-0 p-4 text-body-sm shadow-md"><p className="font-semibold text-ink-900">{t("brainstormConsentTitle")}</p><p className="mt-1 text-ink-600">{t("brainstormConsentDescription")}</p><Button className="mt-3" onClick={acceptConsent}>{t("brainstormConsentAccept")}</Button></div> : null}
+    {recorderToken && !consented ? <Modal title={t("brainstormConsentTitle")} onClose={() => {}} dismissible={false}><p className="text-body text-ink-600">{t("brainstormConsentDescription")}</p><Button className="mt-4 w-full" onClick={acceptConsent}>{t("brainstormConsentAccept")}</Button></Modal> : null}
     {recorderError ? <div className="absolute bottom-5 right-5"><ErrorText>{recorderError}</ErrorText></div> : null}
   </main>;
 }

@@ -36,6 +36,7 @@ export const STALE_TIME = {
  * sin tener que enumerar cada variante (p. ej. commits con distintos filtros).
  */
 export const queryKeys = {
+  project: (ws: string, proj: string) => ["project", ws, proj] as const,
   overview: (ws: string, proj: string) => ["overview", ws, proj] as const,
   repos: (ws: string, proj: string) => ["repos", ws, proj] as const,
   stats: (ws: string, proj: string) => ["stats", ws, proj] as const,

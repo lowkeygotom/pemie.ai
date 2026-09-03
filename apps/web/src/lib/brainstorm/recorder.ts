@@ -17,8 +17,19 @@ export class BrainstormRecorder {
   private media: MediaRecorder | null = null;
   private socket: WebSocket | null = null;
   private chunks: Blob[] = [];
+  /**
+   * Primer chunk del MediaRecorder: lleva la cabecera del contenedor webm (EBML +
+   * codec privado de Opus). Deepgram no puede decodificar NADA sin ella, así que se
+   * conserva para reenviarla al abrir cada socket, incluidas las reconexiones.
+   */
+  private header: Blob | null = null;
   private pending: Array<Omit<BrainstormSegment, "id" | "sessionId">> = [];
-  private sequence = 0;
+  /**
+   * Arranca en 1, no en 0: el cursor de extracción es `seq > extractCursor` y nace en 0,
+   * así que un segmento con seq 0 se guardaría en la transcripción pero no entraría nunca
+   * a una ventana de extracción — se perdería la primera frase de cada sesión.
+   */
+  private sequence = 1;
   private segmentsTimer: number | null = null;
   private extractTimer: number | null = null;
   private reconnectTimer: number | null = null;
@@ -33,10 +44,16 @@ export class BrainstormRecorder {
     this.media.ondataavailable = (event) => {
       if (!event.data.size) return;
       this.chunks.push(event.data);
+      // El primer chunk es la cabecera del contenedor y hay que conservarla para
+      // que cada socket nuevo pueda decodificar lo que venga después.
+      if (!this.header) this.header = event.data;
       if (this.socket?.readyState === WebSocket.OPEN) this.socket.send(event.data);
     };
-    this.media.start(250);
+    // El socket va PRIMERO: si el MediaRecorder arranca antes, su primer chunk —el
+    // que lleva la cabecera— se emite mientras el socket sigue conectando y se
+    // pierde. Deepgram recibe entonces un stream sin cabecera y no transcribe nada.
     await this.connect();
+    this.media.start(250);
     this.segmentsTimer = window.setInterval(() => void this.flushSegments(), 5_000);
     this.extractTimer = window.setInterval(() => void this.options.extract().catch(() => undefined), 25_000);
   }
@@ -62,11 +79,16 @@ export class BrainstormRecorder {
       // Deepgram exige bearer para un JWT efímero; token aplica únicamente a API keys largas.
       const socket = new WebSocket(STT_URL, ["bearer", accessToken]);
       this.socket = socket;
-      socket.onopen = () => { this.reconnectAttempt = 0; };
+      socket.onopen = () => {
+        this.reconnectAttempt = 0;
+        // Reconexión: el socket nuevo necesita la cabecera antes que cualquier audio.
+        if (this.header && socket.readyState === WebSocket.OPEN) socket.send(this.header);
+      };
       socket.onmessage = (event) => this.readTranscript(event.data);
       socket.onclose = () => this.scheduleReconnect();
       socket.onerror = () => socket.close();
-    } catch {
+    } catch (error) {
+      this.options.onError?.(error instanceof Error ? error.message : "No se pudo conectar la transcripción");
       this.scheduleReconnect();
     }
   }

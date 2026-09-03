@@ -30,6 +30,62 @@ export type CardType = "story" | "task" | "bug";
 
 export type ActorType = "user" | "agent";
 
+export const BRAINSTORM_SESSION_STATUSES = ["recording", "closing", "closed", "abandoned"] as const;
+export type BrainstormSessionStatus = (typeof BRAINSTORM_SESSION_STATUSES)[number];
+export const BRAINSTORM_NODE_TYPES = ["idea", "decision", "question", "risk", "action", "data", "conclusion"] as const;
+export type BrainstormNodeType = (typeof BRAINSTORM_NODE_TYPES)[number];
+export const BRAINSTORM_NODE_STATUSES = ["open", "resolved", "discarded"] as const;
+export type BrainstormNodeStatus = (typeof BRAINSTORM_NODE_STATUSES)[number];
+
+export interface BrainstormSessionSummary<TDate = string> {
+  id: string;
+  projectId: string;
+  title: string;
+  status: BrainstormSessionStatus;
+  startedById: string;
+  startedAt: TDate;
+  closedAt: TDate | null;
+  lastRecorderBeatAt: TDate;
+  summary: string | null;
+  audioUrl: string | null;
+  audioBytes: number | null;
+  extractCursor: number;
+  extractRuns: number;
+  extractFailures: number;
+  lastExtractAt: TDate | null;
+  extractionMode: "auto" | "paused";
+  nodeSeq: number;
+  segmentSeq: number;
+  _count?: { segments: number; nodes: number };
+}
+
+export interface BrainstormSpeaker {
+  id: string; sessionId: string; speakerTag: number; label: string; contributorId: string | null;
+}
+export interface BrainstormSegment {
+  id: string; sessionId: string; seq: number; speakerTag: number | null;
+  text: string; startMs: number; endMs: number;
+}
+export interface BrainstormNode {
+  id: string; sessionId: string; key: string; type: BrainstormNodeType; title: string;
+  detail: string | null; status: BrainstormNodeStatus; firstSeq: number; lastSeq: number;
+  editedByUserId: string | null;
+}
+export interface BrainstormEdge {
+  id: string; sessionId: string; fromNodeId: string; toNodeId: string; type: string; rationale: string | null;
+}
+export interface BrainstormStoryProposal<TDate = string> {
+  id: string; sessionId: string; nodeId: string | null; title: string;
+  narrative: unknown; acceptanceCriteria: unknown; priority: string; status: string;
+  userStoryId: string | null; decidedById: string | null; decidedAt: TDate | null;
+}
+export interface BrainstormSessionDetail<TDate = string> extends BrainstormSessionSummary<TDate> {
+  speakers: BrainstormSpeaker[];
+  nodes: BrainstormNode[];
+  edges: BrainstormEdge[];
+  proposals: BrainstormStoryProposal<TDate>[];
+}
+
 export type UserStoryStatus =
   | "backlog"
   | "ready"
@@ -203,6 +259,7 @@ export const API_SCOPES = [
   "objective:write",
   "skills:read",
   "skills:write",
+  "brainstorm:read",
 ] as const;
 
 export type ApiScope = (typeof API_SCOPES)[number];

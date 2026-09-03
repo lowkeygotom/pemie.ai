@@ -84,10 +84,14 @@ export const es = {
   tool_get_story_commit_progress:
     "Cuenta y lista los commits del proyecto cuyo mensaje referencia la key de una HU (ej. PRJ-123).",
   tool_search:
-    "Busca un texto en las HUs, commits, notas y tarjetas del proyecto. Devuelve el tipo y el id de cada resultado para poder operarlo después.",
+    "Busca un texto en las HUs, commits, notas, tarjetas e ideas o conclusiones de brainstorming del proyecto. Devuelve el tipo y el id de cada resultado para poder operarlo después.",
   tool_search_query: "Texto a buscar (mínimo 2 caracteres).",
   tool_search_types: "Limita la búsqueda a estos tipos; por defecto, todos los permitidos.",
   tool_search_limit: "Máximo de resultados (20 por defecto, tope 50).",
+  tool_list_brainstorms: "Lista las sesiones de brainstorming del proyecto, opcionalmente filtradas por estado.",
+  tool_list_brainstorms_status: "Filtra por estado de la sesión (opcional).",
+  tool_get_brainstorm: "Devuelve el detalle de una sesión de brainstorming: acta, participantes, nodos, citas, conexiones y propuestas de HU.",
+  tool_get_brainstorm_session_id: "ID de la sesión de brainstorming.",
   tool_create_note: "Deja una nota o pregunta en el proyecto.",
   tool_get_user_story:
     "Detalle de una sola HU por id, sin listar todas las del proyecto. Si es una épica, incluye sus hijas; si no, incluye su épica padre.",

@@ -1,5 +1,6 @@
 // Servicio F8: búsqueda transversal del proyecto. Un único punto de entrada
-// para localizar una HU, un commit, una nota o una tarjeta sin listar la
+// para localizar una HU, un commit, una nota, una tarjeta o los hallazgos de
+// brainstorming sin listar la
 // colección entera — y sin necesitar una tool distinta por tipo de entidad.
 
 import type { ApiKey } from "@prisma/client";
@@ -68,7 +69,7 @@ export async function opSearch(
   const limit = Math.min(Math.max(Math.trunc(input.limit ?? DEFAULT_LIMIT), 1), MAX_LIMIT);
 
   // Se pide `limit` por tipo y luego se recorta el total: acota el trabajo de
-  // la DB a 4×limit filas en el peor caso, sin que un tipo con muchas
+  // la DB a 5×limit filas en el peor caso, sin que un tipo con muchas
   // coincidencias desplace por completo a los demás.
   const match = { contains: query, mode: "insensitive" as const };
   const hits: SearchHit[] = [];
@@ -151,6 +152,32 @@ export async function opSearch(
                 ref: null,
                 title: r.title,
                 createdAt: r.createdAt,
+              }))
+            )
+          )
+      : null,
+    types.includes("brainstorm")
+      ? prisma.brainstormNode
+          .findMany({
+            // Solo los hallazgos que forman la memoria útil de la mesa; las
+            // decisiones, preguntas y riesgos quedan disponibles en el detalle.
+            where: {
+              type: { in: ["idea", "conclusion"] },
+              session: { projectId },
+              OR: [{ title: match }, { detail: match }, { session: { title: match } }],
+            },
+            orderBy: { session: { startedAt: "desc" } },
+            take: limit,
+            select: { id: true, key: true, title: true, session: { select: { startedAt: true } } },
+          })
+          .then((rows) =>
+            hits.push(
+              ...rows.map((r) => ({
+                type: "brainstorm" as const,
+                id: r.id,
+                ref: r.key,
+                title: r.title,
+                createdAt: r.session.startedAt,
               }))
             )
           )

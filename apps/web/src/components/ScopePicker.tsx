@@ -13,6 +13,7 @@ const GROUPS: { label: string; read?: ApiScope; write?: ApiScope }[] = [
   { label: "Historias", read: "stories:read", write: "stories:write" },
   { label: "Kanban", read: "board:read", write: "board:write" },
   { label: "Skills", read: "skills:read", write: "skills:write" },
+  { label: "Brainstorm", read: "brainstorm:read" },
 ];
 
 const READ_SCOPES = API_SCOPES.filter((scope) => scope.endsWith(":read"));

@@ -28,6 +28,11 @@ const schema = z.object({
   GITHUB_APP_WEBHOOK_SECRET: z.string().optional(),
 
   ANTHROPIC_API_KEY: z.string().optional(),
+  // Deepgram firma credenciales efímeras para el WebSocket del modo mesa.
+  // Si falta, el feature se anuncia como no disponible en vez de fallar al grabar.
+  DEEPGRAM_API_KEY: z.string().optional(),
+  // Vercel Blob firma uploads directos desde el navegador; el audio no pasa por la función.
+  BLOB_READ_WRITE_TOKEN: z.string().optional(),
 
   // Bot de Telegram (canal on-demand). Opcional en local; requerido en prod
   // si se usa el canal. Webhook: POST /webhooks/telegram

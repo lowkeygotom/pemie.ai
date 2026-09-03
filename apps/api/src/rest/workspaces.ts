@@ -3,6 +3,8 @@
 
 import { Hono } from "hono";
 import { z } from "zod";
+import { handleUpload, type HandleUploadBody } from "@vercel/blob/client";
+import { env } from "../env.js";
 import * as tenancy from "../services/tenancy.js";
 import * as ingest from "../services/ingest.js";
 import * as stats from "../services/stats.js";
@@ -12,6 +14,8 @@ import * as stories from "../services/stories.js";
 import * as board from "../services/board.js";
 import * as assignees from "../services/assignees.js";
 import * as leaderboard from "../services/leaderboard.js";
+import * as brainstorm from "../services/brainstorm.js";
+import * as brainstormExtract from "../services/brainstorm-extract.js";
 import * as overview from "../services/overview.js";
 import * as agentReliability from "../services/agent-reliability.js";
 import * as agentActivity from "../services/agent-activity.js";
@@ -19,7 +23,17 @@ import * as searchSvc from "../services/search.js";
 import * as skills from "../services/skills.js";
 import { badRequest } from "../services/errors.js";
 import { type AppContext, type AppEnv, apiOrigin, requireUser } from "./http.js";
-import { isSafeHttpUrl, SEARCHABLE_TYPES, SKILL_DESTINATIONS, SKILL_TARGETS, type SkillDestination, type SkillTarget } from "@pemie/shared";
+import {
+  BRAINSTORM_NODE_STATUSES,
+  BRAINSTORM_NODE_TYPES,
+  BRAINSTORM_SESSION_STATUSES,
+  isSafeHttpUrl,
+  SEARCHABLE_TYPES,
+  SKILL_DESTINATIONS,
+  SKILL_TARGETS,
+  type SkillDestination,
+  type SkillTarget,
+} from "@pemie/shared";
 
 const createWorkspaceSchema = z.object({ name: z.string().min(2) });
 const updateWorkspaceSchema = z.object({ name: z.string().min(2) });
@@ -28,6 +42,29 @@ const createProjectSchema = z.object({
   description: z.string().optional(),
   key: z.string().optional(),
 });
+const createBrainstormSchema = z.object({ title: z.string() });
+const brainstormStatusSchema = z.enum(BRAINSTORM_SESSION_STATUSES);
+const appendBrainstormSegmentsSchema = z.object({
+  recorderToken: z.string().min(1),
+  segments: z.array(z.object({
+    seq: z.number().int(),
+    speakerTag: z.number().int().nullable().optional(),
+    text: z.string(),
+    startMs: z.number().int(),
+    endMs: z.number().int(),
+  })),
+});
+const renameBrainstormSpeakerSchema = z.object({
+  label: z.string(),
+  contributorId: z.string().nullable().optional(),
+});
+const updateBrainstormNodeSchema = z.object({
+  title: z.string().optional(),
+  detail: z.string().nullable().optional(),
+  type: z.enum(BRAINSTORM_NODE_TYPES).optional(),
+  status: z.enum(BRAINSTORM_NODE_STATUSES).optional(),
+}).refine((value) => Object.keys(value).length > 0);
+const attachBrainstormAudioSchema = z.object({ url: z.string().url(), bytes: z.number().int().min(0) });
 const inviteSchema = z.object({
   email: z.string().email(),
   role: z.enum(["admin", "member", "viewer"]).optional(),
@@ -326,6 +363,137 @@ export function workspaceRoutes() {
   app.get("/:slug/projects/:projectSlug/leaderboard", async (c) => {
     const project = await resolveProject(c);
     return c.json({ leaderboard: await leaderboard.opProjectLeaderboard(project.id) });
+  });
+
+  // ─── Brainstorming: el borde solo traduce HTTP; reglas y persistencia viven en el servicio.
+  app.get("/:slug/projects/:projectSlug/brainstorm", async (c) => {
+    const user = requireUser(c);
+    const project = await resolveProject(c);
+    const parsedStatus = brainstormStatusSchema.safeParse(c.req.query("status"));
+    const status = parsedStatus.success ? parsedStatus.data : undefined;
+    return c.json({ sessions: await brainstorm.listSessions(user.id, project.id, { status }), deepgramConfigured: brainstorm.isDeepgramConfigured() });
+  });
+
+  app.post("/:slug/projects/:projectSlug/brainstorm", async (c) => {
+    const user = requireUser(c);
+    const project = await resolveProject(c);
+    const body = createBrainstormSchema.safeParse(await c.req.json().catch(() => null));
+    if (!body.success) throw badRequest("invalid_brainstorm_body");
+    return c.json(await brainstorm.createSession(user.id, project.id, body.data), 201);
+  });
+
+  app.get("/:slug/projects/:projectSlug/brainstorm/:id", async (c) => {
+    const user = requireUser(c);
+    const project = await resolveProject(c);
+    return c.json({ session: await brainstorm.getSession(user.id, c.req.param("id"), project.id) });
+  });
+
+  app.get("/:slug/projects/:projectSlug/brainstorm/:id/segments", async (c) => {
+    const user = requireUser(c);
+    const project = await resolveProject(c);
+    const after = c.req.query("after");
+    const limit = c.req.query("limit");
+    const segments = await brainstorm.listSegments(user.id, c.req.param("id"), {
+      after: after === undefined ? undefined : Number(after),
+      limit: limit === undefined ? undefined : Number(limit),
+    }, project.id);
+    return c.json({ segments });
+  });
+
+  app.post("/:slug/projects/:projectSlug/brainstorm/:id/segments", async (c) => {
+    const user = requireUser(c);
+    const project = await resolveProject(c);
+    const body = appendBrainstormSegmentsSchema.safeParse(await c.req.json().catch(() => null));
+    if (!body.success) throw badRequest("invalid_brainstorm_body");
+    return c.json(await brainstorm.appendSegments(
+      user.id, c.req.param("id"), body.data.recorderToken, body.data.segments, project.id
+    ));
+  });
+
+  app.post("/:slug/projects/:projectSlug/brainstorm/:id/extract", async (c) => {
+    const user = requireUser(c);
+    const project = await resolveProject(c);
+    // El servicio encapsula proveedor, lease y cursor; este borde solo traduce HTTP.
+    return c.json(await brainstormExtract.runExtraction(user.id, c.req.param("id"), {}, project.id));
+  });
+
+  app.post("/:slug/projects/:projectSlug/brainstorm/:id/close", async (c) => {
+    const user = requireUser(c);
+    const project = await resolveProject(c);
+    return c.json({ extraction: await brainstorm.closeSession(user.id, c.req.param("id"), project.id) });
+  });
+
+  app.post("/:slug/projects/:projectSlug/brainstorm/:id/stt-token", async (c) => {
+    const user = requireUser(c);
+    const project = await resolveProject(c);
+    return c.json(await brainstorm.grantSttToken(user.id, c.req.param("id"), project.id));
+  });
+
+  // Blob llama este mismo handler al completar la carga. El navegador persiste
+  // también la URL por PATCH: Blob no puede alcanzar localhost y reintenta webhooks.
+  app.post("/:slug/projects/:projectSlug/brainstorm/:id/audio-upload", async (c) => {
+    const body = await c.req.json().catch(() => null) as HandleUploadBody | null;
+    if (!body || (body.type !== "blob.generate-client-token" && body.type !== "blob.upload-completed")) throw badRequest("invalid_brainstorm_body");
+    const sessionId = c.req.param("id");
+    if (body.type === "blob.generate-client-token") {
+      const user = requireUser(c);
+      const project = await resolveProject(c);
+      await brainstorm.getSession(user.id, sessionId, project.id);
+    }
+    const response = await handleUpload({
+      request: c.req.raw,
+      body,
+      token: env.BLOB_READ_WRITE_TOKEN,
+      onBeforeGenerateToken: async (pathname) => {
+        if (!pathname.startsWith(`brainstorm/${sessionId}/`) || !pathname.endsWith(".webm")) throw badRequest("invalid_brainstorm_audio");
+        return { allowedContentTypes: ["audio/webm"], maximumSizeInBytes: 500 * 1024 * 1024, addRandomSuffix: true, tokenPayload: JSON.stringify({ sessionId }) };
+      },
+      onUploadCompleted: async ({ blob, tokenPayload }) => {
+        const payload = z.object({ sessionId: z.string() }).safeParse(JSON.parse(tokenPayload ?? "{}"));
+        if (payload.success) await brainstorm.opAttachAudioFallback(payload.data.sessionId, blob.url);
+      },
+    });
+    return c.json(response);
+  });
+
+  app.patch("/:slug/projects/:projectSlug/brainstorm/:id/audio", async (c) => {
+    const user = requireUser(c);
+    const project = await resolveProject(c);
+    const body = attachBrainstormAudioSchema.safeParse(await c.req.json().catch(() => null));
+    if (!body.success) throw badRequest("invalid_brainstorm_body");
+    return c.json({ session: await brainstorm.attachAudio(user.id, c.req.param("id"), body.data) });
+  });
+
+  app.patch("/:slug/projects/:projectSlug/brainstorm/:id/speakers/:index", async (c) => {
+    const user = requireUser(c);
+    const project = await resolveProject(c);
+    const body = renameBrainstormSpeakerSchema.safeParse(await c.req.json().catch(() => null));
+    if (!body.success) throw badRequest("invalid_brainstorm_body");
+    return c.json({ speaker: await brainstorm.renameSpeaker(
+      user.id, c.req.param("id"), Number(c.req.param("index")), body.data, project.id
+    ) });
+  });
+
+  app.patch("/:slug/projects/:projectSlug/brainstorm/:id/nodes/:nodeId", async (c) => {
+    const user = requireUser(c);
+    const project = await resolveProject(c);
+    const body = updateBrainstormNodeSchema.safeParse(await c.req.json().catch(() => null));
+    if (!body.success) throw badRequest("invalid_brainstorm_body");
+    return c.json({ node: await brainstorm.updateNode(
+      user.id, c.req.param("nodeId"), body.data, project.id, c.req.param("id")
+    ) });
+  });
+
+  app.post("/:slug/projects/:projectSlug/brainstorm/:id/proposals/:proposalId/accept", async (c) => {
+    const user = requireUser(c);
+    const project = await resolveProject(c);
+    return c.json({ proposal: await brainstorm.acceptProposal(user.id, c.req.param("id"), c.req.param("proposalId"), project.id) });
+  });
+
+  app.post("/:slug/projects/:projectSlug/brainstorm/:id/proposals/:proposalId/reject", async (c) => {
+    const user = requireUser(c);
+    const project = await resolveProject(c);
+    return c.json({ proposal: await brainstorm.rejectProposal(user.id, c.req.param("id"), c.req.param("proposalId"), project.id) });
   });
 
   // PEM-45: vista de estado del proyecto (objetivo, stats, WIP, drift, último informe).

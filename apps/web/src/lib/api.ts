@@ -4,6 +4,11 @@
 import type {
   AgentReliabilityReport,
   AgentActivity,
+  BrainstormNode,
+  BrainstormStoryProposal,
+  BrainstormSegment,
+  BrainstormSessionDetail,
+  BrainstormSessionSummary,
   DayMetrics,
   DomainConfig,
   DriftReport,
@@ -481,7 +486,7 @@ export type SkillInstall = SkillInstallPackage;
 
 // ─── Búsqueda global ───────────────────────────────────────────────────
 export interface SearchHit {
-  type: "story" | "commit" | "note" | "card";
+  type: "story" | "commit" | "note" | "card" | "brainstorm";
   id: string;
   ref: string | null;
   title: string;
@@ -585,6 +590,31 @@ export const api = {
 
   leaderboard: {
     get: (w: string, p: string) => get<{ leaderboard: LeaderboardEntry[] }>(`${pp(w, p)}/leaderboard`),
+  },
+
+  brainstorm: {
+    list: (w: string, p: string) =>
+      get<{ sessions: BrainstormSessionSummary[]; deepgramConfigured: boolean }>(`${pp(w, p)}/brainstorm`),
+    create: (w: string, p: string, title: string) =>
+      post<{ session: BrainstormSessionSummary; recorderToken: string }>(`${pp(w, p)}/brainstorm`, { title }),
+    get: (w: string, p: string, id: string) =>
+      get<{ session: BrainstormSessionDetail }>(`${pp(w, p)}/brainstorm/${id}`),
+    segments: (w: string, p: string, id: string, q?: { after?: number; limit?: number }) =>
+      get<{ segments: BrainstormSegment[] }>(`${pp(w, p)}/brainstorm/${id}/segments${qs(q)}`),
+    appendSegments: (w: string, p: string, id: string, recorderToken: string, segments: Array<Omit<BrainstormSegment, "id" | "sessionId">>) =>
+      post<{ inserted: number }>(`${pp(w, p)}/brainstorm/${id}/segments`, { recorderToken, segments }),
+    sttToken: (w: string, p: string, id: string) =>
+      post<{ accessToken: string; expiresIn: number }>(`${pp(w, p)}/brainstorm/${id}/stt-token`),
+    extract: (w: string, p: string, id: string) => post(`${pp(w, p)}/brainstorm/${id}/extract`),
+    close: (w: string, p: string, id: string) => post(`${pp(w, p)}/brainstorm/${id}/close`),
+    attachAudio: (w: string, p: string, id: string, input: { url: string; bytes: number }) =>
+      patch<{ session: BrainstormSessionSummary }>(`${pp(w, p)}/brainstorm/${id}/audio`, input),
+    acceptProposal: (w: string, p: string, sessionId: string, proposalId: string) =>
+      post<{ proposal: BrainstormStoryProposal }>(`${pp(w, p)}/brainstorm/${sessionId}/proposals/${proposalId}/accept`),
+    rejectProposal: (w: string, p: string, sessionId: string, proposalId: string) =>
+      post<{ proposal: BrainstormStoryProposal }>(`${pp(w, p)}/brainstorm/${sessionId}/proposals/${proposalId}/reject`),
+    updateNode: (w: string, p: string, sessionId: string, nodeId: string, input: Partial<Pick<BrainstormNode, "title" | "detail" | "type" | "status">>) =>
+      patch<{ node: BrainstormNode }>(`${pp(w, p)}/brainstorm/${sessionId}/nodes/${nodeId}`, input),
   },
 
   search: {

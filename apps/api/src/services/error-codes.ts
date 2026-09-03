@@ -183,6 +183,23 @@ export const ERROR_CODES = [
   "invalid_activity_state",
   "invalid_activity_interval",
   "invalid_activity_path",
+  // Modo mesa: errores de dominio estables para REST y futuros bordes MCP.
+  "brainstorm_session_not_found",
+  "brainstorm_node_not_found",
+  "brainstorm_contributor_mismatch",
+  "brainstorm_session_not_recording",
+  "invalid_brainstorm_title",
+  "invalid_brainstorm_segment",
+  "invalid_brainstorm_speaker",
+  "invalid_brainstorm_node",
+  "invalid_brainstorm_audio",
+  "invalid_brainstorm_body",
+  "invalid_brainstorm_recorder_token",
+  "brainstorm_lease_lost",
+  "brainstorm_proposal_not_found",
+  "brainstorm_proposal_already_decided",
+  "deepgram_not_configured",
+  "deepgram_token_unavailable",
 ] as const;
 
 export type ErrorCode = (typeof ERROR_CODES)[number];

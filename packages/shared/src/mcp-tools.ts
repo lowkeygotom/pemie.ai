@@ -12,11 +12,12 @@ export const MCP_TOOL_NAMES = [
   "get_agent_reliability",
   "report_activity", "list_agent_activity",
   "list_skills", "get_skill", "publish_skill", "delete_skill",
+  "list_brainstorms", "get_brainstorm",
 ] as const;
 export type McpToolName = (typeof MCP_TOOL_NAMES)[number];
 
 /** Tipos de entidad que `search` puede consultar y el permiso que los habilita. */
-export const SEARCHABLE_TYPES = ["story", "commit", "note", "card"] as const;
+export const SEARCHABLE_TYPES = ["story", "commit", "note", "card", "brainstorm"] as const;
 export type SearchableType = (typeof SEARCHABLE_TYPES)[number];
 
 export const SCOPE_BY_TYPE: Record<SearchableType, ApiScope> = {
@@ -24,6 +25,7 @@ export const SCOPE_BY_TYPE: Record<SearchableType, ApiScope> = {
   commit: "commits:read",
   note: "notes:read",
   card: "board:read",
+  brainstorm: "brainstorm:read",
 };
 
 /** Cada tool debe declarar explícitamente cómo se autoriza; no hay `null` ambiguo. */
@@ -40,7 +42,8 @@ export type ToolGroup =
   | "Historias de Usuario"
   | "Kanban"
   | "Actividad de agentes"
-  | "Skills del workspace";
+  | "Skills del workspace"
+  | "Brainstorming";
 
 export interface McpToolMeta {
   access: ToolAccess;
@@ -90,6 +93,8 @@ export const MCP_TOOLS: Record<McpToolName, McpToolMeta> = {
   get_skill: { access: { kind: "scope", scope: "skills:read" }, summary: "paquete instalable de una skill (inline o downloadUrl según tamaño).", group: "Skills del workspace" },
   publish_skill: { access: { kind: "scope", scope: "skills:write" }, summary: "crea un ticket de upload; el contenido viaja por tar|curl, no en el tool call.", group: "Skills del workspace" },
   delete_skill: { access: { kind: "scope", scope: "skills:write" }, summary: "borra una skill del workspace (irreversible).", group: "Skills del workspace" },
+  list_brainstorms: { access: { kind: "scope", scope: "brainstorm:read" }, summary: "sesiones de brainstorming del proyecto, filtrables por estado.", group: "Brainstorming" },
+  get_brainstorm: { access: { kind: "scope", scope: "brainstorm:read" }, summary: "detalle de una sesión: acta, participantes, ideas, conclusiones y propuestas.", group: "Brainstorming" },
 };
 
 /** Traducción operativa de las descripciones: mantiene los nombres de tools y parámetros. */
@@ -131,6 +136,8 @@ const MCP_TOOL_SUMMARIES_EN: Record<McpToolName, string> = {
   get_skill: "an installable skill package (inline or downloadUrl depending on size).",
   publish_skill: "creates an upload ticket; content travels through tar|curl, not in the tool call.",
   delete_skill: "deletes a workspace skill (irreversible).",
+  list_brainstorms: "brainstorming sessions for the project, filterable by status.",
+  get_brainstorm: "details for one session: minutes, participants, ideas, conclusions, and proposals.",
 };
 
 export function isToolAvailable(access: ToolAccess, scopes: readonly ApiScope[]): boolean {
@@ -198,7 +205,7 @@ export function buildAgentPrompt(input: {
   const groupName = (group: ToolGroup) => locale === "en" ? ({
     "Descubrimiento": "Discovery", "Contexto y commits": "Context and commits",
     "Objetivo e informes": "Objective and reports", "Notas": "Notes",
-    "Historias de Usuario": "User stories", "Kanban": "Kanban", "Actividad de agentes": "Agent activity", "Skills del workspace": "Workspace skills",
+    "Historias de Usuario": "User stories", "Kanban": "Kanban", "Actividad de agentes": "Agent activity", "Skills del workspace": "Workspace skills", "Brainstorming": "Brainstorming",
   } as const)[group] : group;
   const toolsSection = [...byGroup]
     .map(([group, tools]) => `${groupName(group)}:\n${tools.map((tool) => `- ${tool} — ${locale === "en" ? MCP_TOOL_SUMMARIES_EN[tool] : MCP_TOOLS[tool].summary}`).join("\n")}`)

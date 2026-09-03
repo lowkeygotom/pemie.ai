@@ -46,6 +46,9 @@ model User {
   channelLlmCredentials ChannelLlmCredential[]
   blockedAgentPresences AgentPresence[]     @relation("AgentPresenceBlocker")
   ownedAgentActivities  AgentActivity[]        @relation("AgentActivityOwner")
+  brainstormStartedSessions  BrainstormSession[]       @relation("BrainstormStartedBy")
+  brainstormEditedNodes      BrainstormNode[]          @relation("BrainstormEditedBy")
+  brainstormDecidedProposals BrainstormStoryProposal[] @relation("BrainstormDecidedBy")
 
   @@map("users")
 }
@@ -154,6 +157,7 @@ model Project {
   channelDefaultsFor  UserChannelConfig[]
   agentPresences      AgentPresence[]
   agentActivities    AgentActivity[]
+  brainstormSessions BrainstormSession[]
 
   @@unique([workspaceId, slug])
   @@index([workspaceId])
@@ -195,6 +199,7 @@ model Contributor {
   commits         Commit[]
   assignedStories UserStory[]
   assignedCards   Card[]
+  brainstormSpeakers BrainstormSpeaker[]
 
   @@unique([projectId, githubLogin])
   @@index([projectId])
@@ -256,6 +261,168 @@ model ObjectiveHistory {
 
   @@index([projectId, createdAt])
   @@map("objective_history")
+}
+
+// ─── Brainstorming: memoria de la conversación de mesa ───────────────
+
+model BrainstormSession {
+  id                 String                    @id @default(cuid())
+  projectId          String
+  title              String
+  status             String                    @default("recording") // recording | closing | closed | abandoned
+  startedById        String
+  startedAt          DateTime                  @default(now())
+  closedAt           DateTime?
+  lastRecorderBeatAt DateTime                  @default(now())
+  recorderTokenHash  String?                   @unique
+  summary            String?                   @db.Text
+  audioUrl           String?
+  audioBytes         Int?
+  extractCursor      Int                       @default(0)
+  extractLockId      String?
+  extractLockUntil   DateTime?
+  extractRuns        Int                       @default(0)
+  extractFailures    Int                       @default(0)
+  lastExtractAt      DateTime?
+  extractionMode     String                    @default("auto") // auto | paused
+  nodeSeq            Int                       @default(0)
+  segmentSeq         Int                       @default(0)
+  project            Project                   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  startedBy          User                      @relation("BrainstormStartedBy", fields: [startedById], references: [id], onDelete: Cascade)
+  speakers           BrainstormSpeaker[]
+  segments           BrainstormSegment[]
+  nodes              BrainstormNode[]
+  edges              BrainstormEdge[]
+  runs               BrainstormRun[]
+  proposals          BrainstormStoryProposal[]
+
+  @@index([projectId, startedAt])
+  @@index([projectId, status, lastRecorderBeatAt])
+  @@map("brainstorm_sessions")
+}
+
+model BrainstormSpeaker {
+  id            String            @id @default(cuid())
+  sessionId     String
+  speakerTag    Int
+  label         String
+  contributorId String?
+  session       BrainstormSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  contributor   Contributor?      @relation(fields: [contributorId], references: [id], onDelete: SetNull)
+
+  @@unique([sessionId, speakerTag])
+  @@index([sessionId])
+  @@map("brainstorm_speakers")
+}
+
+model BrainstormSegment {
+  id         String            @id @default(cuid())
+  sessionId  String
+  seq        Int
+  speakerTag Int?
+  text       String            @db.Text
+  startMs    Int
+  endMs      Int
+  session    BrainstormSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@unique([sessionId, seq])
+  @@map("brainstorm_segments")
+}
+
+model BrainstormNode {
+  id             String                    @id @default(cuid())
+  sessionId      String
+  key            String
+  type           String
+  title          String
+  detail         String?                   @db.Text
+  status         String                    @default("open") // open | resolved | discarded
+  firstSeq       Int
+  lastSeq        Int
+  editedByUserId String?
+  session        BrainstormSession         @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  editedBy       User?                     @relation("BrainstormEditedBy", fields: [editedByUserId], references: [id], onDelete: SetNull)
+  citations      BrainstormCitation[]
+  outgoing       BrainstormEdge[]          @relation("BrainstormEdgeFrom")
+  incoming       BrainstormEdge[]          @relation("BrainstormEdgeTo")
+  proposals      BrainstormStoryProposal[]
+
+  @@unique([sessionId, key])
+  @@index([sessionId, status])
+  @@map("brainstorm_nodes")
+}
+
+model BrainstormCitation {
+  id         String         @id @default(cuid())
+  nodeId     String
+  segmentSeq Int
+  quote      String         @db.VarChar(400)
+  verbatim   Boolean        @default(true)
+  createdAt  DateTime       @default(now())
+  node       BrainstormNode @relation(fields: [nodeId], references: [id], onDelete: Cascade)
+
+  @@unique([nodeId, segmentSeq, quote])
+  @@map("brainstorm_citations")
+}
+
+model BrainstormEdge {
+  id         String            @id @default(cuid())
+  sessionId  String
+  fromNodeId String
+  toNodeId   String
+  type       String
+  rationale  String?           @db.Text
+  session    BrainstormSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  fromNode   BrainstormNode    @relation("BrainstormEdgeFrom", fields: [fromNodeId], references: [id], onDelete: Cascade)
+  toNode     BrainstormNode    @relation("BrainstormEdgeTo", fields: [toNodeId], references: [id], onDelete: Cascade)
+
+  @@unique([fromNodeId, toNodeId, type])
+  @@index([sessionId])
+  @@map("brainstorm_edges")
+}
+
+model BrainstormStoryProposal {
+  id                 String            @id @default(cuid())
+  sessionId          String
+  nodeId             String?
+  title              String
+  narrative          Json
+  acceptanceCriteria Json
+  priority           String
+  status             String            @default("pending") // pending | accepted | rejected
+  userStoryId        String?
+  decidedById        String?
+  decidedAt          DateTime?
+  session            BrainstormSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  node               BrainstormNode?   @relation(fields: [nodeId], references: [id], onDelete: SetNull)
+  userStory          UserStory?        @relation(fields: [userStoryId], references: [id], onDelete: SetNull)
+  decidedBy          User?             @relation("BrainstormDecidedBy", fields: [decidedById], references: [id], onDelete: SetNull)
+
+  @@index([sessionId, status])
+  @@map("brainstorm_story_proposals")
+}
+
+model BrainstormRun {
+  id                String            @id @default(cuid())
+  sessionId         String
+  runIndex          Int
+  fromSeq           Int
+  toSeq             Int
+  status            String // ok | failed | skipped | empty
+  reason            String?
+  model             String?
+  latencyMs         Int?
+  inputTokens       Int?
+  cachedInputTokens Int?
+  outputTokens      Int?
+  opsApplied        Int               @default(0)
+  opsRejected       Json?
+  createdAt         DateTime          @default(now())
+  session           BrainstormSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@unique([sessionId, runIndex])
+  @@index([sessionId, createdAt])
+  @@map("brainstorm_runs")
 }
 
 model Report {
@@ -397,6 +564,7 @@ model UserStory {
   assignee           Contributor? @relation(fields: [assigneeId], references: [id])
   card               Card?
   activities         AgentActivity[]
+  brainstormProposals BrainstormStoryProposal[]
 
   @@unique([projectId, key])
   @@index([projectId, status])

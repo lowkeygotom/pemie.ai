@@ -622,6 +622,8 @@ export const api = {
       post<BrainstormExtractionOutcome>(`${pp(w, p)}/brainstorm/${id}/extract`),
     close: (w: string, p: string, id: string) =>
       post<{ extraction: BrainstormExtractionOutcome }>(`${pp(w, p)}/brainstorm/${id}/close`),
+    retryExtraction: (w: string, p: string, id: string) =>
+      post<BrainstormExtractionOutcome>(`${pp(w, p)}/brainstorm/${id}/retry-extraction`),
     remove: (w: string, p: string, id: string) => del<{ ok: true }>(`${pp(w, p)}/brainstorm/${id}`),
     acceptProposal: (w: string, p: string, sessionId: string, proposalId: string) =>
       post<{ proposal: BrainstormStoryProposal }>(`${pp(w, p)}/brainstorm/${sessionId}/proposals/${proposalId}/accept`),

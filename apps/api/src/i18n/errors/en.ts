@@ -179,6 +179,7 @@ export const en: Record<keyof typeof es, string | ((params?: ErrorParams) => str
   brainstorm_node_not_found: "Brainstorming node not found",
   brainstorm_contributor_mismatch: "The contributor doesn't belong to the project",
   brainstorm_session_not_recording: "The session is no longer recording",
+  brainstorm_session_recording: "The session is still recording",
   invalid_brainstorm_title: "The session title must be at least 2 characters",
   invalid_brainstorm_segment: "Invalid transcript segment",
   invalid_brainstorm_speaker: "Invalid speaker",

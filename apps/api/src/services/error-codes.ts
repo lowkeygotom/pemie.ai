@@ -188,6 +188,7 @@ export const ERROR_CODES = [
   "brainstorm_node_not_found",
   "brainstorm_contributor_mismatch",
   "brainstorm_session_not_recording",
+  "brainstorm_session_recording",
   "invalid_brainstorm_title",
   "invalid_brainstorm_segment",
   "invalid_brainstorm_speaker",

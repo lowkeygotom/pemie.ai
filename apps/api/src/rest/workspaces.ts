@@ -416,6 +416,12 @@ export function workspaceRoutes() {
     return c.json(await brainstormExtract.runExtraction(user.id, c.req.param("id"), {}, project.id));
   });
 
+  app.post("/:slug/projects/:projectSlug/brainstorm/:id/retry-extraction", async (c) => {
+    const user = requireUser(c);
+    const project = await resolveProject(c);
+    return c.json(await brainstorm.retryExtraction(user.id, c.req.param("id"), project.id));
+  });
+
   app.post("/:slug/projects/:projectSlug/brainstorm/:id/close", async (c) => {
     const user = requireUser(c);
     const project = await resolveProject(c);

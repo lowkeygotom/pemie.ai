@@ -261,14 +261,19 @@ export function opUpdateNode(nodeId: string, input: UpdateNodeInput, actor: { us
   });
 }
 
-/** Genera un acta y propuestas únicamente a partir de nodos y citas persistidos. */
-async function generateHarvest(sessionId: string) {
+/**
+ * Genera un acta y propuestas únicamente a partir de nodos y citas persistidos.
+ * `force` reintenta el acta tras una extracción que antes no había encontrado evidencia
+ * (summary ya seteado con el fallback "sin hallazgos"); las propuestas nunca se
+ * regeneran si ya existen, para no duplicarlas.
+ */
+async function generateHarvest(sessionId: string, options: { force?: boolean } = {}) {
   const session = await prisma.brainstormSession.findUnique({
     where: { id: sessionId },
     include: { nodes: { orderBy: { key: "asc" }, include: { citations: { orderBy: { segmentSeq: "asc" } } } }, edges: true, proposals: true },
   });
   if (!session) throw notFound("brainstorm_session_not_found");
-  if (session.summary || session.proposals.length) return session;
+  if (session.proposals.length || (session.summary && !options.force)) return session;
   const evidence = session.nodes.map((node) => ({
     key: node.key, type: node.type, title: node.title, detail: node.detail, status: node.status,
     citations: node.citations.filter((citation) => citation.verbatim).map((citation) => ({ segmentSeq: citation.segmentSeq, quote: citation.quote })),
@@ -358,6 +363,25 @@ export async function closeSession(userId: string, sessionId: string, expectedPr
     data: { status: "closed", closedAt: new Date(), extractLockId: null, extractLockUntil: null },
   });
   return extraction;
+}
+
+/**
+ * Reintenta la extracción de una sesión ya cerrada que se quedó sin grafo (p. ej. la
+ * cuota de Anthropic se agotó durante la grabación). No aplica a sesiones en grabación:
+ * ahí la extracción ya corre sola cada 25s y una vez más al cerrar.
+ */
+export async function retryExtraction(userId: string, sessionId: string, expectedProjectId?: string) {
+  const session = await sessionWithAccess(userId, sessionId, "member", expectedProjectId);
+  if (session.status === "recording") throw conflict("brainstorm_session_recording");
+  const { opRunExtraction } = await import("./brainstorm-extract.js");
+  let outcome = await opRunExtraction(sessionId, { final: true, allowClosed: true });
+  // Cada pasada consume como mucho MAX_SEGMENTS_PER_RUN segmentos: se repite hasta
+  // vaciar el pendiente o toparse con un fallo real.
+  for (let i = 0; outcome.ok && outcome.pending && i < 20; i++) {
+    outcome = await opRunExtraction(sessionId, { final: true, allowClosed: true });
+  }
+  await generateHarvest(sessionId, { force: true });
+  return outcome;
 }
 
 /** Elimina una sesión de brainstorming (member+). No hay soft delete: cascadea segments, nodes, edges y propuestas. */

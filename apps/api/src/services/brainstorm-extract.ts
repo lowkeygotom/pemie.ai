@@ -172,15 +172,19 @@ export async function runExtraction(userId: string, sessionId: string, options: 
   return opRunExtraction(sessionId, options);
 }
 
-export async function opRunExtraction(sessionId: string, options: { final?: boolean } = {}): Promise<ExtractionOutcome> {
+export async function opRunExtraction(sessionId: string, options: { final?: boolean; allowClosed?: boolean } = {}): Promise<ExtractionOutcome> {
   const before = await prisma.brainstormSession.findUnique({ where: { id: sessionId } });
   if (!before) return { ok: false, status: "skipped", reason: "session_not_found" };
   if (before.extractionMode === "paused") return { ok: false, status: "skipped", reason: "paused" };
+  // `allowClosed` es para reintentar sobre una sesión ya cerrada (p. ej. tras agotar
+  // cuota): fuera de eso, la extracción solo corre mientras se graba.
+  if (before.status !== "recording" && !options.allowClosed) return { ok: false, status: "skipped", reason: "session_not_recording" };
   const lockId = randomUUID();
   const now = new Date();
   // UPDATE condicional: bajo READ COMMITTED el segundo competidor reevalúa el WHERE tras el lock de fila.
+  // El CAS es contra `before.status` (no un "recording" fijo) para cubrir también el reintento.
   const claimed = await prisma.brainstormSession.updateMany({
-    where: { id: sessionId, status: "recording", extractCursor: before.extractCursor, OR: [{ extractLockUntil: null }, { extractLockUntil: { lte: now } }] },
+    where: { id: sessionId, status: before.status, extractCursor: before.extractCursor, OR: [{ extractLockUntil: null }, { extractLockUntil: { lte: now } }] },
     data: { extractLockId: lockId, extractLockUntil: new Date(now.getTime() + LEASE_MS) },
   });
   if (!claimed.count) return { ok: false, status: "skipped", reason: "locked", pending: Math.max(0, before.segmentSeq - before.extractCursor) };

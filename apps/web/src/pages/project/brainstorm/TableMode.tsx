@@ -5,7 +5,8 @@ import { useNavigate, useParams } from "react-router-dom";
 import type { BrainstormNode } from "@pemie/shared";
 import { api, ApiError } from "../../../lib/api.js";
 import { queryKeys, STALE_TIME } from "../../../lib/queryClient.js";
-import { BrainstormRecorder, describeExtractionFailure } from "../../../lib/brainstorm/recorder.js";
+import { BrainstormRecorder } from "../../../lib/brainstorm/recorder.js";
+import { describeExtractionFailure } from "../../../lib/brainstorm/extraction-messages.js";
 import { Badge, Button, EmptyState, ErrorText, LiveDot, Modal, SkeletonBrainstorm } from "../../../components/ui.js";
 import { useTheme } from "../../../lib/theme.js";
 

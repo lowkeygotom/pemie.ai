@@ -181,6 +181,7 @@ export const es: Record<ErrorCode, string | ((params?: ErrorParams) => string)> 
   brainstorm_node_not_found: "Nodo de brainstorming no encontrado",
   brainstorm_contributor_mismatch: "El contributor no pertenece al proyecto",
   brainstorm_session_not_recording: "La sesión ya no está grabando",
+  brainstorm_session_recording: "La sesión todavía está grabando",
   invalid_brainstorm_title: "El título de la sesión debe tener al menos 2 caracteres",
   invalid_brainstorm_segment: "Segmento de transcripción inválido",
   invalid_brainstorm_speaker: "Hablante inválido",

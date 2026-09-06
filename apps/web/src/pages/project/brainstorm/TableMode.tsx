@@ -5,7 +5,7 @@ import { useNavigate, useParams } from "react-router-dom";
 import type { BrainstormNode } from "@pemie/shared";
 import { api, ApiError } from "../../../lib/api.js";
 import { queryKeys, STALE_TIME } from "../../../lib/queryClient.js";
-import { BrainstormRecorder } from "../../../lib/brainstorm/recorder.js";
+import { BrainstormRecorder, describeExtractionFailure } from "../../../lib/brainstorm/recorder.js";
 import { Badge, Button, EmptyState, ErrorText, LiveDot, Modal, SkeletonBrainstorm } from "../../../components/ui.js";
 import { useTheme } from "../../../lib/theme.js";
 
@@ -103,8 +103,10 @@ export default function TableMode() {
     } catch (error) {
       setRecorderError(error instanceof Error ? error.message : t("brainstormRecordingError"));
     }
-    try { await api.brainstorm.close(slug, projectSlug, sessionId); }
-    catch (error) { setRecorderError(error instanceof Error ? error.message : t("brainstormRecordingError")); }
+    try {
+      const { extraction } = await api.brainstorm.close(slug, projectSlug, sessionId);
+      if (!extraction.ok && extraction.reason !== "locked") setRecorderError(describeExtractionFailure(extraction.reason));
+    } catch (error) { setRecorderError(error instanceof Error ? error.message : t("brainstormRecordingError")); }
     setRecording(false);
   }
 

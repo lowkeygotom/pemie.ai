@@ -493,6 +493,19 @@ export interface SearchHit {
   createdAt: string;
 }
 
+/**
+ * Resultado de una pasada de extracción del grafo de brainstorming. `reason` viaja
+ * sin traducir (código crudo, p. ej. "anthropic_429") — el cliente lo interpreta,
+ * ver `describeExtractionFailure` en `lib/brainstorm/recorder.ts`.
+ */
+export interface BrainstormExtractionOutcome {
+  ok: boolean;
+  status: "ok" | "idle" | "skipped";
+  reason?: string;
+  pending?: number;
+  opsApplied?: number;
+}
+
 // ─── API ─────────────────────────────────────────────────────────────
 
 export const api = {
@@ -605,8 +618,10 @@ export const api = {
       post<{ inserted: number }>(`${pp(w, p)}/brainstorm/${id}/segments`, { recorderToken, segments }),
     sttToken: (w: string, p: string, id: string) =>
       post<{ accessToken: string; expiresIn: number }>(`${pp(w, p)}/brainstorm/${id}/stt-token`),
-    extract: (w: string, p: string, id: string) => post(`${pp(w, p)}/brainstorm/${id}/extract`),
-    close: (w: string, p: string, id: string) => post(`${pp(w, p)}/brainstorm/${id}/close`),
+    extract: (w: string, p: string, id: string) =>
+      post<BrainstormExtractionOutcome>(`${pp(w, p)}/brainstorm/${id}/extract`),
+    close: (w: string, p: string, id: string) =>
+      post<{ extraction: BrainstormExtractionOutcome }>(`${pp(w, p)}/brainstorm/${id}/close`),
     remove: (w: string, p: string, id: string) => del<{ ok: true }>(`${pp(w, p)}/brainstorm/${id}`),
     acceptProposal: (w: string, p: string, sessionId: string, proposalId: string) =>
       post<{ proposal: BrainstormStoryProposal }>(`${pp(w, p)}/brainstorm/${sessionId}/proposals/${proposalId}/accept`),

@@ -1,12 +1,26 @@
 import type { BrainstormSegment } from "@pemie/shared";
+import type { BrainstormExtractionOutcome } from "../api.js";
 
 type Token = { accessToken: string; expiresIn: number };
 type RecorderOptions = {
   token: () => Promise<Token>;
   appendSegments: (segments: Array<Omit<BrainstormSegment, "id" | "sessionId">>) => Promise<unknown>;
-  extract: () => Promise<unknown>;
+  extract: () => Promise<BrainstormExtractionOutcome>;
   onError?: (message: string) => void;
 };
+
+/**
+ * `reason` es el código crudo que devuelve `opRunExtraction` (brainstorm-extract.ts)
+ * cuando la pasada falla. "locked" es una colisión transitoria entre dos llamadas
+ * (se resuelve sola en la próxima ventana) y no se reporta como error.
+ */
+export function describeExtractionFailure(reason: string | undefined): string {
+  if (reason === "anthropic_not_configured") return "Falta configurar la clave de Anthropic en el servidor: la extracción no puede correr.";
+  if (reason === "anthropic_429") return "Se alcanzó el límite de uso (cuota) de la API de Anthropic: la extracción está pausada.";
+  if (reason === "anthropic_401" || reason === "anthropic_403") return "La clave de Anthropic fue rechazada: la extracción no puede correr.";
+  if (reason?.startsWith("anthropic_")) return "El servicio de Anthropic no respondió: se reintentará en la próxima ventana.";
+  return "No se pudo extraer el grafo de esta ventana: se reintentará automáticamente.";
+}
 
 type DeepgramMessage = { is_final?: boolean; channel?: { alternatives?: Array<{ transcript?: string; words?: Array<{ start?: number; end?: number; speaker?: number }> }> } };
 
@@ -55,7 +69,7 @@ export class BrainstormRecorder {
     await this.connect();
     this.media.start(250);
     this.segmentsTimer = window.setInterval(() => void this.flushSegments(), 5_000);
-    this.extractTimer = window.setInterval(() => void this.options.extract().catch(() => undefined), 25_000);
+    this.extractTimer = window.setInterval(() => void this.runExtraction(), 25_000);
   }
 
   async stop(): Promise<Blob> {
@@ -118,6 +132,16 @@ export class BrainstormRecorder {
       startMs: Math.round((first.start ?? 0) * 1_000),
       endMs: Math.round((last.end ?? first.start ?? 0) * 1_000),
     });
+  }
+
+  /** A diferencia del fetch de segmentos, `extract` nunca tira: el fallo viaja en `status`/`reason`. */
+  private async runExtraction() {
+    try {
+      const outcome = await this.options.extract();
+      if (outcome.status === "skipped" && outcome.reason !== "locked") this.options.onError?.(describeExtractionFailure(outcome.reason));
+    } catch (error) {
+      this.options.onError?.(error instanceof Error ? error.message : describeExtractionFailure(undefined));
+    }
   }
 
   private async flushSegments() {

@@ -1,10 +1,13 @@
 // Cliente deliberadamente pequeño para los trabajos server-side de Anthropic.
 // Telegram conserva su cliente BYOK: unificar ambos sería un refactor distinto.
-import { CHANNEL_LLM_DEFAULT_MODELS } from "@pemie/shared";
 import { env } from "../env.js";
 
-// Un id de modelo con fecha incrustada envejece en silencio: se toma del catálogo compartido.
-const MODEL = CHANNEL_LLM_DEFAULT_MODELS.anthropic;
+// Extracción estructurada (tool_choice forzado, schema acotado) sobre ventanas de
+// transcript: no necesita el modelo insignia. Fijo aparte de CHANNEL_LLM_DEFAULT_MODELS
+// a propósito — esa constante también es el modelo que se sugiere por defecto a los
+// usuarios de Telegram BYOK (channels.ts), y no debe cambiar por una decisión de costo
+// tomada acá.
+const MODEL = "claude-haiku-4-5";
 
 export interface CompleteJsonInput {
   system: string;

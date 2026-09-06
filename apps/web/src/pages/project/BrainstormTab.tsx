@@ -99,7 +99,16 @@ function HarvestDetail({ ws, proj, id }: { ws: string; proj: string; id: string 
   const detail = useQuery({ queryKey: [...queryKeys.brainstorm(ws, proj), id], queryFn: () => api.brainstorm.get(ws, proj, id).then((value) => value.session) });
   const refresh = () => void queryClient.invalidateQueries({ queryKey: [...queryKeys.brainstorm(ws, proj), id] });
   const decide = useMutation({ mutationFn: ({ proposalId, decision }: { proposalId: string; decision: "accept" | "reject" }) => decision === "accept" ? api.brainstorm.acceptProposal(ws, proj, id, proposalId) : api.brainstorm.rejectProposal(ws, proj, id, proposalId), onSuccess: refresh });
-  const retry = useMutation({ mutationFn: () => api.brainstorm.retryExtraction(ws, proj, id), onSuccess: refresh });
+  // Cada llamada al servidor procesa una sola ventana; se repite acá mientras quede
+  // pendiente, en vez de encadenarlas todas dentro de un único request largo.
+  const retry = useMutation({
+    mutationFn: async () => {
+      let outcome = await api.brainstorm.retryExtraction(ws, proj, id);
+      while (outcome.ok && outcome.pending) outcome = await api.brainstorm.retryExtraction(ws, proj, id);
+      return outcome;
+    },
+    onSuccess: refresh,
+  });
   if (detail.isLoading) return <Card><Skeleton className="h-8 w-2/5" /><Skeleton className="mt-4 h-24 w-full" /><Skeleton className="mt-6 h-72 w-full" /><Skeleton className="mt-6 h-28 w-full" /></Card>;
   if (detail.error || !detail.data) return <ErrorText>{detail.error instanceof ApiError ? detail.error.message : t("brainstormDetailError")}</ErrorText>;
   const session = detail.data;

@@ -9,10 +9,14 @@ import { projectWithAccess } from "./ingest.js";
 export const MAX_SEGMENTS_PER_RUN = 120;
 export const MIN_SEGMENTS_TO_RUN = 3;
 export const OVERLAP_SEGMENTS = 10;
-export const EXTRACT_BUDGET_MS = 20_000;
-export const PROVIDER_TIMEOUT_MS = 15_000;
+// 15s hacía abortar llamadas legítimas ("The operation was aborted due to timeout") sin
+// que fuera un problema real de Anthropic — se vio en producción con Haiku 4.5 sobre una
+// ventana de tamaño normal. LEASE_MS queda por encima de EXTRACT_BUDGET_MS con margen
+// para que una pasada lenta no pierda su lock contra el siguiente tick del recorder.
+export const EXTRACT_BUDGET_MS = 50_000;
+export const PROVIDER_TIMEOUT_MS = 45_000;
 export const NEAR_DUPLICATE_THRESHOLD = 0.6;
-const LEASE_MS = 35_000;
+const LEASE_MS = 65_000;
 const MAX_OPS_PER_RUN = 40;
 
 type Segment = { seq: number; text: string; speakerTag: number | null };

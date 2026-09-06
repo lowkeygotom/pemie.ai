@@ -367,20 +367,21 @@ export async function closeSession(userId: string, sessionId: string, expectedPr
 
 /**
  * Reintenta la extracción de una sesión ya cerrada que se quedó sin grafo (p. ej. la
- * cuota de Anthropic se agotó durante la grabación). No aplica a sesiones en grabación:
- * ahí la extracción ya corre sola cada 25s y una vez más al cerrar.
+ * cuota de Anthropic se agotó, o una llamada abortó por timeout, durante la grabación).
+ * No aplica a sesiones en grabación: ahí la extracción ya corre sola cada 25s y una vez
+ * más al cerrar.
+ *
+ * Una sola pasada por llamada (como el `/extract` de una sesión en vivo): una sesión
+ * larga puede necesitar varias, y encadenarlas todas en un mismo request arriesga el
+ * timeout de la función serverless. El cliente reintenta llamando de nuevo mientras
+ * quede `pending`. El acta solo se regenera una vez vaciado el pendiente.
  */
 export async function retryExtraction(userId: string, sessionId: string, expectedProjectId?: string) {
   const session = await sessionWithAccess(userId, sessionId, "member", expectedProjectId);
   if (session.status === "recording") throw conflict("brainstorm_session_recording");
   const { opRunExtraction } = await import("./brainstorm-extract.js");
-  let outcome = await opRunExtraction(sessionId, { final: true, allowClosed: true });
-  // Cada pasada consume como mucho MAX_SEGMENTS_PER_RUN segmentos: se repite hasta
-  // vaciar el pendiente o toparse con un fallo real.
-  for (let i = 0; outcome.ok && outcome.pending && i < 20; i++) {
-    outcome = await opRunExtraction(sessionId, { final: true, allowClosed: true });
-  }
-  await generateHarvest(sessionId, { force: true });
+  const outcome = await opRunExtraction(sessionId, { final: true, allowClosed: true });
+  if (outcome.ok && !outcome.pending) await generateHarvest(sessionId, { force: true });
   return outcome;
 }
 

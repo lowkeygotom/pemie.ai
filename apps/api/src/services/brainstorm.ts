@@ -286,8 +286,11 @@ async function generateHarvest(sessionId: string, options: { force?: boolean } =
     const completion = await completeJson({
       system: "Eres relator de producto. Escribe en español y usa exclusivamente los nodos y citas entregados. No inventes requisitos, actores, decisiones ni criterios. Solo propone HUs cuando el nodo y sus citas sostengan una necesidad implementable; conserva los términos técnicos literales.",
       user: `Evidencia del grafo:\n${JSON.stringify({ nodes: evidence, edges: session.edges.map((edge) => ({ fromNodeId: edge.fromNodeId, toNodeId: edge.toNodeId, type: edge.type })) })}`,
-      maxTokens: 2_500,
-      timeoutMs: 15_000,
+      // Mismo ajuste que en brainstorm-extract.ts: hasta 20 propuestas con narrativa y
+      // criterios de aceptación no entran en 2500 tokens, y 15s abortaba llamadas
+      // legítimas sin que hubiera un problema real de Anthropic.
+      maxTokens: 8_000,
+      timeoutMs: 45_000,
       tool: {
         name: "emit_harvest", description: "Emite el acta y propuestas sustentadas.",
         inputSchema: HARVEST_SCHEMA,

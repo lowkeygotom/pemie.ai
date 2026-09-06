@@ -201,7 +201,10 @@ export async function opRunExtraction(sessionId: string, options: { final?: bool
     const deadline = Date.now() + EXTRACT_BUDGET_MS;
     const request = prompt(nodes, segments);
     let completion;
-    try { completion = await completeJson({ ...request, maxTokens: 2_500,
+    // Una ventana de MAX_SEGMENTS_PER_RUN densa puede necesitar hasta MAX_OPS_PER_RUN ops
+    // con detail y citas: 2500 se quedaba corto y truncaba el tool_use a mitad de camino
+    // (anthropic_truncated) en vez de fallar por falta de contenido real.
+    try { completion = await completeJson({ ...request, maxTokens: 8_000,
       tool: { name: "emit_graph_ops", description: "Emite las operaciones del grafo de la reunión.", inputSchema: GRAPH_OPS_SCHEMA }, timeoutMs: Math.min(PROVIDER_TIMEOUT_MS, Math.max(1, deadline - Date.now())) }); }
     catch (error) {
       await prisma.brainstormSession.updateMany({ where: { id: sessionId, extractLockId: lockId }, data: { extractFailures: { increment: 1 } } });
